@@ -7,7 +7,7 @@ free on Hobby) BEFORE anything is deployed, and the page is checked from outside
 Needs the Vercel CLI, logged in (`vercel login`). Exit 1 on any failure; never leaves a public page
 without saying so.
 """
-import json, os, platform, shutil, subprocess, sys, urllib.error, urllib.request
+import json, os, platform, re, shutil, subprocess, sys, urllib.error, urllib.request
 from pathlib import Path
 
 API = "https://api.vercel.com"
@@ -82,14 +82,21 @@ def main():
         print(log[-1500:])
         sys.exit("FAILED: vercel deploy. If it says 'Not authorized' or hangs on 'Building', check that the git "
                  "commit author email is on your Vercel account (Vercel blocks unknown commit authors).")
-    url = r.stdout.strip().splitlines()[-1]
+    # the CLI prints plain text to a terminal but JSON when it detects an agent: take the URL from either
+    m = re.search(r"https://[a-z0-9-]+\.vercel\.app", r.stdout)
+    if not m:
+        print(log[-1500:])
+        sys.exit("FAILED: deploy ran but no deployment URL found in the CLI output")
+    url = m.group(0)
     st, d = call("GET", f"/v13/deployments/{url.removeprefix('https://')}", team=team)
-    alias = next((a for a in d.get("alias", []) if a.startswith(name)), None) or url
-    code = anon_status(f"https://{alias.removeprefix('https://')}/")
-    if code == 200:
-        sys.exit(f"FAILED: https://{alias} answers 200 to an anonymous visitor - the page is PUBLIC. Check the project's Deployment Protection.")
-    print(f"deployed: https://{alias.removeprefix('https://')}  (anonymous visitor gets {code}, i.e. locked)")
-
+    hosts = [url.removeprefix("https://"), *d.get("alias", [])]
+    codes = {h: anon_status(f"https://{h}/") for h in hosts}
+    public = [h for h, c in codes.items() if c == 200]
+    if public:
+        sys.exit(f"FAILED: answers 200 to an anonymous visitor - PUBLIC: {', '.join(public)}. Check the project's Deployment Protection.")
+    main_host = next((h for h in d.get("alias", []) if h.startswith(name + ".") or h.startswith(name + "-") and "-git-" not in h), hosts[0])
+    print(f"deployed: https://{main_host}")
+    print("anonymous visitor: " + ", ".join(f"{h} -> {c}" for h, c in codes.items()) + "  (not 200 = locked)")
 
 if __name__ == "__main__":
     TOKEN = token()

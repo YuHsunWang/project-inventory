@@ -18,6 +18,7 @@ HOME/inventory.json          projects, sources, data checks, diagram   (you writ
 HOME/gathered/<date>.json    tickets/PRs you fetched through MCP tools  (you write it each run)
 HOME/facts/<date>.json       one snapshot per run                       (collect.py)
 HOME/out/index.html          the page                                   (build.py)
+HOME/out/artifact.html       same page for a claude.ai Artifact          (build.py)
 ```
 
 `SCRIPTS` = the `scripts/` folder next to this file. Schemas for every file: `reference/schema.md`.
@@ -77,7 +78,7 @@ Talk to the user in their language and write page text (names, tags, diagram) in
 | Option | How | Who can see it |
 |---|---|---|
 | Local file (default) | `HOME/out/index.html`, open in a browser | only this computer |
-| claude.ai Artifact | Artifact tool, publish `HOME/out/index.html` (same file path every run keeps one URL) | private to the user |
+| claude.ai Artifact | Artifact tool, publish `HOME/out/artifact.html` (build.py writes it without the html/head/body wrapper the host adds; the same file path every run keeps one URL) | private to the user |
 | Vercel | `python3 SCRIPTS/publish_vercel.py HOME <project-name>` — creates the project, locks it (Vercel Authentication, all deployments) BEFORE deploying, then checks an anonymous visitor is turned away | only the user's logged-in Vercel account |
 | GitHub Pages | see below | **everyone on the internet** |
 

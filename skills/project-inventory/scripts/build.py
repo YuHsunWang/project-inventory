@@ -84,6 +84,11 @@ def main():
     out = home / "out" / "index.html"
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(html, encoding="utf-8")
+    # claude.ai Artifact: the host adds doctype/html/head/body and the meta tags itself
+    head = html.split("<head>", 1)[1].split("</head>", 1)[0]
+    head = "\n".join(l for l in head.splitlines() if not l.lstrip().startswith("<meta"))
+    body = html.split("<body>", 1)[1].rsplit("</body>", 1)[0]
+    (out.parent / "artifact.html").write_text(head.strip() + "\n" + body.strip() + "\n", encoding="utf-8")
     print(f"built {out} ({len(html):,} bytes, {len(projects)} projects, snapshot {now['date']}, {len(hist)} days of history)")
 
 
