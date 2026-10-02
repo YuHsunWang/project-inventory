@@ -1,0 +1,6 @@
+{
+  "name": "project-inventory",
+  "version": "0.1.0",
+  "description": "Take stock of all your projects (Linear, Notion, GitHub, local git, Obsidian, data freshness) and build one dashboard page.",
+  "author": {"name": "YuHsunWang", "url": "https://github.com/YuHsunWang"}
+}

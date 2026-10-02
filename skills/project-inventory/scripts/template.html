@@ -1,0 +1,295 @@
+<!doctype html>
+<html lang="__LANG__">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>__TITLE__</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+:root{
+  --ground:#EDF0EA; --paper:#FAFBF7; --ink:#17201B; --muted:#56625A; --faint:#8B968F; --line:#C9D1C9;
+  --accent:#0E5B60;
+  --done:#2E7A4C; --done-soft:#DCEFE2; --wait:#2A5FC4; --wait-soft:#DCE6F8;
+  --open:#A86A12; --open-soft:#F6E9CF; --dead:#8A938D; --dead-soft:#E6E9E5; --bad:#B23A22; --bad-soft:#F7DCD5;
+  --viz-a:#1F6B40; --viz-b:#B8761A;
+  --sans:"Noto Sans TC","PingFang TC","Microsoft JhengHei",system-ui,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
+  --r:14px; --shadow:0 1px 2px rgb(0 0 0/.05),0 4px 14px rgb(0 0 0/.05);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --ground:#111513; --paper:#181D1A; --ink:#E4EAE5; --muted:#A1ACA5; --faint:#6F7A73; --line:#2F3833; --accent:#6CC4C6;
+    --done:#6FC08F; --done-soft:#19301F; --wait:#7FA6F0; --wait-soft:#1B2640;
+    --open:#E0A94E; --open-soft:#33280F; --dead:#7D8680; --dead-soft:#232826; --bad:#F08A70; --bad-soft:#3A1E18;
+    --viz-a:#56A876; --viz-b:#D19A3E; --shadow:none;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --ground:#111513; --paper:#181D1A; --ink:#E4EAE5; --muted:#A1ACA5; --faint:#6F7A73; --line:#2F3833; --accent:#6CC4C6;
+  --done:#6FC08F; --done-soft:#19301F; --wait:#7FA6F0; --wait-soft:#1B2640;
+  --open:#E0A94E; --open-soft:#33280F; --dead:#7D8680; --dead-soft:#232826; --bad:#F08A70; --bad-soft:#3A1E18;
+  --viz-a:#56A876; --viz-b:#D19A3E; --shadow:none;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--ground);color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.65;padding:0 16px 64px}
+.wrap{max-width:1120px;margin:0 auto}
+a{color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+code,.mono{font-family:var(--mono);font-size:.86em;overflow-wrap:anywhere}
+h1,h2,h3{letter-spacing:-.01em;line-height:1.3}
+.muted{color:var(--muted)} .small{font-size:13px}
+
+.bar{position:sticky;top:0;z-index:5;margin:0 -16px;padding:10px 16px;background:color-mix(in srgb,var(--ground) 80%,transparent);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border-bottom:1px solid var(--line)}
+.bar .wrap{display:flex;gap:8px 14px;align-items:center;flex-wrap:wrap}
+.brand{font-weight:700;font-size:18px;text-decoration:none}
+.stamp{margin-left:auto;color:var(--muted);font-size:12.5px}
+.menu{position:relative}
+.menu>button{font:inherit;font-size:14px;padding:5px 12px;border-radius:999px;border:1px solid var(--line);background:var(--paper);color:var(--ink);cursor:pointer}
+.menu .list{position:absolute;top:calc(100% + 6px);left:0;min-width:240px;max-width:calc(100vw - 32px);background:var(--paper);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);padding:6px;display:grid}
+.menu .list[hidden]{display:none}
+@media (max-width:560px){.menu{position:static}.menu .list{left:16px;right:16px;min-width:0;max-width:none}}
+.menu .list a{display:flex;gap:8px;align-items:center;padding:7px 10px;border-radius:9px;text-decoration:none}
+.menu .list a:hover{background:var(--ground)}
+.menu .list small{margin-left:auto;color:var(--open)}
+.dot{width:9px;height:9px;border-radius:50%;flex:none}
+
+.hero{padding:28px 0 8px}
+.hero h1{font-size:28px;margin:0 0 4px}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin:16px 0}
+.tile{background:var(--paper);border-radius:var(--r);box-shadow:var(--shadow);padding:12px 14px;border:1px solid var(--line)}
+.tile b{display:block;font-size:26px;line-height:1.1}
+.todo{background:var(--paper);border-top:4px solid var(--ink);border-radius:var(--r);box-shadow:var(--shadow);padding:6px 16px;margin:16px 0}
+.todo a{display:flex;gap:12px;align-items:baseline;padding:9px 0;border-bottom:1px solid var(--line);text-decoration:none}
+.todo a:last-child{border-bottom:0}
+.todo .n{font-size:20px;font-weight:700;min-width:2.2em;text-align:right}
+.todo .who{color:var(--muted);font-size:13px;margin-left:auto;white-space:nowrap}
+.drawers{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px;margin-top:12px}
+.drawer{display:block;text-decoration:none;background:var(--paper);border-radius:var(--r);box-shadow:var(--shadow);border:1px solid var(--line);border-left:5px solid var(--pc);padding:14px 16px}
+.drawer h3{margin:0;font-size:17px}
+.drawer p{margin:4px 0 8px;color:var(--muted);font-size:13.5px}
+.drawer:active{transform:scale(.99)}
+
+.pills{display:flex;gap:6px;flex-wrap:wrap}
+.pill{font-size:12px;padding:1px 9px;border-radius:999px;white-space:nowrap}
+.p-done{background:var(--done-soft);color:var(--done)} .p-wait{background:var(--wait-soft);color:var(--wait)}
+.p-open{background:var(--open-soft);color:var(--open)} .p-dead{background:var(--dead-soft);color:var(--dead)}
+.p-bad{background:var(--bad-soft);color:var(--bad)}
+
+.phead{padding:24px 0 4px;border-bottom:1px solid var(--line)}
+.phead h1{margin:0;font-size:26px;display:flex;gap:10px;align-items:center}
+.phead p{margin:4px 0 10px;color:var(--muted)}
+.links{display:flex;gap:6px 14px;flex-wrap:wrap;font-size:13.5px;margin-bottom:12px}
+.sub{display:flex;gap:4px;margin:12px 0 18px;background:var(--paper);border:1px solid var(--line);border-radius:11px;padding:3px;width:max-content;max-width:100%;overflow-x:auto}
+.sub a{padding:5px 14px;border-radius:8px;text-decoration:none;font-size:14px;white-space:nowrap}
+.sub a[aria-current="true"]{background:var(--ink);color:var(--paper)}
+
+/* road: spine in the middle, branches left/right, panels open in-flow under their row */
+.road{display:grid;grid-template-columns:1fr minmax(0,1.15fr) 1fr;gap:10px 18px;position:relative}
+.zone{grid-column:1/-1;font-size:12.5px;font-weight:700;color:var(--muted);letter-spacing:.04em;padding-top:10px;text-align:center}
+.cell{display:flex;flex-direction:column;gap:8px;justify-content:center}
+.cell.l{grid-column:1} .cell.s{grid-column:2;position:relative} .cell.r{grid-column:3}
+.cell.s::before{content:"";position:absolute;left:50%;top:-14px;bottom:-14px;border-left:2px solid var(--line);z-index:0}
+.node{position:relative;z-index:1;font:inherit;text-align:left;width:100%;background:var(--paper);color:var(--ink);border:1px solid var(--line);border-radius:12px;padding:9px 12px;cursor:pointer;box-shadow:var(--shadow)}
+.node.spine{border:2px solid var(--pc)}
+.node.br{border-style:dashed}
+.node .num{font-family:var(--mono);font-size:11.5px;color:var(--faint);margin-right:6px}
+.node b{font-size:15px}
+.node .s{display:block;color:var(--muted);font-size:13px;white-space:pre-line}
+.node .pills{margin-top:5px}
+.node[aria-expanded="true"]{outline:2px solid var(--pc);outline-offset:1px}
+.panel{grid-column:1/-1;background:var(--paper);border:1px solid var(--line);border-left:4px solid var(--pc);border-radius:var(--r);padding:12px 16px}
+.panel h4{margin:0 0 6px}
+.panel p{margin:6px 0;white-space:pre-line}
+@media (max-width:720px){
+  .road{grid-template-columns:1fr}
+  .cell.l,.cell.s,.cell.r{grid-column:1}
+  .cell.l,.cell.r{padding-left:22px;border-left:2px dashed var(--line);margin-left:10px}
+  .cell.s::before{display:none}
+  .cell:empty{display:none}
+  .zone{text-align:left}
+}
+
+.card{background:var(--paper);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);padding:14px 16px;margin-bottom:14px}
+.card h3{margin:0 0 8px;font-size:16px}
+.rows{display:grid;grid-template-columns:minmax(90px,170px) 1fr;gap:8px 16px}
+.rows>div:nth-child(odd){color:var(--muted);font-size:13.5px}
+@media (max-width:560px){.rows{grid-template-columns:1fr}.rows>div:nth-child(odd){margin-top:6px}}
+.tk{display:flex;gap:10px;align-items:baseline;padding:6px 0;border-bottom:1px solid var(--line)}
+.tk:last-child{border-bottom:0}
+.tk .id{font-family:var(--mono);font-size:12px;color:var(--muted);flex:none}
+.act{display:grid;grid-template-columns:52px 1fr;gap:4px 10px;font-size:14px}
+.act .d{color:var(--muted);font-family:var(--mono);font-size:12px;padding-top:2px}
+details summary{cursor:pointer;color:var(--muted);font-size:13.5px}
+svg.chart{width:100%;height:auto;display:block}
+.chart text{font-size:11px;fill:var(--muted);font-family:var(--sans)}
+.legend{display:flex;gap:14px;font-size:12.5px;color:var(--muted);margin-top:4px}
+.legend i{display:inline-block;width:14px;height:3px;vertical-align:middle;margin-right:5px}
+.empty{color:var(--muted);font-size:14px}
+@media (prefers-reduced-motion:no-preference){.drawer,.node{transition:transform .12s ease}}
+</style>
+</head>
+<body>
+<header class="bar"><div class="wrap">
+  <a class="brand" href="#" id="brand"></a>
+  <div class="menu"><button id="menubtn" aria-expanded="false" aria-controls="menulist"></button><div class="list" id="menulist" hidden></div></div>
+  <span class="stamp" id="stamp"></span>
+</div></header>
+<main class="wrap" id="main"></main>
+<script>
+const D = /*__DATA__*/null;
+const L = {
+ "zh-TW": {all:"全部專案", projects:"個專案", waiting:"件事等你", nothing:"沒有事等你，全部都處理好了。",
+  prs:"個修改在 GitHub 等你合併", review:"件待辦做好了、等你確認", dirty:"個檔改到一半，還沒存起來", unpushed:"次改動還沒備份到 GitHub",
+  no_upstream:"這條分支還沒推上 GitHub", stale:"份資料過期了", errors:"項資料這次沒抓到",
+  road:"運作流程", tickets:"待辦", activity:"最近動態", facts:"基本資料", updated:"更新於",
+  done:"做完", wait:"等你確認", open:"還沒做", dead:"取消", noroad:"還沒畫流程圖。", notickets:"這個專案沒有接 Linear 或 Notion。",
+  noact:"最近 14 天沒有動靜。", repo:"程式碼", branch:"分支", ahead:"還沒推", behind:"落後 GitHub", dirtyf:"改到一半的檔", last:"最後一次改動",
+  local_only:"只在本機，沒有 GitHub", data:"資料", newest:"最新到", days:"天前", limit:"超過 N 天算過期", notes:"筆記待辦",
+  notes_open:"個還沒勾", notes_done:"個已勾", trend:"變化", t_open:"還沒做完的待辦", t_todo:"等你處理的事", commits:"每週改動次數",
+  needtwo:"要累積兩天以上的盤點才畫得出線。", paths:"相關檔案", errs:"沒抓到的東西", pr_open:"開著的 PR", commit:"改動", tdone:"完成", tpr:"開 PR",
+  on_node:"這一步的待辦", other:"沒有對到步驟的待辦", show_dead:"看取消的", stale1:"過期"},
+ "en": {all:"All projects", projects:"projects", waiting:"things wait on you", nothing:"Nothing waits on you.",
+  prs:"PRs wait for your merge", review:"tickets are done and wait for review", dirty:"files have uncommitted changes", unpushed:"commits are not pushed",
+  no_upstream:"branch has no upstream on GitHub", stale:"datasets are stale", errors:"sources failed this run",
+  road:"How it works", tickets:"Tickets", activity:"Activity", facts:"Facts", updated:"Updated",
+  done:"Done", wait:"In review", open:"Open", dead:"Canceled", noroad:"No diagram yet.", notickets:"No Linear or Notion source.",
+  noact:"Nothing in the last 14 days.", repo:"Code", branch:"Branch", ahead:"Unpushed", behind:"Behind GitHub", dirtyf:"Uncommitted files", last:"Last commit",
+  local_only:"Local only, no GitHub", data:"Data", newest:"Newest", days:"days ago", limit:"Stale after N days", notes:"Note tasks",
+  notes_open:"open", notes_done:"done", trend:"Trend", t_open:"Open tickets", t_todo:"Things waiting on you", commits:"Commits per week",
+  needtwo:"Needs two or more runs before a line can be drawn.", paths:"Files", errs:"What failed", pr_open:"Open PRs", commit:"commit", tdone:"done", tpr:"PR",
+  on_node:"Tickets on this step", other:"Tickets not tied to a step", show_dead:"Show canceled", stale1:"stale"}
+};
+const T = L[D.lang] || L[D.lang.split("-")[0]] || L.en;
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const link = (href, text) => href ? `<a href="${esc(href)}" target="_blank" rel="noopener">${esc(text)}</a>` : esc(text);
+const md = d => d ? d.slice(5, 10).replace("-", "/") : "";
+const todoText = t => `${t.where ? esc(t.where) + "：" : ""}${T[t.t]}`;
+
+function home(){
+  const all = D.projects.flatMap(p => p.todo.map(t => ({...t, p})));
+  const kinds = {}; all.forEach(t => kinds[t.kind] = (kinds[t.kind] || 0) + 1);
+  return `<section class="hero"><h1>${D.projects.length} ${T.projects}</h1>
+    <div class="muted">${all.length ? `${all.length} ${T.waiting}` : T.nothing}</div></section>
+  ${all.length ? `<div class="todo">${all.map(t => `<a href="${t.go}"><span class="n">${t.n ?? "•"}</span><span>${todoText(t)}</span><span class="who"><i class="dot" style="background:${t.p.color};display:inline-block"></i> ${esc(t.p.name)}</span></a>`).join("")}</div>` : ""}
+  <div class="drawers">${D.projects.map(p => `<a class="drawer" href="#${p.key}" style="--pc:${p.color}">
+    <h3>${esc(p.name)}</h3><p>${esc(p.tag || "")}</p>
+    <div class="pills">${counts(p)}${notesOpen(p) ? `<span class="pill p-dead">${T.notes} ${notesOpen(p)}</span>` : ""}${p.todo.length ? `<span class="pill p-open">${p.todo.length} ${T.waiting}</span>` : ""}</div>
+    ${bars(p)}</a>`).join("")}</div>`;
+}
+const notesOpen = p => p.facts.obsidian.reduce((a, o) => a + o.open, 0);
+const counts = p => ["done","wait","open"].filter(s => p.counts[s]).map(s => `<span class="pill p-${s}">${T[s]} ${p.counts[s]}</span>`).join("");
+
+function weeks(p){
+  const w = {}; p.facts.repos.forEach(r => r.weekly.forEach(x => w[x.week] = Math.max(w[x.week] || 0, x.n)));
+  return Object.keys(w).sort().map(k => ({week:k, n:w[k]}));
+}
+function bars(p, big){
+  const w = weeks(p); if (!w.length) return "";
+  const W = big ? 600 : 260, H = big ? 120 : 34, max = Math.max(1, ...w.map(x => x.n)), bw = W / w.length;
+  return `<svg class="chart" viewBox="0 0 ${W} ${H + (big ? 18 : 0)}" role="img" aria-label="${T.commits}">${w.map((x, i) => {
+    const h = Math.round(x.n / max * (H - 4)); return `<rect x="${i * bw + 2}" y="${H - h}" width="${bw - 4}" height="${h}" rx="2" fill="${p.color}" opacity=".75"><title>${x.week}: ${x.n}</title></rect>`
+      + (big && (i % 3 === 0) ? `<text x="${i * bw + 2}" y="${H + 14}">${md(x.week)}</text>` : "");}).join("")}</svg>`;
+}
+function lines(p){
+  const t = p.trend; if (t.length < 2) return `<p class="empty">${T.needtwo}</p>`;
+  const W = 600, H = 150, pad = 26, max = Math.max(1, ...t.flatMap(x => [x.open, x.todo]));
+  const X = i => pad + i * (W - 2 * pad) / (t.length - 1), Y = v => H - 18 - v / max * (H - 36);
+  const path = k => t.map((x, i) => `${i ? "L" : "M"}${X(i).toFixed(1)},${Y(x[k]).toFixed(1)}`).join("");
+  return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${T.trend}">
+    <path d="${path("open")}" fill="none" stroke="var(--viz-a)" stroke-width="2"/>
+    <path d="${path("todo")}" fill="none" stroke="var(--viz-b)" stroke-width="2" stroke-dasharray="5 4"/>
+    ${t.map((x, i) => `<circle cx="${X(i)}" cy="${Y(x.open)}" r="3" fill="var(--viz-a)"><title>${x.date} ${T.t_open}: ${x.open}</title></circle><circle cx="${X(i)}" cy="${Y(x.todo)}" r="3" fill="var(--viz-b)"><title>${x.date} ${T.t_todo}: ${x.todo}</title></circle>`).join("")}
+    <text x="${pad}" y="${H - 2}">${md(t[0].date)}</text><text x="${W - pad}" y="${H - 2}" text-anchor="end">${md(t.at(-1).date)}</text>
+    <text x="2" y="${Y(max) + 4}">${max}</text></svg>
+    <div class="legend"><span><i style="background:var(--viz-a)"></i>${T.t_open}</span><span><i style="background:var(--viz-b)"></i>${T.t_todo}</span></div>`;
+}
+
+function ticketRow(t){
+  return `<div class="tk"><span class="id">${link(t.url, t.id || "")}</span><span>${esc(t.title)}${t.benefit ? `<div class="small muted">${esc(t.benefit)}</div>` : ""}</span><span class="pill p-${t.state}" style="margin-left:auto">${T[t.state] || esc(t.state)}</span></div>`;
+}
+function road(p){
+  const nodes = p.nodes || []; if (!nodes.length) return `<p class="empty">${T.noroad}</p>`;
+  const tk = p.facts.tickets, byNode = id => tk.filter(t => t.node === id);
+  const spine = nodes.filter(n => n.on == null);
+  let h = `<div class="road">`, zone = null;
+  const btn = (n, cls) => { const ts = byNode(n.id), c = s => ts.filter(t => t.state === s).length;
+    return `<button class="node ${cls}" data-id="${n.id}" aria-expanded="false" aria-controls="pn-${p.key}-${n.id}"><span class="num">${n.id}</span><b>${esc(n.title)}</b>${n.sub ? `<span class="s">${esc(n.sub)}</span>` : ""}${ts.length ? `<div class="pills">${["done","wait","open"].filter(c).map(s => `<span class="pill p-${s}">${T[s]} ${c(s)}</span>`).join("")}</div>` : ""}</button>`; };
+  const panel = n => `<div class="panel" id="pn-${p.key}-${n.id}" hidden><h4>${n.id}. ${esc(n.title)}</h4>${n.detail ? `<p>${esc(n.detail)}</p>` : ""}
+    ${(n.paths || []).length ? `<div class="small muted">${T.paths}：${n.paths.map(x => `<code>${esc(x)}</code>`).join(" · ")}</div>` : ""}
+    ${byNode(n.id).length ? `<h4 style="margin-top:10px">${T.on_node}</h4>${byNode(n.id).map(ticketRow).join("")}` : ""}</div>`;
+  for (const s of spine){
+    if (s.zone && s.zone !== zone){ zone = s.zone; h += `<div class="zone">${esc(zone)}</div>`; }
+    const side = d => nodes.filter(n => n.on === s.id && (n.side || "r") === d);
+    h += `<div class="cell l">${side("l").map(n => btn(n, "br")).join("")}</div><div class="cell s">${btn(s, "spine")}</div><div class="cell r">${side("r").map(n => btn(n, "br")).join("")}</div>`;
+    h += [s, ...side("l"), ...side("r")].map(panel).join("");
+  }
+  return h + `</div>`;
+}
+function tickets(p){
+  const tk = p.facts.tickets; if (!tk.length) return `<p class="empty">${(p.sources || {}).linear || (p.sources || {}).notion ? "0" : T.notickets}</p>`;
+  const group = s => tk.filter(t => t.state === s);
+  return ["wait","open","done"].filter(s => group(s).length).map(s => `<div class="card"><h3>${T[s]} · ${group(s).length}</h3>${group(s).map(ticketRow).join("")}</div>`).join("")
+    + (group("dead").length ? `<details class="card"><summary>${T.show_dead} · ${group("dead").length}</summary>${group("dead").map(ticketRow).join("")}</details>` : "");
+}
+function activityTab(p){
+  const a = p.activity, kind = {commit:T.commit, done:T.tdone, pr:T.tpr};
+  return `<div class="card"><h3>${T.trend}</h3>${lines(p)}</div>
+    <div class="card"><h3>${T.commits}</h3>${bars(p, true) || `<p class="empty">—</p>`}</div>
+    <div class="card"><h3>${T.activity}</h3>${a.length ? `<div class="act">${a.map(x => `<span class="d">${md(x.date)}</span><span><span class="pill p-${x.kind === "done" ? "done" : x.kind === "pr" ? "wait" : "dead"}">${kind[x.kind]}</span> ${x.url ? link(x.url, x.text) : esc(x.text)} <span class="small muted">${esc(x.where || x.ref || "")}</span></span>`).join("")}</div>` : `<p class="empty">${T.noact}</p>`}</div>`;
+}
+function factsTab(p){
+  const f = p.facts, rows = [];
+  for (const r of f.repos){
+    const bits = [`${T.branch} <code>${esc(r.branch)}</code>`];
+    if (!r.has_origin) bits.push(`<span class="pill p-dead">${T.local_only}</span>`);
+    if (r.ahead) bits.push(`<span class="pill p-open">${T.ahead} ${r.ahead}</span>`);
+    if (r.behind) bits.push(`<span class="pill p-dead">${T.behind} ${r.behind}</span>`);
+    if (r.dirty) bits.push(`<span class="pill p-open">${T.dirtyf} ${r.dirty}</span>`);
+    rows.push([`${T.repo} · ${esc(r.label)}`, `<code>${esc(r.path)}</code><div>${bits.join(" ")}</div>${r.last_commit ? `<div class="small muted">${T.last}：${esc(r.last_commit)}</div>` : ""}`]);
+  }
+  if (f.prs.length) rows.push([T.pr_open, f.prs.map(x => `<div>${link(x.url, `#${x.number}`)} ${esc(x.title)} <span class="small muted">${esc(x.repo || "")} · ${md(x.createdAt)}</span></div>`).join("")]);
+  for (const d of f.data) rows.push([`${T.data} · ${esc(d.label)}`, d.error ? `<span class="pill p-bad">${esc(d.error)}</span><div class="small muted"><code>${esc(d.path)}</code></div>`
+    : `${T.newest} <b>${esc(d.newest.slice(0, 10))}</b>（${d.age_days} ${T.days}）<span class="pill ${d.stale ? "p-bad" : "p-done"}">${d.stale ? T.stale1 : "OK"}</span><div class="small muted"><code>${esc(d.path)}</code> · ${T.limit.replace("N", d.max_age_days)}</div>`]);
+  for (const o of f.obsidian) rows.push([T.notes, `${o.open} ${T.notes_open} · ${o.done} ${T.notes_done} <div class="small muted"><code>${esc(o.path)}</code></div>${o.items.length ? `<details><summary>${o.open} ${T.notes_open}</summary>${o.items.map(i => `<div class="small">☐ ${esc(i.text)} <span class="muted">${esc(i.file)}</span></div>`).join("")}</details>` : ""}`]);
+  for (const r of p.notes || []) rows.push([esc(r[0]), esc(r[1])]);
+  if (f.errors.length) rows.push([T.errs, f.errors.map(e => `<div><span class="pill p-bad">!</span> ${esc(e)}</div>`).join("")]);
+  return `<div class="card"><div class="rows">${rows.map(([a, b]) => `<div>${a}</div><div>${b}</div>`).join("")}</div></div>`;
+}
+function project(p, tab){
+  const tabs = [["road", T.road], ["tickets", T.tickets], ["activity", T.activity], ["facts", T.facts]];
+  const body = {road, tickets, activity:activityTab, facts:factsTab}[tab](p);
+  return `<section style="--pc:${p.color}"><div class="phead"><h1><i class="dot" style="background:${p.color};width:14px;height:14px"></i>${esc(p.name)}</h1><p>${esc(p.tag || "")}</p>
+    <div class="links">${(p.links || []).map(([t, u]) => link(u, t + " ↗")).join("")}</div></div>
+    <nav class="sub">${tabs.map(([k, t]) => `<a href="#${p.key}/${k}" aria-current="${k === tab}">${t}${k === "tickets" && p.counts.open + p.counts.wait ? ` <small>${p.counts.open + p.counts.wait}</small>` : ""}</a>`).join("")}</nav>${body}</section>`;
+}
+function route(){
+  const [key, tab] = location.hash.slice(1).split("/"), p = D.projects.find(x => x.key === key);
+  $("#main").innerHTML = p ? project(p, ["road","tickets","activity","facts"].includes(tab) ? tab : "road") : home();
+  $("#menubtn").textContent = (p ? p.name : T.all) + " ▾";
+  document.title = p ? `${p.name} · ${D.title}` : D.title;
+}
+document.addEventListener("click", e => {
+  const n = e.target.closest(".node");
+  if (n){ const pn = document.getElementById(n.getAttribute("aria-controls")), open = n.getAttribute("aria-expanded") === "true";
+    document.querySelectorAll(".node[aria-expanded=true]").forEach(x => { x.setAttribute("aria-expanded", "false"); document.getElementById(x.getAttribute("aria-controls")).hidden = true; });
+    if (!open){ n.setAttribute("aria-expanded", "true"); pn.hidden = false; } return; }
+  if (!e.target.closest(".menu")) toggle(false);
+});
+function toggle(on){ $("#menulist").hidden = !on; $("#menubtn").setAttribute("aria-expanded", on); }
+$("#menubtn").onclick = () => toggle($("#menulist").hidden);
+document.addEventListener("keydown", e => { if (e.key === "Escape") toggle(false); });
+$("#menulist").innerHTML = `<a href="#">${T.all}</a>` + D.projects.map(p => `<a href="#${p.key}"><i class="dot" style="background:${p.color}"></i>${esc(p.name)}${p.todo.length ? `<small>${p.todo.length}</small>` : ""}</a>`).join("");
+$("#menulist").addEventListener("click", () => toggle(false));
+$("#brand").textContent = D.title;
+$("#stamp").textContent = `${T.updated} ${D.generated_at.slice(0, 16).replace("T", " ")}`;
+addEventListener("hashchange", () => { route(); scrollTo(0, 0); });
+route();
+</script>
+</body>
+</html>

@@ -1,0 +1,9 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "project-inventory",
+  "description": "Project inventory dashboard skill for Claude Code.",
+  "owner": {"name": "YuHsunWang", "url": "https://github.com/YuHsunWang"},
+  "plugins": [
+    {"name": "project-inventory", "description": "Take stock of all your projects and build one dashboard page.", "source": "./", "category": "productivity"}
+  ]
+}
