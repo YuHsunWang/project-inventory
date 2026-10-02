@@ -35,7 +35,7 @@ Say "inventory my projects" or run `/project-inventory`.
 | Needed for | What |
 |---|---|
 | everything | Python 3.9+, git |
-| Linear tickets | a Linear MCP connector in Claude |
+| Linear tickets | a Linear MCP connector in Claude, or `LINEAR_API_KEY` in the environment (faster; scripts then read Linear without Claude) |
 | Notion tickets | a Notion MCP connector in Claude |
 | GitHub PRs | `gh` CLI logged in, or a GitHub MCP connector |
 | parquet / duckdb data checks | `pip install duckdb` |

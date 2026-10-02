@@ -52,7 +52,8 @@ Talk to the user in their language and write page text (names, tags, diagram) in
 ## Refresh (every run)
 
 1. **Gather through MCP** what scripts cannot reach, into `HOME/gathered/<today>.json`:
-   - Linear: issues of the project (`list_issues` with the project). Map status type:
+   - Linear: skip this if `LINEAR_API_KEY` is set in the environment — collect.py then reads
+     Linear itself (faster, exact). Otherwise: issues of the project (`list_issues` with the project). Map status type:
      completed → `done`, canceled → `dead`, started with an open PR or "In Review" → `wait`,
      everything else → `open`.
    - Notion: query the database (or read the page's to-do blocks). Map its status property the
