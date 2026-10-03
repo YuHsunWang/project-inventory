@@ -18,9 +18,12 @@ HOME/inventory.json          projects, sources, data checks, diagram   (you writ
 HOME/gathered/<date>.json    tickets/PRs you fetched through MCP tools  (you write it each run)
 HOME/facts/<date>.json       one snapshot per run                       (collect.py)
 HOME/out/index.html          the page                                   (build.py)
+HOME/out/artifact.html       same page for a claude.ai Artifact          (build.py)
 ```
 
-`SCRIPTS` = the `scripts/` folder next to this file. Schemas for every file: `reference/schema.md`.
+`SCRIPTS` = the `scripts/` folder next to this file. Not running in Claude Code? Everything works
+the same except the Artifact publish option and `/schedule`; MCP steps need the matching
+connector in your own tool, and without one, say which source was not read. Schemas for every file: `reference/schema.md`.
 Talk to the user in their language and write page text (names, tags, diagram) in it too; set
 `"lang"` in inventory.json (`zh-TW` and `en` have page labels; anything else falls back to `en`).
 
@@ -51,10 +54,15 @@ Talk to the user in their language and write page text (names, tags, diagram) in
 
 ## Refresh (every run)
 
-1. **Gather through MCP** what scripts cannot reach, into `HOME/gathered/<today>.json`:
-   - Linear: issues of the project (`list_issues` with the project). Map status type:
-     completed → `done`, canceled → `dead`, started with an open PR or "In Review" → `wait`,
-     everything else → `open`.
+1. **Gather through MCP** what scripts cannot reach, into `HOME/gathered/<today>.json`.
+   Get `<today>` by running `date +%F` — collect.py looks for this computer's local date, which
+   can differ from the date you believe it is (time zones, runs near midnight).
+   - Linear: skip this if `LINEAR_API_KEY` is set in the environment — collect.py then reads
+     Linear itself (faster, exact). Otherwise: every issue of the project, archived ones included (`list_issues` with the
+     project, `includeArchived: true`, `limit: 250`; it returns one page at a time — pass the
+     returned `cursor` back until there is no next page).
+     Map exactly as collect.py does: status type completed → `done`, canceled → `dead`, status
+     name containing "review" → `wait`, everything else → `open`.
    - Notion: query the database (or read the page's to-do blocks). Map its status property the
      same way; say which values you mapped how the first time and save that in inventory.json
      (`sources.notion.status_map`).
@@ -76,15 +84,16 @@ Talk to the user in their language and write page text (names, tags, diagram) in
 | Option | How | Who can see it |
 |---|---|---|
 | Local file (default) | `HOME/out/index.html`, open in a browser | only this computer |
-| claude.ai Artifact | Artifact tool, publish `HOME/out/index.html` (same file path every run keeps one URL) | private to the user |
-| Vercel | `python3 SCRIPTS/publish_vercel.py HOME <project-name>` — creates the project, locks it (Vercel Authentication, all deployments) BEFORE deploying, then checks an anonymous visitor is turned away | only the user's logged-in Vercel account |
+| claude.ai Artifact (Claude Code only) | Artifact tool, publish `HOME/out/artifact.html` (build.py writes it without the html/head/body wrapper the host adds; the same file path every run keeps one URL) | private to the user |
+| Vercel | `python3 SCRIPTS/publish_vercel.py HOME <project-name>` (refuses an existing project it did not create; `--reuse` only after the user confirms that project is for this page) — creates the project, locks it (Vercel Authentication, all deployments) BEFORE deploying, then checks an anonymous visitor is turned away | only the user's logged-in Vercel account |
 | GitHub Pages | see below | **everyone on the internet** |
 
 **GitHub Pages is public**, also from a private repo on a free plan. The page lists project
 names, tickets, branches, file paths and data locations. Before the first Pages publish, say
 this in one plain sentence and get an explicit yes. Then: a repo the user names (create it with
 `gh repo create <name> --private` if needed), copy `out/index.html` to the repo root, commit,
-push, and enable Pages: `gh api -X POST repos/<owner>/<repo>/pages -f "source[branch]=main" -f "source[path]=/"`.
+push, and enable Pages on the repo's default branch (`gh repo view <owner>/<repo> --json defaultBranchRef -q .defaultBranchRef.name`;
+it is not always `main`): `gh api -X POST repos/<owner>/<repo>/pages -f "source[branch]=<branch>" -f "source[path]=/"`.
 Each later run: copy, commit, push. Pushing and creating repos are outward-facing — confirm the
 first time.
 
@@ -97,6 +106,7 @@ Never send the page anywhere the user did not choose.
 - If a run cannot read a source, the page must say so (collect.py does this) — do not fill the
   gap with yesterday's data or a guess.
 - Re-runs on the same day overwrite that day's snapshot; trends need snapshots on 2+ days.
-- Scheduling is not built in. If the user wants it nightly, point them to `/schedule` (or cron
-  for the script-only part: collect.py + build.py run without Claude, but then Linear/Notion
-  are not refreshed and the page says so).
+- Scheduling is not built in. If the user wants it nightly, point them to `/schedule` in Claude Code (or cron
+  for the script-only part: `collect.py HOME; build.py HOME` — `;`, not `&&`: collect.py exits 1
+  whenever Notion (or Linear without `LINEAR_API_KEY`) was not gathered, so `&&` would never build.
+  Cron has a bare environment: set `PATH` so it finds git and gh, and `LINEAR_API_KEY` if used).

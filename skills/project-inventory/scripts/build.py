@@ -4,7 +4,7 @@
 
 Uses the newest snapshot in <home>/facts/ for the page and every snapshot for the trend lines.
 """
-import datetime as dt, json, sys
+import datetime as dt, html as htmllib, json, sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -79,11 +79,16 @@ def main():
     page = {"title": inv.get("title", "Projects"), "lang": inv.get("lang", "en"),
             "date": now["date"], "generated_at": now["generated_at"], "projects": projects}
     html = (HERE / "template.html").read_text(encoding="utf-8")
-    html = html.replace("__TITLE__", page["title"]).replace("__LANG__", page["lang"])
+    html = html.replace("__LANG__", htmllib.escape(page["lang"])).replace("__TITLE__", htmllib.escape(page["title"]))
     html = html.replace("/*__DATA__*/null", json.dumps(page, ensure_ascii=False).replace("</", "<\\/"))
     out = home / "out" / "index.html"
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(html, encoding="utf-8")
+    # claude.ai Artifact: the host adds doctype/html/head/body and the meta tags itself
+    head = html.split("<head>", 1)[1].split("</head>", 1)[0]
+    head = "\n".join(l for l in head.splitlines() if not l.lstrip().startswith("<meta"))
+    body = html.split("<body>", 1)[1].rsplit("</body>", 1)[0]
+    (out.parent / "artifact.html").write_text(head.strip() + "\n" + body.strip() + "\n", encoding="utf-8")
     print(f"built {out} ({len(html):,} bytes, {len(projects)} projects, snapshot {now['date']}, {len(hist)} days of history)")
 
 

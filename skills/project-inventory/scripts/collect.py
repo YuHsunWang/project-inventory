@@ -6,19 +6,26 @@ Reads   <home>/inventory.json               projects and their sources
         <home>/gathered/<today>.json        tickets/PRs Claude fetched through MCP (optional)
 Writes  <home>/facts/<today>.json           one snapshot; build.py reads every snapshot for trends
 
-Script-side sources: local git checkouts, GitHub PRs via `gh`, Obsidian task lines, data freshness.
+Script-side sources: local git checkouts, GitHub PRs via `gh`, Obsidian task lines, data freshness,
+and Linear when $LINEAR_API_KEY is set (then Claude does not need to gather Linear).
 Nothing here needs a package outside the standard library except parquet/duckdb checks (duckdb).
 Exit 1 when any source failed; the failure is also written into the snapshot, so the page shows it.
 """
-import csv, datetime as dt, json, re, shutil, sqlite3, subprocess, sys
+import csv, datetime as dt, json, os, re, shutil, sqlite3, subprocess, sys, urllib.error, urllib.request
 from pathlib import Path
 
 RECENT_DAYS, WEEKS = 14, 12
 TASK = re.compile(r"^\s*[-*]\s+\[( |x|X)\]\s+(.*)$")
 
 
+# never stop to ask for a password: fail instead (cron has no one to answer). An ssh passphrase
+# prompt is left alone (overriding the ssh command would drop the user's core.sshCommand); the
+# 60 s timeout ends it.
+GIT_ENV = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
+
+
 def run(cmd, cwd=None, timeout=60):
-    r = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, timeout=timeout)
+    r = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, timeout=timeout, env=GIT_ENV)
     if r.returncode:
         raise RuntimeError((r.stderr or r.stdout).strip().splitlines()[-1] if (r.stderr or r.stdout).strip() else f"exit {r.returncode}")
     return r.stdout
@@ -53,6 +60,7 @@ def git_state(path, today):
         "last_commit": g("log", "-1", "--format=%cs %s") if g("rev-list", "-n1", "--all") else None,
         "weekly": weekly([c["date"] for c in commits], today),
         "recent": [c for c in commits if c["date"] >= recent_since][:40],
+        "_commits": commits,  # popped by main: the project's weekly counts, deduped across checkouts
     }
 
 
@@ -67,6 +75,40 @@ def gh_prs(repo):
     out = run(["gh", "pr", "list", "-R", repo, "--state", "open", "--limit", "50",
                "--json", "number,title,url,createdAt,isDraft,headRefName"])
     return [{**p, "repo": repo} for p in json.loads(out)]
+
+
+LINEAR_Q = """query($name:String!, $after:String){
+  projects(filter:{name:{eq:$name}}){ nodes{ id } }
+  issues(first:100, after:$after, includeArchived:true, filter:{project:{name:{eq:$name}}}){
+    nodes{ identifier title url createdAt completedAt state{ name type } }
+    pageInfo{ hasNextPage endCursor } } }"""
+
+
+def linear_tickets(project):
+    """Issues of one Linear project, straight from the API ($LINEAR_API_KEY), no Claude needed."""
+    out, after = [], None
+    while True:
+        req = urllib.request.Request("https://api.linear.app/graphql",
+                                     data=json.dumps({"query": LINEAR_Q, "variables": {"name": project, "after": after}}).encode(),
+                                     headers={"Authorization": os.environ["LINEAR_API_KEY"], "Content-Type": "application/json"})
+        try:
+            with urllib.request.urlopen(req, timeout=60) as r:
+                res = json.load(r)
+        except urllib.error.HTTPError as e:
+            raise RuntimeError(f"HTTP {e.code}")
+        if res.get("errors"):
+            raise RuntimeError(res["errors"][0].get("message"))
+        if not res["data"]["projects"]["nodes"]:
+            raise RuntimeError(f"no Linear project named {project!r} (check the exact name)")
+        page = res["data"]["issues"]
+        for i in page["nodes"]:
+            st = i["state"]
+            state = {"completed": "done", "canceled": "dead"}.get(st["type"]) or ("wait" if "review" in st["name"].lower() else "open")
+            out.append({"id": i["identifier"], "title": i["title"], "state": state, "url": i["url"], "source": "linear",
+                        "created": i["createdAt"][:10], "completed": (i["completedAt"] or "")[:10] or None})
+        if not page["pageInfo"]["hasNextPage"]:
+            return out
+        after = page["pageInfo"]["endCursor"]
 
 
 def obsidian_tasks(folder):
@@ -114,7 +156,12 @@ def newest_date(spec):
     elif kind in ("parquet", "duckdb"):
         import duckdb  # only needed for these two kinds
         if kind == "parquet":
-            src = f"read_parquet('{path}/**/*.parquet', hive_partitioning=true)" if path.is_dir() else f"read_parquet('{path}')"
+            # a folder: skip files/dirs starting with _ or . (staging/temp files, the Hive/Spark convention)
+            files = [str(x) for x in sorted(path.rglob("*.parquet"))
+                     if not any(part.startswith(("_", ".")) for part in x.relative_to(path).parts)] if path.is_dir() else [str(path)]
+            if not files:
+                raise RuntimeError("no .parquet files")
+            src = f"read_parquet({files!r}, hive_partitioning=true, union_by_name=true)"
             con = duckdb.connect()
         else:
             src, con = f'"{spec["table"]}"', duckdb.connect(str(path), read_only=True)
@@ -143,6 +190,9 @@ def main():
     gathered_f = home / "gathered" / f"{today}.json"
     gathered = json.loads(gathered_f.read_text(encoding="utf-8")) if gathered_f.exists() else {}
     have_gh = shutil.which("gh") is not None
+    # a gathered file under another date usually means Claude's date and this computer's date differ
+    others = sorted(x.name for x in (home / "gathered").glob("*.json") if x != gathered_f) if not gathered_f.exists() else []
+    other = f"; newest gathered file is {others[-1]}, this computer's date is {today}" if others else ""
     snap = {"date": today.isoformat(), "generated_at": dt.datetime.now().isoformat(timespec="seconds"),
             "gathered": gathered_f.exists(), "projects": {}}
     failed = 0
@@ -150,11 +200,21 @@ def main():
         src, g = p.get("sources", {}), gathered.get(p["key"], {})
         f = {"errors": list(g.get("errors", [])), "tickets": g.get("tickets", []),
              "repos": [], "prs": [], "obsidian": [], "data": []}
+        commits = {}
+        if src.get("linear") and os.environ.get("LINEAR_API_KEY") and "linear" not in g.get("read", []):
+            try:
+                f["tickets"] = [t for t in f["tickets"] if t.get("source") != "linear"] + linear_tickets(src["linear"]["project"])
+                g = {**g, "read": [*g.get("read", []), "linear"]}
+            except Exception as e:
+                f["errors"].append(f"linear: {e}")
         for r in src.get("local", []):
             try:
-                f["repos"].append({"label": r["label"], "path": r["path"], **git_state(Path(r["path"]).expanduser(), today)})
+                st = git_state(Path(r["path"]).expanduser(), today)
+                commits.update((c["hash"], c["date"]) for c in st.pop("_commits"))
+                f["repos"].append({"label": r["label"], "path": r["path"], **st})
             except Exception as e:
                 f["errors"].append(f'git {r["path"]}: {e}')
+        f["weekly"] = weekly(list(commits.values()), today)
         if "prs" in g:  # Claude fetched PRs through the GitHub MCP (no gh here)
             f["prs"] = g["prs"]
         elif src.get("github"):
@@ -178,7 +238,7 @@ def main():
                 f["data"].append({"label": d.get("label", d["path"]), "path": d["path"], "error": str(e)})
         for name in ("linear", "notion"):  # Claude lists what it read in "read"; a silent gap is an error
             if src.get(name) and name not in g.get("read", []) and not any(e.startswith(name) for e in f["errors"]):
-                f["errors"].append(f"{name}: not gathered today (gathered/{today}.json does not list it in \"read\")")
+                f["errors"].append(f"{name}: not gathered today (gathered/{today}.json does not list it in \"read\"){other}")
         failed += len(f["errors"])
         snap["projects"][p["key"]] = f
     out = home / "facts" / f"{today}.json"

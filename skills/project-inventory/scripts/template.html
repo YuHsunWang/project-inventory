@@ -44,7 +44,7 @@ code,.mono{font-family:var(--mono);font-size:.86em;overflow-wrap:anywhere}
 h1,h2,h3{letter-spacing:-.01em;line-height:1.3}
 .muted{color:var(--muted)} .small{font-size:13px}
 
-.bar{position:sticky;top:0;z-index:5;margin:0 -16px;padding:10px 16px;background:color-mix(in srgb,var(--ground) 80%,transparent);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border-bottom:1px solid var(--line)}
+.bar{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;margin:0 -16px;padding:10px 16px;background:color-mix(in srgb,var(--ground) 80%,transparent);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border-bottom:1px solid var(--line)}
 .bar .wrap{display:flex;gap:8px 14px;align-items:center;flex-wrap:wrap}
 .brand{font-weight:700;font-size:18px;text-decoration:none}
 .stamp{margin-left:auto;color:var(--muted);font-size:12.5px}
@@ -169,7 +169,7 @@ const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const link = (href, text) => href ? `<a href="${esc(href)}" target="_blank" rel="noopener">${esc(text)}</a>` : esc(text);
 const md = d => d ? d.slice(5, 10).replace("-", "/") : "";
-const todoText = t => `${t.where ? esc(t.where) + "：" : ""}${T[t.t]}`;
+const todoText = t => `${T[t.t]}${t.where ? ` <span class="muted small">· ${esc(t.where)}</span>` : ""}`;
 
 function home(){
   const all = D.projects.flatMap(p => p.todo.map(t => ({...t, p})));
@@ -186,6 +186,7 @@ const notesOpen = p => p.facts.obsidian.reduce((a, o) => a + o.open, 0);
 const counts = p => ["done","wait","open"].filter(s => p.counts[s]).map(s => `<span class="pill p-${s}">${T[s]} ${p.counts[s]}</span>`).join("");
 
 function weeks(p){
+  if (p.facts.weekly && p.facts.repos.length) return p.facts.weekly;  // collect.py dedupes commits across checkouts
   const w = {}; p.facts.repos.forEach(r => r.weekly.forEach(x => w[x.week] = Math.max(w[x.week] || 0, x.n)));
   return Object.keys(w).sort().map(k => ({week:k, n:w[k]}));
 }

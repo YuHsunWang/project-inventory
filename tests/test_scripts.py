@@ -1,0 +1,124 @@
+"""Checks for the script fixes. Stdlib only; no network, no Vercel, no Linear.
+
+    python3 tests/test_scripts.py
+"""
+import io, json, subprocess, urllib.error, sys, tempfile, types, urllib.request
+from pathlib import Path
+
+S = Path(__file__).resolve().parent.parent / "skills/project-inventory/scripts"
+sys.path.insert(0, str(S))
+import collect, publish_vercel as pv
+
+tmp = Path(tempfile.mkdtemp())
+git = lambda cwd, *a: subprocess.run(["git", "-c", "user.email=a@b", "-c", "user.name=a", *a], cwd=cwd, check=True, capture_output=True)
+
+
+def run(script, *args):
+    return subprocess.run([sys.executable, str(S / script), *args], capture_output=True, text=True)
+
+
+# --- collect + build: one repo checked out twice (a worktree) and one other repo -----------------
+a, b = tmp / "a", tmp / "b"
+for r in (a, b):
+    r.mkdir(); git(r, "init", "-q"); git(r, "commit", "-q", "--allow-empty", "-m", f"c1 {r.name}")
+git(a, "commit", "-q", "--allow-empty", "-m", "c2")
+git(a, "worktree", "add", "-q", str(tmp / "a-wt"))
+home = tmp / "home"; (home / "gathered").mkdir(parents=True)
+(home / "gathered" / "2000-01-01.json").write_text("{}")
+(home / "inventory.json").write_text(json.dumps({"title": "A&B <i>x</i>", "projects": [{
+    "key": "p", "name": "P", "color": "#c00",
+    "sources": {"notion": {"url": "x"}, "local": [{"label": "a", "path": str(a)}, {"label": "a-wt", "path": str(tmp / "a-wt")},
+                                                  {"label": "b", "path": str(b)}]}}]}))
+r = run("collect.py", str(home))
+# Notion not gathered -> exit 1 (that is why the docs say `;`, not `&&`), and the hint names the other date
+assert r.returncode == 1, r.stdout + r.stderr
+assert "newest gathered file is 2000-01-01.json" in r.stdout, r.stdout
+facts = json.loads(next((home / "facts").glob("*.json")).read_text())["projects"]["p"]
+# 3 distinct commits: a's two are seen from both checkouts but count once; b's one adds to them
+assert sum(w["n"] for w in facts["weekly"]) == 3, facts["weekly"]
+r = run("build.py", str(home))
+assert r.returncode == 0, r.stderr
+page = (home / "out/index.html").read_text()
+assert "<title>A&amp;B &lt;i&gt;x&lt;/i&gt;</title>" in page, "title must be HTML-escaped"
+
+# --- git never waits for a password ----------------------------------------------------------
+assert collect.GIT_ENV["GIT_TERMINAL_PROMPT"] == "0"
+
+
+# --- Linear: an empty project is fine, a wrong name is an error -------------------------------
+def fake_linear(projects):
+    body = {"data": {"projects": {"nodes": projects}, "issues": {"nodes": [], "pageInfo": {"hasNextPage": False}}}}
+    return lambda req, timeout: io.BytesIO(json.dumps(body).encode())
+
+collect.os.environ["LINEAR_API_KEY"] = "k"
+urllib.request.urlopen = fake_linear([{"id": "1"}])
+assert collect.linear_tickets("New") == []
+urllib.request.urlopen = fake_linear([])
+try:
+    collect.linear_tickets("Typo"); raise AssertionError("missing project must raise")
+except RuntimeError as e:
+    assert "no Linear project named" in str(e)
+
+
+# --- Vercel -----------------------------------------------------------------------------------
+vhome = tmp / "vhome"; (vhome / "out").mkdir(parents=True); (vhome / "out/index.html").write_text("x")
+pv.TOKEN = "t"
+real_call = pv.call
+REAL_ANON = pv.anon_status
+pv.shutil.which = lambda _: "/bin/vercel"
+calls = []
+
+def fake_call(method, path, body=None, team=None):
+    calls.append((method, path, team))
+    if method == "GET" and path.startswith("/v9/projects/"):
+        return 200, {"id": "prj_1", "accountId": "acc"}
+    if method == "PATCH":
+        return 200, {"ssoProtection": {"deploymentType": "all"}}
+    return 200, {"alias": []}
+
+def deploy(codes, *args):
+    pv.call = fake_call
+    pv.subprocess.run = lambda *a, **k: types.SimpleNamespace(returncode=0, stdout="https://x-1.vercel.app\n", stderr="")
+    pv.anon_status = lambda url: codes
+    sys.argv = ["publish_vercel.py", str(vhome), "dash", *args]
+    try:
+        pv.main(); return "ok"
+    except SystemExit as e:
+        return str(e.code)
+
+# an existing project this script did not make is never deployed over
+calls.clear()
+assert "already exists" in deploy(401)
+assert not any(m == "PATCH" for m, _, _ in calls), "must stop before touching the project"
+# --reuse takes it over and remembers it; the next run needs no flag
+assert deploy(401, "--reuse") == "ok"
+assert json.loads((vhome / "vercel.json").read_text()) == {"dash": "prj_1"}
+assert deploy(401) == "ok"
+# only a login wall proves the lock: 200 is public, 404 and "unreachable" prove nothing
+assert deploy(302) == "ok"
+for bad in (200, 404, "unreachable (x)"):
+    assert "could not confirm the page is locked" in deploy(bad), bad
+
+# a redirect counts as the lock only when it goes to Vercel's sign-in
+import email.message
+def redirect_to(loc):
+    h = email.message.Message(); h["Location"] = loc
+    def opener(*_):
+        def open_(url, timeout):
+            raise urllib.error.HTTPError(url, 302, "Found", h, None)
+        return types.SimpleNamespace(open=open_)
+    return opener
+pv.urllib.request.build_opener = redirect_to("https://vercel.com/sso-api?url=x")
+assert REAL_ANON("https://x/") == 302
+pv.urllib.request.build_opener = redirect_to("https://example.com/")
+assert REAL_ANON("https://x/") == "302 to https://example.com/"
+
+# team: an id goes as teamId=, a slug as slug=
+class R(io.BytesIO):
+    status = 200
+urls = []
+urllib.request.urlopen = lambda req, timeout: urls.append(req.full_url) or R(b"{}")
+real_call("GET", "/v9/projects/x", team="team_abc"); real_call("GET", "/v9/projects/x", team="my-team")
+assert urls == ["https://api.vercel.com/v9/projects/x?teamId=team_abc", "https://api.vercel.com/v9/projects/x?slug=my-team"], urls
+
+print("OK")

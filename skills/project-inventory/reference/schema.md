@@ -75,6 +75,7 @@ the first 8 chars of the page id) as `id`.
 ## facts/&lt;date&gt;.json (written by collect.py)
 
 Per project: `tickets` (copied from gathered), `repos` (branch, upstream, ahead, behind, dirty,
-last_commit, weekly commit counts for 12 weeks, recent commits for 14 days), `prs`,
+last_commit, weekly commit counts for 12 weeks, recent commits for 14 days), `weekly` (the project's
+commits per week across all its checkouts, each commit counted once), `prs`,
 `obsidian` (open/done counts, first 50 open items), `data` (newest, age_days, stale, or error),
 `errors`.

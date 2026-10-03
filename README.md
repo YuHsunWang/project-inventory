@@ -23,6 +23,21 @@ The home page lists everything that waits on you, across all projects.
 /plugin install project-inventory@project-inventory
 ```
 
+### Other AI coding tools (Codex, Hermes, …)
+
+No MCP server needed. The skill is a folder with `SKILL.md` (the steps) and `scripts/` (plain
+Python), the same layout Codex and Hermes read skills from. Copy the folder in:
+
+```
+git clone https://github.com/YuHsunWang/project-inventory
+cp -r project-inventory/skills/project-inventory ~/.codex/skills/     # Codex
+cp -r project-inventory/skills/project-inventory ~/.hermes/skills/    # Hermes
+```
+
+Any other tool that can run shell commands: tell it to read `skills/project-inventory/SKILL.md`
+and follow it. Claude-only parts: the claude.ai Artifact option and `/schedule`. Linear and
+Notion need that tool's own connector (or `LINEAR_API_KEY` for Linear).
+
 ## Use
 
 Say "inventory my projects" or run `/project-inventory`.
@@ -35,7 +50,7 @@ Say "inventory my projects" or run `/project-inventory`.
 | Needed for | What |
 |---|---|
 | everything | Python 3.9+, git |
-| Linear tickets | a Linear MCP connector in Claude |
+| Linear tickets | a Linear MCP connector in Claude, or `LINEAR_API_KEY` in the environment (faster; scripts then read Linear without Claude) |
 | Notion tickets | a Notion MCP connector in Claude |
 | GitHub PRs | `gh` CLI logged in, or a GitHub MCP connector |
 | parquet / duckdb data checks | `pip install duckdb` |
@@ -55,13 +70,33 @@ You choose. The default is a local file.
 
 ## Scripts (usable without Claude)
 
+The scripts are in `skills/project-inventory/scripts/`. To run them by hand, clone this repo
+(the plugin install puts its copy in Claude's own plugin folder). Without Claude you write
+`~/.project-inventory/inventory.json` yourself: start from
+[example-inventory.json](skills/project-inventory/reference/example-inventory.json).
+
 ```
-python3 scripts/collect.py ~/.project-inventory     # git, gh PRs, Obsidian tasks, data checks -> facts/<date>.json
-python3 scripts/build.py   ~/.project-inventory     # -> out/index.html
-python3 scripts/check_page.py ~/.project-inventory  # headless browser check, every tab and step, 390 + 1280 px
-python3 scripts/publish_vercel.py ~/.project-inventory <vercel-project-name>
+S=skills/project-inventory/scripts
+python3 $S/collect.py ~/.project-inventory     # git, gh PRs, Obsidian tasks, data checks -> facts/<date>.json
+python3 $S/build.py   ~/.project-inventory     # -> out/index.html
+python3 $S/check_page.py ~/.project-inventory  # headless browser check, every tab and step, 390 + 1280 px
+python3 $S/publish_vercel.py ~/.project-inventory <vercel-project-name>
 ```
 
-Run without Claude, the scripts do not refresh Linear or Notion. The page then says those sources were not read.
+Run without Claude, the scripts do not refresh Notion, or Linear unless `LINEAR_API_KEY` is set.
+The page then says those sources were not read, and `collect.py` exits 1. So chain the two with
+`;`, not `&&` — with `&&` the page would never be rebuilt:
+
+```
+# crontab: cron has almost no environment. Give it PATH (git, gh), and keep LINEAR_API_KEY in a
+# file only you can read (chmod 600) rather than in the crontab line.
+0 7 * * * PATH=/usr/local/bin:/usr/bin:/bin sh -c '. ~/.project-inventory/env; cd ~/project-inventory/skills/project-inventory/scripts; python3 collect.py ~/.project-inventory; python3 build.py ~/.project-inventory'
+```
+
+`~/.project-inventory/env` holds one line, `export LINEAR_API_KEY=lin_api_...` (leave it empty if
+you do not use the key).
+
+`publish_vercel.py` will not overwrite a Vercel project it did not create. To use one you already
+have, pass `--reuse` once.
 
 File formats: [skills/project-inventory/reference/schema.md](skills/project-inventory/reference/schema.md).

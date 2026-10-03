@@ -1,0 +1,24 @@
+{
+  "title": "Projects",
+  "lang": "en",
+  "publish": {"to": "local"},
+  "projects": [
+    {
+      "key": "myapp",
+      "name": "My App",
+      "color": "#2C6FC4",
+      "tag": "One sentence: what this project is for.",
+      "sources": {
+        "github": ["owner/myapp"],
+        "local": [{"label": "main checkout", "path": "~/code/myapp"}]
+      },
+      "data": [
+        {"label": "orders", "path": "~/code/myapp/data/orders.csv", "kind": "csv", "column": "created_at", "max_age_days": 2}
+      ],
+      "nodes": [
+        {"id": 1, "title": "Fetch", "sub": "API → orders.csv", "paths": ["fetch.py"]},
+        {"id": 2, "title": "Report", "sub": "orders.csv → report.html", "paths": ["report.py"]}
+      ]
+    }
+  ]
+}
