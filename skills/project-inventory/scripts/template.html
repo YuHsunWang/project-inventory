@@ -186,6 +186,7 @@ const notesOpen = p => p.facts.obsidian.reduce((a, o) => a + o.open, 0);
 const counts = p => ["done","wait","open"].filter(s => p.counts[s]).map(s => `<span class="pill p-${s}">${T[s]} ${p.counts[s]}</span>`).join("");
 
 function weeks(p){
+  if (p.facts.weekly && p.facts.repos.length) return p.facts.weekly;  // collect.py dedupes commits across checkouts
   const w = {}; p.facts.repos.forEach(r => r.weekly.forEach(x => w[x.week] = Math.max(w[x.week] || 0, x.n)));
   return Object.keys(w).sort().map(k => ({week:k, n:w[k]}));
 }
