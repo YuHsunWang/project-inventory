@@ -17,6 +17,7 @@ All state lives in one folder, `HOME` = `~/.project-inventory` unless the user n
 HOME/inventory.json          projects, sources, data checks, diagram   (you write it with the user)
 HOME/gathered/<date>.json    tickets/PRs you fetched through MCP tools  (you write it each run)
 HOME/facts/<date>.json       one snapshot per run                       (collect.py)
+HOME/summaries.json          one plain-words summary per project-week   (you write it)
 HOME/out/index.html          the page                                   (build.py)
 HOME/out/artifact.html       same page for a claude.ai Artifact          (build.py)
 ```
@@ -79,6 +80,14 @@ Talk to the user in their language and write page text (names, tags, diagram) in
 2. `python3 SCRIPTS/collect.py HOME` — git (fetches origin first), PRs via `gh`, Obsidian tasks,
    data checks. Exit 1 = some source failed; the page shows it. Read the printed ERROR lines.
 3. `python3 SCRIPTS/build.py HOME` → `HOME/out/index.html`.
+   It prints `SUMMARIES n weeks need a summary: HOME/out/summaries-needed.json` when a week has
+   no summary yet or got new work since its summary was written (the current week, usually; on
+   the first run, every past week). For each listed week write 2–3 short sentences in the page
+   language: what changed that week and why it matters, from the listed commits/tickets/PRs
+   only — no guesses. Save them in `HOME/summaries.json` as
+   `{"<key>": {"<week>": {"n": <n from the list>, "text": "…"}}}` (keep the other weeks), then
+   run build.py again. Many weeks on a first run: do them in batches; weeks not yet written
+   show "no summary" on the page.
 4. **Check the page** before handing it over: open it in a headless browser if one is available
    (Playwright: every project tab at 390 px and 1280 px, click every diagram step, no JS errors,
    no sideways scroll). No browser → say UNVERIFIED for the layout. `check_page.py` cannot
@@ -111,7 +120,7 @@ Never send the page anywhere the user did not choose.
 ## Rules
 
 - Facts on the page come from tools and scripts. Your own words go only into names, tags,
-  diagram text and ticket `benefit` notes, and those must be checkable against code/docs.
+  diagram text, ticket `benefit` notes and week summaries, and those must be checkable against code/docs.
 - If a run cannot read a source, the page must say so (collect.py does this) — do not fill the
   gap with yesterday's data or a guess.
 - Re-runs on the same day overwrite that day's snapshot. The ticket chart is rebuilt from ticket

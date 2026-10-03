@@ -79,18 +79,18 @@ h1{font-family:var(--display);font-weight:700;letter-spacing:-.02em;line-height:
 .sumt span{font-size:13.5px;color:var(--muted);letter-spacing:.01em}
 h2.sec{font-family:var(--display);font-size:24px;margin:44px 0 12px;font-weight:700;letter-spacing:-.01em}
 .todos{background:var(--paper);border-radius:var(--radius);box-shadow:var(--shadow);padding:2px 14px;margin-top:8px}
-.todo{display:grid;grid-template-columns:64px 1fr auto 18px;gap:4px 14px;align-items:baseline;padding:13px 4px;border-bottom:1px solid var(--line);text-decoration:none}
+.todo{display:grid;grid-template-columns:44px 1fr auto 18px;gap:2px 12px;align-items:baseline;padding:6px 4px;border-bottom:1px solid var(--line);text-decoration:none}
 .todos .todo:last-child{border-bottom:0}
 .todo:hover{background:color-mix(in srgb,var(--pc,var(--accent)) 5%,var(--paper))}
-.todo .tn{font-family:var(--display);font-size:30px;line-height:1;font-weight:700;text-align:right;font-variant-numeric:tabular-nums}
-.todo .tt{font-size:16px}
+.todo .tn{font-family:var(--display);font-size:19px;line-height:1;font-weight:700;text-align:right;font-variant-numeric:tabular-nums}
+.todo .tt{font-size:14.5px}
 .todo .tp{font-size:13px;color:var(--muted);white-space:nowrap}
-.todo .ta{color:var(--faint);font-size:20px;line-height:1}
+.todo .ta{color:var(--faint);font-size:17px;line-height:1}
 .todos.small{margin:18px 0 0;padding:0 12px}
-.todos.small .todo{grid-template-columns:44px 1fr 18px;padding:9px 4px}
-.todos.small .tn{font-size:22px}
+.todos.small .todo{grid-template-columns:36px 1fr 18px;padding:5px 4px}
+.todos.small .tn{font-size:16px}
 .todos.small .tp{display:none}
-@media (max-width:560px){.todo{grid-template-columns:44px 1fr 14px}.todo .tn{font-size:24px}.todo .tp{grid-column:2;grid-row:2;white-space:normal}.todo .ta{grid-row:1/3;grid-column:3}}
+@media (max-width:560px){.todo{grid-template-columns:36px 1fr 14px}.todo .tn{font-size:17px}.todo .tp{grid-column:2;grid-row:2;white-space:normal}.todo .ta{grid-row:1/3;grid-column:3}}
 .drawers{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:14px}
 .drawer{display:grid;gap:4px;background:var(--paper);border-radius:var(--radius);box-shadow:var(--shadow);padding:18px 20px 16px;text-decoration:none}
 .drawer:hover{background:color-mix(in srgb,var(--pc) 5%,var(--paper))}
@@ -280,6 +280,16 @@ ul.act .k{font-size:11.5px;font-weight:700;padding:0 7px;border-radius:999px;tex
 ul.act .k.commit{background:var(--dead-soft);color:var(--muted)} ul.act .k.done{background:var(--done-soft);color:var(--done)} ul.act .k.pr{background:var(--wait-soft);color:var(--wait)}
 ul.act .t{min-width:0;overflow-wrap:anywhere}
 ul.act .r{font-family:var(--mono);font-size:11.5px;color:var(--faint);margin-left:6px}
+.wk{padding:12px 0;border-top:1px solid var(--line)}
+.wk:first-child{border-top:0;padding-top:2px}
+.wk h4{margin:0 0 4px;font-size:14px;font-family:var(--mono);color:var(--muted);font-weight:600}
+.wk .sumx{margin:0 0 6px;font-size:14.5px;line-height:1.6;white-space:pre-line}
+.wk .sumx.none{color:var(--faint);font-size:13px}
+.wk details summary{cursor:pointer;font-size:12.5px;color:var(--muted)}
+.wk ul.act{margin-top:6px}
+button.morewk{margin-top:10px;font:inherit;font-size:13.5px;padding:6px 14px;border-radius:8px;border:1px solid var(--line);background:var(--paper);color:var(--ink);cursor:pointer}
+button.morewk:hover{background:var(--ground)}
+.facts + h3{margin-top:26px}
 footer{margin-top:60px;color:var(--muted);font-size:13px;border-top:1px solid var(--line);padding-top:16px}
 footer p{margin:4px 0;max-width:80ch}
 </style>
@@ -315,16 +325,17 @@ const L = {
   tk_chart:"待辦數量變化", tk_chart_sub:"近 90 天。用待辦的建立、完成、取消日期倒推。", s_done:"累計做完", s_done_s:"做完", s_open:"還沒做完（含等你確認）", s_open_s:"沒做完",
   wk_chart:"每週改動次數", wk_sub:"近 12 週，共改了 X 次。", wk_none:"這段時間沒有改動。", wk_tip:"改了 X 次", wk_this:"這週",
   table:"看數字表", th_date:"日期", th_week:"那週一", th_n:"改動次數",
-  activity:"最近動態", act_hint:"近 14 天的改動、做完的待辦、新開的 PR，新的在最上面。", noact:"這 14 天沒有動靜。", more:"再看 X 筆",
+  activity:"每週進度", act_hint:"每週一段白話說明，點開看那週每一筆改動。新的在最上面。", noact:"還沒有任何紀錄。", nosum:"這週還沒寫說明。", more_wk:"再看更早 4 週",
+  wk_cnt:{commit:"X 筆改動", done:"做完 X 張待辦", pr:"X 個 PR"},
   k_commit:"改動", k_done:"做完", k_pr2:"PR",
   lg_done:"做完了", lg_wait:"改好了，等你確認", lg_open:"還沒做", lg_dead:"取消",
   tk_h:"待辦：做了什麼、還差什麼", tk_counts:"做完 A 張 · 等你確認 B 張 · 還沒做 C 張 · 取消 D 張",
   col_done:"帶來了什麼", col_wait:"改好了，等你按合併", col_open:"做完會帶來什麼", gain:"做完會得到 → ", dead_sum:"取消的待辦（X 張）— 點開看",
   notickets:"這個專案沒有接 Linear 或 Notion。",
-  facts_hint:"放在哪裡、多新、git 狀態。", repo:"程式碼", branch:"分支", ahead:"還沒推", behind:"落後 GitHub", dirtyf:"改到一半的檔", last:"最後一次改動",
+  facts_hint:"本機是這台電腦上的資料夾和資料；雲端是 GitHub、Linear、Notion 上的狀態。", f_local:"本機", f_cloud:"雲端", gh:"GitHub", remote_none:"沒有設定 GitHub", no_up:"這條分支還沒推上去", repo:"程式碼", branch:"分支", ahead:"還沒推", behind:"落後 GitHub", dirtyf:"改到一半的檔", last:"最後一次改動",
   local_only:"只在本機，沒有 GitHub", data:"資料", newest:"最新到", days:"天前", limit:"超過 X 天算過期", stale1:"過期", ok1:"新鮮",
   notes:"筆記待辦", notes_open:"個還沒勾", notes_done:"個已勾", pr_open:"開著的 PR", errs:"沒抓到的東西",
-  foot:["右上角是這一版的時間。", "待辦看 Linear／Notion，「等你合併」看 GitHub 上還沒合併的修改（PR），git 狀態和資料日期是在電腦上掃出來的。", "運作流程和待辦的說明是手寫的。"]},
+  foot:["待辦：Linear／Notion", "等你合併：GitHub 的 PR", "git 狀態、資料日期：這台電腦"]},
  "en": {all:"All projects", projects:"projects", todo_h:"Waiting on you", nothing:"Nothing waits on you", projects_h:"Projects", back:"‹ All projects",
   prs:"PRs wait for your merge", review:"tickets are done and wait for review", dirty:"files have uncommitted changes", unpushed:"commits are not pushed",
   no_upstream:"branch is not on GitHub yet", stale:"datasets are stale", errors:"sources failed this run", join:", ",
@@ -340,16 +351,17 @@ const L = {
   tk_chart:"Tickets over time", tk_chart_sub:"Last 90 days, rebuilt from each ticket's created, done and canceled dates.", s_done:"Done so far", s_done_s:"done", s_open:"Not done (incl. in review)", s_open_s:"open",
   wk_chart:"Commits per week", wk_sub:"Last 12 weeks, X commits.", wk_none:"No commits in this period.", wk_tip:"X commits", wk_this:"",
   table:"Show the numbers", th_date:"Date", th_week:"Week of", th_n:"Commits",
-  activity:"Recent activity", act_hint:"Commits, finished tickets and new PRs from the last 14 days, newest first.", noact:"Nothing in the last 14 days.", more:"X more",
+  activity:"Week by week", act_hint:"A plain-words summary per week; open it for every change. Newest first.", noact:"Nothing yet.", nosum:"No summary for this week yet.", more_wk:"4 earlier weeks",
+  wk_cnt:{commit:"X commits", done:"X tickets done", pr:"X PRs"},
   k_commit:"commit", k_done:"done", k_pr2:"PR",
   lg_done:"Done", lg_wait:"Done, waiting for your review", lg_open:"Open", lg_dead:"Canceled",
   tk_h:"Tickets: what got done, what is left", tk_counts:"A done · B in review · C open · D canceled",
   col_done:"what it brought", col_wait:"waiting for your merge", col_open:"what finishing it brings", gain:"Brings → ", dead_sum:"Canceled tickets (X) — click to show",
   notickets:"No Linear or Notion source.",
-  facts_hint:"Where it lives, how fresh it is, git state.", repo:"Code", branch:"Branch", ahead:"Unpushed", behind:"Behind GitHub", dirtyf:"Uncommitted files", last:"Last commit",
+  facts_hint:"Local: folders and data on this computer. Cloud: state on GitHub, Linear, Notion.", f_local:"Local", f_cloud:"Cloud", gh:"GitHub", remote_none:"No GitHub remote", no_up:"branch not pushed yet", repo:"Code", branch:"Branch", ahead:"Unpushed", behind:"Behind GitHub", dirtyf:"Uncommitted files", last:"Last commit",
   local_only:"Local only, no GitHub", data:"Data", newest:"Newest", days:"days ago", limit:"Stale after X days", stale1:"stale", ok1:"fresh",
   notes:"Note tasks", notes_open:"open", notes_done:"done", pr_open:"Open PRs", errs:"What failed",
-  foot:["The time at the top right is when this page was built.", "Tickets come from Linear / Notion, PRs from GitHub; git state and data dates are read on this computer.", "Diagram text and ticket notes are written by hand."]}
+  foot:["Tickets: Linear / Notion", "Waiting for merge: GitHub PRs", "Git state, data dates: this computer"]}
 };
 const T = L[D.lang] || L[D.lang.split("-")[0]] || L.en;
 const X = (s, ...v) => v.reduce((a, x, i) => a.replace(["X","Y","Z"][i], x), s);
@@ -582,12 +594,21 @@ function renderTrends(p){
   return h + `</div>`;
 }
 function renderActivity(p){
-  const a = p.activity, K = {commit:T.k_commit, done:T.k_done, pr:T.k_pr2};
+  const H = p.history, K = {commit:T.k_commit, done:T.k_done, pr:T.k_pr2};
   let h = `<h3>${T.activity}</h3><p class="hint">${T.act_hint}</p><div class="card">`;
-  if (!a.length) return h + `<p class="empty">${T.noact}</p></div>`;
-  const li = x => `<li><span class="d">${mdOf(x.date)}</span><span class="k ${x.kind}">${K[x.kind]}</span><span class="t">${esc(x.text)}${x.url ? ext(x.url, esc(x.ref || ""), "r") : `<span class="r">${esc(x.where || x.ref || "")}</span>`}</span></li>`;
-  h += `<ul class="act">${a.slice(0,10).map(li).join("")}</ul>`;
-  if (a.length > 10) h += `<details class="tbl"><summary>${X(T.more, a.length-10)}</summary><ul class="act">${a.slice(10).map(li).join("")}</ul></details>`;
+  if (!H.length) return h + `<p class="empty">${T.noact}</p></div>`;
+  const li = x => `<li><span class="d">${mdOf(x.date)}</span><span class="k ${x.kind}">${K[x.kind]}</span><span class="t">${esc(x.text)}${x.url ? ext(x.url, esc(x.ref || ""), "r") : `<span class="r">${esc(x.where || x.ref || "")}</span>`}${x.note ? `<span class="note2">${esc(x.note)}</span>` : ""}</span></li>`;
+  const d0 = new Date(D.date + "T00:00"); d0.setDate(d0.getDate() - (d0.getDay() + 6) % 7);
+  const H0 = `${d0.getFullYear()}-${String(d0.getMonth()+1).padStart(2,"0")}-${String(d0.getDate()).padStart(2,"0")}`;
+  const wk = (w, i) => {
+    const end = new Date(w.week + "T00:00"); end.setDate(end.getDate() + 6);
+    const cnt = ["commit", "done", "pr"].map(k => [k, w.items.filter(x => x.kind === k).length]).filter(([, n]) => n).map(([k, n]) => X(T.wk_cnt[k], n)).join(" · ");
+    return `<div class="wk"${i >= 4 ? " hidden" : ""}><h4>${mdOf(w.week)}–${end.getMonth()+1}/${end.getDate()}${i === 0 && w.week === H0 ? ` ${T.wk_this}` : ""}</h4>
+      ${w.summary ? `<p class="sumx">${esc(w.summary)}</p>` : `<p class="sumx none">${T.nosum}</p>`}
+      <details><summary>${cnt}</summary><ul class="act">${w.items.map(li).join("")}</ul></details></div>`;
+  };
+  h += H.map(wk).join("");
+  if (H.length > 4) h += `<button type="button" class="morewk">${T.more_wk}</button>`;
   return h + `</div>`;
 }
 function renderTickets(p){
@@ -604,22 +625,27 @@ function renderTickets(p){
   return h;
 }
 function renderFacts(p){
-  const f = p.facts, rows = [];
+  const f = p.facts, src = p.sources || {}, local = [], cloud = [];
   for (const r of f.repos){
     const bits = [`${T.branch} <code>${esc(r.branch)}</code>`];
-    if (!r.has_origin) bits.push(`<span class="st hist">${T.local_only}</span>`);
-    if (r.ahead) bits.push(`<span class="st warn">${T.ahead} ${r.ahead}</span>`);
-    if (r.behind) bits.push(`<span class="st hist">${T.behind} ${r.behind}</span>`);
     if (r.dirty) bits.push(`<span class="st warn">${T.dirtyf} ${r.dirty}</span>`);
-    rows.push([`${T.repo} · ${esc(r.label)}`, `<code>${esc(r.path)}</code><div>${bits.join(" ")}</div>${r.last_commit ? `<div class="small">${T.last}：${esc(r.last_commit)}</div>` : ""}`]);
+    local.push([`${T.repo} · ${esc(r.label)}`, `<code>${esc(r.path)}</code><div>${bits.join(" ")}</div>${r.last_commit ? `<div class="small">${T.last}：${esc(r.last_commit)}</div>` : ""}`]);
+    const up = [];
+    if (r.ahead) up.push(`<span class="st warn">${T.ahead} ${r.ahead}</span>`);
+    if (r.behind) up.push(`<span class="st hist">${T.behind} ${r.behind}</span>`);
+    if (r.has_origin && !r.upstream && r.branch !== "(detached)") up.push(`<span class="st warn">${T.no_up}</span>`);
+    cloud.push([`${T.gh} · ${esc(r.label)}`, r.has_origin ? `${r.remote ? ext(/^https?:/.test(r.remote) ? r.remote : "", esc(r.remote)) : ""}<div>${T.branch} <code>${esc(r.branch)}</code> ${up.join(" ")}</div>` : `<span class="st hist" style="margin-left:0">${T.local_only}</span>`]);
   }
-  if (f.prs.length) rows.push([T.pr_open, f.prs.map(x => `<div>${ext(x.url, `#${esc(x.number)}`)} ${esc(x.title)} <span class="small">${esc(x.repo || "")} · ${mdOf(x.createdAt)}</span></div>`).join("")]);
-  for (const d of f.data) rows.push([`${T.data} · ${esc(d.label)}`, d.error ? `<span class="st bad" style="margin-left:0">${esc(d.error)}</span><div class="small"><code>${esc(d.path)}</code></div>`
+  for (const d of f.data) local.push([`${T.data} · ${esc(d.label)}`, d.error ? `<span class="st bad" style="margin-left:0">${esc(d.error)}</span><div class="small"><code>${esc(d.path)}</code></div>`
     : `${T.newest} <b>${esc(d.newest.slice(0, 10))}</b>（${d.age_days} ${T.days}）<span class="st ${d.stale ? "bad" : "ok"}">${d.stale ? T.stale1 : T.ok1}</span><div class="small"><code>${esc(d.path)}</code> · ${X(T.limit, d.max_age_days)}</div>`]);
-  for (const o of f.obsidian) rows.push([T.notes, `${o.open} ${T.notes_open} · ${o.done} ${T.notes_done} <div class="small"><code>${esc(o.path)}</code></div>${o.items.length ? `<details><summary>${o.open} ${T.notes_open}</summary>${o.items.map(i => `<div class="small">☐ ${esc(i.text)} · ${esc(i.file)}</div>`).join("")}</details>` : ""}`]);
-  for (const r of p.notes || []) rows.push([esc(r[0]), esc(r[1])]);
-  if (f.errors.length) rows.push([T.errs, f.errors.map(e => `<div><span class="st bad" style="margin-left:0">!</span> ${esc(e)}</div>`).join("")]);
-  return `<p class="hint">${T.facts_hint}</p><div class="facts"><table>${rows.map(([a, b]) => `<tr><th>${a}</th><td>${b}</td></tr>`).join("")}</table></div>`;
+  for (const o of f.obsidian) local.push([T.notes, `${o.open} ${T.notes_open} · ${o.done} ${T.notes_done} <div class="small"><code>${esc(o.path)}</code></div>${o.items.length ? `<details><summary>${o.open} ${T.notes_open}</summary>${o.items.map(i => `<div class="small">☐ ${esc(i.text)} · ${esc(i.file)}</div>`).join("")}</details>` : ""}`]);
+  for (const r of p.notes || []) local.push([esc(r[0]), esc(r[1])]);
+  if (f.prs.length) cloud.push([T.pr_open, f.prs.map(x => `<div>${ext(x.url, `#${esc(x.number)}`)} ${esc(x.title)} <span class="small">${esc(x.repo || "")} · ${mdOf(x.createdAt)}</span></div>`).join("")]);
+  if (src.linear) cloud.push(["Linear", esc(src.linear.project)]);
+  if (src.notion) cloud.push(["Notion", ext(src.notion.url, esc(src.notion.url))]);
+  const tbl = (head, rows) => rows.length ? `<h3>${head}</h3><div class="facts"><table>${rows.map(([a, b]) => `<tr><th>${a}</th><td>${b}</td></tr>`).join("")}</table></div>` : "";
+  const errs = f.errors.length ? [[T.errs, f.errors.map(e => `<div><span class="st bad" style="margin-left:0">!</span> ${esc(e)}</div>`).join("")]] : [];
+  return `<p class="hint">${T.facts_hint}</p>${tbl(T.f_local, local)}${tbl(T.f_cloud, cloud)}${tbl(T.errs, errs)}`;
 }
 function nowLine(p){
   const n = p.now, bits = [];
@@ -721,6 +747,8 @@ function boot(){
   document.addEventListener("keydown", e => { if (e.key === "Escape" && !$("#menu").hidden){ toggleMenu(false); $("#menubtn").focus(); } });
   document.addEventListener("click", e => {
     if (!$("#menu").hidden && !e.target.closest("#menu,#menubtn")) toggleMenu(false);
+    const mw = e.target.closest(".morewk");
+    if (mw){ const rest = [...mw.parentNode.querySelectorAll(".wk[hidden]")]; rest.slice(0, 4).forEach(x => x.hidden = false); if (rest.length <= 4) mw.remove(); return; }
     const g = e.target.closest("[data-go]");
     if (g){ go(g.dataset.go); return; }
     const n = e.target.closest(".node");

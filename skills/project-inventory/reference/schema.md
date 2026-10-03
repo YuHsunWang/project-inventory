@@ -89,10 +89,20 @@
 (canceled). Notion rows use the page URL as `url` and a short id (e.g. the row's ID property or
 the first 8 chars of the page id) as `id`.
 
+## summaries.json (written by Claude, kept across runs)
+
+```json
+{"cvs": {"2026-09-28": {"n": 14, "text": "Two or three plain sentences about that week."}}}
+```
+
+Keys are the Monday of each week. `n` is the number of items the summary was written for;
+build.py lists a week in `out/summaries-needed.json` again when its count changes.
+
 ## facts/&lt;date&gt;.json (written by collect.py)
 
-Per project: `tickets` (copied from gathered), `repos` (branch, upstream, ahead, behind, dirty,
-last_commit, weekly commit counts for 12 weeks, recent commits for 14 days), `weekly` (the project's
-commits per week across all its checkouts, each commit counted once), `prs`,
+Per project: `tickets` (copied from gathered), `repos` (branch, upstream, remote URL, ahead,
+behind, dirty, last_commit, weekly commit counts for 12 weeks, recent commits for 14 days),
+`weekly` (the project's commits per week across all its checkouts, each commit counted once),
+`commits` (the whole history, newest 3000 per checkout, deduped), `prs`,
 `obsidian` (open/done counts, first 50 open items), `data` (newest, age_days, stale, or error),
 `errors`.

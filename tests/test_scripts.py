@@ -73,6 +73,28 @@ f = {"prs": [], "tickets": [], "data": [], "errors": [], "repos": [
 t = build.todos({"key": "k"}, f)
 assert [x["parts"] for x in t] == [[[2, "dirty"], [3, "unpushed"]], [[None, "no_upstream"]]], "one row per checkout"
 
+# --- progress history: grouped by week (Monday), a summary is stale once the week gets new work
+f = {"prs": [], "commits": [{"hash": "a", "date": "2026-09-28", "subject": "x"}, {"hash": "b", "date": "2026-10-04", "subject": "y"},
+                            {"hash": "c", "date": "2026-09-27", "subject": "z"}],
+     "tickets": [{"state": "done", "completed": "2026-09-30T10:00", "title": "t"}, {"state": "open", "title": "u"}]}
+h = build.history(f, {"2026-09-28": {"n": 2, "text": "s"}, "2026-09-21": {"n": 2, "text": "old"}})
+assert [(w["week"], len(w["items"])) for w in h] == [("2026-09-28", 3), ("2026-09-21", 1)], h
+assert h[0]["summary"] == "s" and not h[0]["fresh"], "3 items now, summary was written for 2: rewrite it"
+assert not h[1]["fresh"]
+assert h[0]["items"][0]["text"] == "y", "newest first"
+# the whole history reaches the page, and the weeks to summarise are listed for Claude
+r = run("build.py", str(home))
+need = json.loads((home / "out/summaries-needed.json").read_text())["p"]
+assert "SUMMARIES" in r.stdout and sum(w["n"] for w in need) == 3, need
+wk = need[0]["week"]
+(home / "summaries.json").write_text(json.dumps({"p": {w["week"]: {"n": w["n"], "text": "ok"} for w in need}}))
+r = run("build.py", str(home))
+assert "SUMMARIES" not in r.stdout and not (home / "out/summaries-needed.json").exists(), r.stdout
+
+# --- a remote URL never shows a token
+assert collect.clean_url("https://me:ghp_secret@github.com/o/r.git") == "https://github.com/o/r"
+assert collect.clean_url("git@github.com:o/r.git") == "https://github.com/o/r"
+
 # --- git never waits for a password ----------------------------------------------------------
 assert collect.GIT_ENV["GIT_TERMINAL_PROMPT"] == "0"
 

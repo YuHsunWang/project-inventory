@@ -10,7 +10,7 @@ For each project the page shows:
 - **Local git**: branch, uncommitted files, unpushed commits.
 - **Obsidian**: open note tasks (`- [ ]` lines).
 - **Data freshness**: the newest date read from inside your data files (not file timestamps).
-- **Progress**: commits per week, open and done tickets over the last 90 days (rebuilt from ticket dates, so it shows on the first run), recent work.
+- **Progress**: commits per week, open and done tickets over the last 90 days (rebuilt from ticket dates, so it shows on the first run), and the whole history week by week, each week with a short plain-words summary.
 
 The home page lists everything that waits on you, across all projects.
 

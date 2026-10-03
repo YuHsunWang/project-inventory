@@ -14,7 +14,7 @@ Exit 1 when any source failed; the failure is also written into the snapshot, so
 import csv, datetime as dt, json, os, re, shutil, sqlite3, subprocess, sys, urllib.error, urllib.request
 from pathlib import Path
 
-RECENT_DAYS, WEEKS = 14, 12
+RECENT_DAYS, WEEKS, HISTORY = 14, 12, 3000  # HISTORY: newest commits kept per checkout for the progress tab
 TASK = re.compile(r"^\s*[-*]\s+\[( |x|X)\]\s+(.*)$")
 
 
@@ -49,19 +49,25 @@ def git_state(path, today):
             behind, ahead = map(int, g("rev-list", "--left-right", "--count", f"{upstream}...HEAD").split())
         except Exception:
             upstream = None
-    since = (today - dt.timedelta(weeks=WEEKS)).isoformat()
-    log = g("log", "--all", f"--since={since}", "--format=%h%x09%cs%x09%s")
+    log = g("log", "--all", "-n", str(HISTORY), "--format=%h%x09%cs%x09%s")
     commits = [dict(zip(("hash", "date", "subject"), l.split("\t", 2))) for l in log.splitlines() if l]
     recent_since = (today - dt.timedelta(days=RECENT_DAYS)).isoformat()
     return {
         "branch": branch, "upstream": upstream, "has_origin": has_origin, "fetch_error": fetch_error,
+        "remote": clean_url(g("remote", "get-url", "origin")) if has_origin else None,
         "ahead": ahead, "behind": behind,
         "dirty": len([l for l in g("status", "--porcelain").splitlines() if l]),
         "last_commit": g("log", "-1", "--format=%cs %s") if g("rev-list", "-n1", "--all") else None,
         "weekly": weekly([c["date"] for c in commits], today),
         "recent": [c for c in commits if c["date"] >= recent_since][:40],
-        "_commits": commits,  # popped by main: the project's weekly counts, deduped across checkouts
+        "_commits": commits,  # popped by main: the project's history and weekly counts, deduped across checkouts
     }
+
+
+def clean_url(u):
+    """origin as a browser link, without any user:token@ in it."""
+    u = re.sub(r"^git@([^:]+):", r"https://\1/", u.strip())
+    return re.sub(r"^(\w+://)[^/@]+@", r"\1", u).removesuffix(".git")
 
 
 def weekly(dates, today):
@@ -211,11 +217,13 @@ def main():
         for r in src.get("local", []):
             try:
                 st = git_state(Path(r["path"]).expanduser(), today)
-                commits.update((c["hash"], c["date"]) for c in st.pop("_commits"))
+                for c in st.pop("_commits"):
+                    commits.setdefault(c["hash"], {**c, "where": r["label"]})
                 f["repos"].append({"label": r["label"], "path": r["path"], **st})
             except Exception as e:
                 f["errors"].append(f'git {r["path"]}: {e}')
-        f["weekly"] = weekly(list(commits.values()), today)
+        f["weekly"] = weekly([c["date"] for c in commits.values()], today)
+        f["commits"] = sorted(commits.values(), key=lambda c: c["date"], reverse=True)
         if "prs" in g:  # Claude fetched PRs through the GitHub MCP (no gh here)
             f["prs"] = g["prs"]
         elif src.get("github"):
