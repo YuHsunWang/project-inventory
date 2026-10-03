@@ -74,7 +74,9 @@ Talk to the user in their language and write page text (names, tags, diagram) in
 3. `python3 SCRIPTS/build.py HOME` → `HOME/out/index.html`.
 4. **Check the page** before handing it over: open it in a headless browser if one is available
    (Playwright: every project tab at 390 px and 1280 px, click every diagram step, no JS errors,
-   no sideways scroll). No browser → say UNVERIFIED for the layout.
+   no sideways scroll). No browser → say UNVERIFIED for the layout. `check_page.py` cannot
+   start because the temp folder is read-only (some sandboxes, e.g. Codex)? Re-run it with
+   `TMPDIR` set to a writable folder, e.g. `mkdir -p HOME/tmp && TMPDIR=HOME/tmp python3 ...`.
 5. **Report** in chat: first line = what failed, if anything. Then what waits on the user (the
    home list), which data is stale, and the page path / URL.
 6. **Publish** only where the user chooses (ask once, remember it in inventory.json `publish`).
