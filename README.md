@@ -23,6 +23,21 @@ The home page lists everything that waits on you, across all projects.
 /plugin install project-inventory@project-inventory
 ```
 
+### Other AI coding tools (Codex, Hermes, …)
+
+No MCP server needed. The skill is a folder with `SKILL.md` (the steps) and `scripts/` (plain
+Python), the same layout Codex and Hermes read skills from. Copy the folder in:
+
+```
+git clone https://github.com/YuHsunWang/project-inventory
+cp -r project-inventory/skills/project-inventory ~/.codex/skills/     # Codex
+cp -r project-inventory/skills/project-inventory ~/.hermes/skills/    # Hermes
+```
+
+Any other tool that can run shell commands: tell it to read `skills/project-inventory/SKILL.md`
+and follow it. Claude-only parts: the claude.ai Artifact option and `/schedule`. Linear and
+Notion need that tool's own connector (or `LINEAR_API_KEY` for Linear).
+
 ## Use
 
 Say "inventory my projects" or run `/project-inventory`.

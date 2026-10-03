@@ -21,7 +21,9 @@ HOME/out/index.html          the page                                   (build.p
 HOME/out/artifact.html       same page for a claude.ai Artifact          (build.py)
 ```
 
-`SCRIPTS` = the `scripts/` folder next to this file. Schemas for every file: `reference/schema.md`.
+`SCRIPTS` = the `scripts/` folder next to this file. Not running in Claude Code? Everything works
+the same except the Artifact publish option and `/schedule`; MCP steps need the matching
+connector in your own tool, and without one, say which source was not read. Schemas for every file: `reference/schema.md`.
 Talk to the user in their language and write page text (names, tags, diagram) in it too; set
 `"lang"` in inventory.json (`zh-TW` and `en` have page labels; anything else falls back to `en`).
 
@@ -82,7 +84,7 @@ Talk to the user in their language and write page text (names, tags, diagram) in
 | Option | How | Who can see it |
 |---|---|---|
 | Local file (default) | `HOME/out/index.html`, open in a browser | only this computer |
-| claude.ai Artifact | Artifact tool, publish `HOME/out/artifact.html` (build.py writes it without the html/head/body wrapper the host adds; the same file path every run keeps one URL) | private to the user |
+| claude.ai Artifact (Claude Code only) | Artifact tool, publish `HOME/out/artifact.html` (build.py writes it without the html/head/body wrapper the host adds; the same file path every run keeps one URL) | private to the user |
 | Vercel | `python3 SCRIPTS/publish_vercel.py HOME <project-name>` (refuses an existing project it did not create; `--reuse` only after the user confirms that project is for this page) — creates the project, locks it (Vercel Authentication, all deployments) BEFORE deploying, then checks an anonymous visitor is turned away | only the user's logged-in Vercel account |
 | GitHub Pages | see below | **everyone on the internet** |
 
@@ -104,7 +106,7 @@ Never send the page anywhere the user did not choose.
 - If a run cannot read a source, the page must say so (collect.py does this) — do not fill the
   gap with yesterday's data or a guess.
 - Re-runs on the same day overwrite that day's snapshot; trends need snapshots on 2+ days.
-- Scheduling is not built in. If the user wants it nightly, point them to `/schedule` (or cron
+- Scheduling is not built in. If the user wants it nightly, point them to `/schedule` in Claude Code (or cron
   for the script-only part: `collect.py HOME; build.py HOME` — `;`, not `&&`: collect.py exits 1
   whenever Notion (or Linear without `LINEAR_API_KEY`) was not gathered, so `&&` would never build.
   Cron has a bare environment: set `PATH` so it finds git and gh, and `LINEAR_API_KEY` if used).
