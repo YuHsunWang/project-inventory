@@ -27,7 +27,13 @@
       "nodes": [
         {"id": 1, "zone": "Every hour", "title": "Crawl", "sub": "PTT board → posts.jsonl",
          "detail": "Longer text shown when the step is opened.", "paths": ["crawler.py"], "tickets": ["DEV-12"]},
-        {"id": 2, "on": 1, "side": "r", "title": "Dedupe", "sub": "drops reposts"}
+        {"id": 2, "on": 1, "side": "r", "title": "Dedupe", "sub": "drops reposts", "icon": "check",
+         "media": [
+           {"shot": "shots/dedupe.png", "caption": "What a duplicate looks like", "phone": false},
+           {"math": ["s = \\frac{n_{good}}{n_{good}+n_{bad}}"], "p": "Plain-words reading of the formula"},
+           {"mock": "in   12 posts\n<b>out  9 posts</b>", "cap": "A run's input and output", "real": true},
+           {"link": ["Live site", "https://example.com"]}
+         ]}
       ],
       "notes": [["Tests", "pytest -q (16 files)"]]   // optional static rows on the 基本資料 tab
     }
@@ -38,6 +44,16 @@
 - `nodes` without `on` form the spine, top to bottom, in list order. A node with `on: <spine id>`
   hangs off that spine step, `side` `l` or `r` (default `r`). `zone` on a spine node starts a new
   labelled section. `tickets` ties ticket ids to a step (shown on the step and in its panel).
+- `icon` (optional): spider, brain, box, gear, shield, clock, truck, globe, eye, flame, check, dice,
+  table, hand, cards, play, coin, quiz, scale, pipe, lake, flask, chart, book, plug.
+- `media` (optional): what opens when a step is clicked, in order.
+  - `shot`: an image file (absolute, `~/…`, or relative to HOME). `build.py` embeds it in the page;
+    a missing file shows as missing and prints a `WARN`. `phone: true` keeps a tall phone shot narrow.
+  - `math`: TeX strings; the page loads MathJax (cdnjs) only when some step has one. `p` explains it.
+  - `mock`: text shown in a monospace box; columns line up when 2+ lines have double spaces. It is
+    HTML: `<b>`, `<span class="dim">`, `<span class="bad">` highlight; escape `<` and `&` yourself.
+    `real: true` labels it real output instead of a sketch.
+  - `link`: `[text, url]`.
 - Every `sources` key is optional. A project with none of them still shows its diagram.
 - `data[].kind` and what `column` means:
 
@@ -60,7 +76,8 @@
     "read": ["linear"],
     "tickets": [
       {"id": "DEV-12", "title": "…", "state": "done", "url": "https://linear.app/…",
-       "source": "linear", "created": "2026-09-01", "completed": "2026-09-20", "benefit": "optional plain-words note"}
+       "source": "linear", "created": "2026-09-01", "completed": "2026-09-20", "canceled": null,
+       "benefit": "optional plain-words note"}
     ],
     "prs": [],          // only when gh is missing: [{"number", "title", "url", "createdAt", "repo"}]
     "errors": []        // "linear: <message>" / "notion: <message>"

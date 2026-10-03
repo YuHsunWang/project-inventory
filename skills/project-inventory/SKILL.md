@@ -50,6 +50,11 @@ Talk to the user in their language and write page text (names, tags, diagram) in
    real order of work as the spine, inputs/alternatives on the left, checks/helpers on the
    right), with `paths` to the code for each step. Show the draft as a short list; fix what the
    user corrects. Facts in `detail` must come from code or docs, not guesses.
+   Give every step an `icon` from this list: spider brain box gear shield clock truck globe eye flame check dice table hand cards play coin quiz scale pipe lake flask chart book plug.
+   Then offer what a step can open to (`media`, see schema): a `mock` (a few lines showing what
+   goes in and out, copied from real code/output; mark `real: true` only when it is real output),
+   a `math` formula the code actually computes, a `link`, or a `shot` screenshot — ask the user
+   for screenshot files; never invent one. Skip media the user does not want.
 5. Save `HOME/inventory.json`. Pick distinct `color`s that read in light and dark mode.
 
 ## Refresh (every run)
@@ -62,7 +67,9 @@ Talk to the user in their language and write page text (names, tags, diagram) in
      project, `includeArchived: true`, `limit: 250`; it returns one page at a time — pass the
      returned `cursor` back until there is no next page).
      Map exactly as collect.py does: status type completed → `done`, canceled → `dead`, status
-     name containing "review" → `wait`, everything else → `open`.
+     name containing "review" → `wait`, everything else → `open`. Ask for the `createdAt`,
+     `completedAt` and `canceledAt` fields and keep them as `created` / `completed` / `canceled`
+     (the page's ticket chart is rebuilt from these dates).
    - Notion: query the database (or read the page's to-do blocks). Map its status property the
      same way; say which values you mapped how the first time and save that in inventory.json
      (`sources.notion.status_map`).
@@ -74,7 +81,9 @@ Talk to the user in their language and write page text (names, tags, diagram) in
 3. `python3 SCRIPTS/build.py HOME` → `HOME/out/index.html`.
 4. **Check the page** before handing it over: open it in a headless browser if one is available
    (Playwright: every project tab at 390 px and 1280 px, click every diagram step, no JS errors,
-   no sideways scroll). No browser → say UNVERIFIED for the layout.
+   no sideways scroll). No browser → say UNVERIFIED for the layout. `check_page.py` cannot
+   start because the temp folder is read-only (some sandboxes, e.g. Codex)? Re-run it with
+   `TMPDIR` set to a writable folder, e.g. `mkdir -p HOME/tmp && TMPDIR=HOME/tmp python3 ...`.
 5. **Report** in chat: first line = what failed, if anything. Then what waits on the user (the
    home list), which data is stale, and the page path / URL.
 6. **Publish** only where the user chooses (ask once, remember it in inventory.json `publish`).
@@ -105,7 +114,9 @@ Never send the page anywhere the user did not choose.
   diagram text and ticket `benefit` notes, and those must be checkable against code/docs.
 - If a run cannot read a source, the page must say so (collect.py does this) — do not fill the
   gap with yesterday's data or a guess.
-- Re-runs on the same day overwrite that day's snapshot; trends need snapshots on 2+ days.
+- Re-runs on the same day overwrite that day's snapshot. The ticket chart is rebuilt from ticket
+  dates and the commit chart from git history, so both show on the first run.
+- `build.py` prints `WARN` lines (a screenshot not found, a page over 8 MB). Report them.
 - Scheduling is not built in. If the user wants it nightly, point them to `/schedule` in Claude Code (or cron
   for the script-only part: `collect.py HOME; build.py HOME` — `;`, not `&&`: collect.py exits 1
   whenever Notion (or Linear without `LINEAR_API_KEY`) was not gathered, so `&&` would never build.

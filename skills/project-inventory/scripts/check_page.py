@@ -21,7 +21,7 @@ if "--shots" in args:
 page_file = (Path(args[0] if args else "~/.project-inventory").expanduser() / "out" / "index.html").resolve()
 
 CLICK_ALL = """() => { const bad = [];
-  for (const n of document.querySelectorAll('.node')) {
+  for (const n of document.querySelectorAll('section.proj:not([hidden]) .node')) {
     n.click(); const p = document.getElementById(n.getAttribute('aria-controls'));
     if (!p || p.hidden || !p.textContent.trim()) bad.push(n.dataset.id);
     if (document.documentElement.scrollWidth > innerWidth) bad.push(n.dataset.id + ' scrolls sideways');
@@ -37,16 +37,17 @@ with sync_playwright() as p:
         pg.goto(page_file.as_uri()); pg.wait_for_timeout(500)
         if shots: pg.screenshot(path=str(shots / f"home-{w}.png"), full_page=True)
         for key in pg.evaluate("D.projects.map(p => p.key)"):
-            for tab in ("road", "tickets", "activity", "facts"):
+            tabs = pg.evaluate(f"[...document.getElementById({key!r}).querySelectorAll('.subnav a')].map(a => a.dataset.panel)")
+            for tab in tabs:
                 pg.evaluate(f"location.hash='{key}/{tab}'"); pg.wait_for_timeout(150)
-                if not pg.inner_text("#main").strip():
+                if not pg.inner_text(f"section[id='{key}'] .panel[data-panel={tab}]").strip():
                     bad.append(f"{w}px {key}/{tab}: empty")
                 if pg.evaluate("document.documentElement.scrollWidth > innerWidth"):
                     bad.append(f"{w}px {key}/{tab}: scrolls sideways")
                 if tab == "road":
                     bad += [f"{w}px {key} step {x}" for x in pg.evaluate(CLICK_ALL)]
                     if shots:
-                        first = pg.query_selector(".node")
+                        first = pg.query_selector("section.proj:not([hidden]) .node")
                         if first: first.click()
                         pg.screenshot(path=str(shots / f"{key}-{tab}-{w}.png"), full_page=True)
                         if first: first.click()

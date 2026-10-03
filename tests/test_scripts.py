@@ -40,6 +40,38 @@ r = run("build.py", str(home))
 assert r.returncode == 0, r.stderr
 page = (home / "out/index.html").read_text()
 assert "<title>A&amp;B &lt;i&gt;x&lt;/i&gt;</title>" in page, "title must be HTML-escaped"
+assert "libs/mathjax" not in page, "no formula on the page -> MathJax is not loaded"
+
+# --- build: a step's screenshot is embedded, a missing one is shown and warned, a formula loads MathJax
+shot = tmp / "s.png"; shot.write_bytes(b"\x89PNG fake")
+inv = json.loads((home / "inventory.json").read_text())
+inv["projects"][0]["nodes"] = [{"id": 1, "title": "x", "icon": "gear", "media": [
+    {"shot": str(shot), "caption": "ok"}, {"shot": "nope.png", "caption": "gone"}, {"math": ["a+b"]}]}]
+(home / "inventory.json").write_text(json.dumps(inv))
+r = run("build.py", str(home))
+assert r.returncode == 0 and "WARN p: step 1: screenshot not found" in r.stdout, r.stdout + r.stderr
+page = (home / "out/index.html").read_text()
+assert "data:image/png;base64," in page and str(shot) not in page, "screenshot must be inside the page, not linked"
+assert '"missing":' in page, "a missing screenshot is shown as missing, not dropped"
+assert "cdnjs.cloudflare.com/ajax/libs/mathjax" in page
+
+# --- build logic --------------------------------------------------------------------------------
+import build, datetime as dt
+today = dt.date(2026, 10, 3)
+s = build.ticket_series([
+    {"state": "done", "created": "2026-09-01", "completed": "2026-09-10"},
+    {"state": "dead", "created": "2026-09-01", "canceled": "2026-09-05"},
+    {"state": "dead", "created": "2026-09-01"},              # canceled, date unknown: never counted as open
+    {"state": "open", "created": "2026-09-20"}], today)
+at = lambda d: s["days"].index(d)
+assert (s["done"][at("2026-09-09")], s["done"][at("2026-09-10")]) == (0, 1)
+assert s["open"][at("2026-09-04")] == 2  # the done one + the one canceled on 9/5
+assert s["open"][at("2026-09-06")] == 1 and s["open"][at("2026-10-03")] == 1
+f = {"prs": [], "tickets": [], "data": [], "errors": [], "repos": [
+    {"label": "main", "dirty": 2, "ahead": 3, "has_origin": True, "upstream": "origin/x", "branch": "x"},
+    {"label": "wt", "dirty": 0, "ahead": 0, "has_origin": True, "upstream": None, "branch": "y"}]}
+t = build.todos({"key": "k"}, f)
+assert [x["parts"] for x in t] == [[[2, "dirty"], [3, "unpushed"]], [[None, "no_upstream"]]], "one row per checkout"
 
 # --- git never waits for a password ----------------------------------------------------------
 assert collect.GIT_ENV["GIT_TERMINAL_PROMPT"] == "0"

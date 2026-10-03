@@ -4,13 +4,13 @@ A Claude Code skill that takes stock of all your projects and builds one dashboa
 
 For each project the page shows:
 
-- **How it works**: a diagram of the project's steps. Claude drafts it from your code and you confirm it.
+- **How it works**: a diagram of the project's steps, each with an icon. Claude drafts it from your code and you confirm it. A step can open to screenshots, formulas or a sketch of its input and output.
 - **Tickets** from Linear and/or Notion: done, waiting for your review, open, canceled.
 - **GitHub**: open PRs.
 - **Local git**: branch, uncommitted files, unpushed commits.
 - **Obsidian**: open note tasks (`- [ ]` lines).
 - **Data freshness**: the newest date read from inside your data files (not file timestamps).
-- **Activity and trends**: commits per week, recent work, open tickets over time.
+- **Progress**: commits per week, open and done tickets over the last 90 days (rebuilt from ticket dates, so it shows on the first run), recent work.
 
 The home page lists everything that waits on you, across all projects.
 

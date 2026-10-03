@@ -80,7 +80,7 @@ def gh_prs(repo):
 LINEAR_Q = """query($name:String!, $after:String){
   projects(filter:{name:{eq:$name}}){ nodes{ id } }
   issues(first:100, after:$after, includeArchived:true, filter:{project:{name:{eq:$name}}}){
-    nodes{ identifier title url createdAt completedAt state{ name type } }
+    nodes{ identifier title url createdAt completedAt canceledAt state{ name type } }
     pageInfo{ hasNextPage endCursor } } }"""
 
 
@@ -105,7 +105,8 @@ def linear_tickets(project):
             st = i["state"]
             state = {"completed": "done", "canceled": "dead"}.get(st["type"]) or ("wait" if "review" in st["name"].lower() else "open")
             out.append({"id": i["identifier"], "title": i["title"], "state": state, "url": i["url"], "source": "linear",
-                        "created": i["createdAt"][:10], "completed": (i["completedAt"] or "")[:10] or None})
+                        "created": i["createdAt"][:10], "completed": (i["completedAt"] or "")[:10] or None,
+                        "canceled": (i["canceledAt"] or "")[:10] or None})
         if not page["pageInfo"]["hasNextPage"]:
             return out
         after = page["pageInfo"]["endCursor"]
