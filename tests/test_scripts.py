@@ -197,16 +197,18 @@ calls = []
 
 def fake_call(method, path, body=None, team=None):
     calls.append((method, path, team))
-    if method == "GET" and path.startswith("/v9/projects/"):
-        return 200, {"id": "prj_1", "accountId": "acc"}
+    if method == "GET" and path.startswith("/v9/projects/") and "/domains?" not in path:
+        return 200, {"id": "prj_1", "accountId": "acc", "ssoProtection": {"deploymentType": "all"}}
     if method == "PATCH":
         return 200, {"ssoProtection": {"deploymentType": "all"}}
+    if "/domains?" in path:
+        return 200, {"domains": [], "pagination": {"next": None}}
     return 200, {"alias": []}
 
-def deploy(codes, *args):
-    pv.call = fake_call
+def deploy(codes, *args, api=fake_call):
+    pv.call = api
     pv.subprocess.run = lambda *a, **k: types.SimpleNamespace(returncode=0, stdout="https://x-1.vercel.app\n", stderr="")
-    pv.anon_status = lambda url: codes
+    pv.anon_status = lambda url: codes(url) if callable(codes) else codes
     sys.argv = ["publish_vercel.py", str(vhome), "dash", *args]
     try:
         pv.main(); return "ok"
@@ -218,12 +220,12 @@ calls.clear()
 assert "already exists" in deploy(401)
 assert not any(m == "PATCH" for m, _, _ in calls), "must stop before touching the project"
 # --reuse takes it over and remembers it; the next run needs no flag
-assert deploy(401, "--reuse") == "ok"
+assert deploy("Vercel login redirect", "--reuse") == "ok"
 assert json.loads((vhome / "vercel.json").read_text()) == {"dash": "prj_1"}
-assert deploy(401) == "ok"
+assert deploy("Vercel login redirect") == "ok"
 # only a login wall proves the lock: 200 is public, 404 and "unreachable" prove nothing
-assert deploy(302) == "ok"
-for bad in (200, 404, "unreachable (x)"):
+assert deploy(302) != "ok"
+for bad in (200, 401, 403, 404, 500, 302, "unreachable (x)"):
     assert "could not confirm the page is locked" in deploy(bad), bad
 
 # a redirect counts as the lock only when it goes to Vercel's sign-in
@@ -235,10 +237,72 @@ def redirect_to(loc):
             raise urllib.error.HTTPError(url, 302, "Found", h, None)
         return types.SimpleNamespace(open=open_)
     return opener
-pv.urllib.request.build_opener = redirect_to("https://vercel.com/sso-api?url=x")
-assert REAL_ANON("https://x/") == 302
+pv.urllib.request.build_opener = redirect_to("https://vercel.com/sso-api?url=https%3A%2F%2Fx%2F")
+assert REAL_ANON("https://x/") == "Vercel login redirect"
 pv.urllib.request.build_opener = redirect_to("https://example.com/")
 assert REAL_ANON("https://x/") == "302 to https://example.com/"
+
+def test_vercel_fail_closed():
+    def verify(api, codes="Vercel login redirect"):
+        output = io.StringIO()
+        from contextlib import redirect_stdout
+        with redirect_stdout(output):
+            result = deploy(codes, api=api)
+        assert result != "ok" and result.startswith("FAILED:"), result
+        assert "deployed:" not in output.getvalue(), output.getvalue()
+        assert "Deployment Protection" in result and "PUBLIC" in result, result
+        return result
+    for endpoint in ("/v13/deployments/", "/domains?"):
+        for status in (403, 429):
+            def api(method, path, body=None, team=None):
+                return (status, {}) if endpoint in path else fake_call(method, path, body, team)
+            assert f"API {status}" in verify(api)
+    for aliases in (None, {}, "dash.vercel.app", [None], ["x/attack"]):
+        def api(method, path, body=None, team=None):
+            return (200, {"alias": aliases}) if "/v13/" in path else fake_call(method, path, body, team)
+        verify(api)
+    visited = []
+    def api(method, path, body=None, team=None):
+        if "/v13/" in path:
+            return 200, {"alias": ["dash.vercel.app", "public-exception.vercel.app"]}
+        if "/domains?" in path:
+            return 200, {"domains": [{"name": "private.example.com"}, {"name": "public.example.com"}],
+                         "pagination": {"next": None}}
+        return fake_call(method, path, body, team)
+    for public in ("public.example.com", "public-exception.vercel.app"):
+        visited.clear()
+        def codes(url):
+            visited.append(url)
+            return 200 if public in url else "Vercel login redirect"
+        assert public in verify(api, codes)
+        assert len(visited) == 5, visited  # deployment, both aliases and both custom domains
+    for bad in ("unreachable (timeout)", "302 to https://vercel.com/docs", 401, 403):
+        verify(api, lambda url: bad if "private.example.com" in url else "Vercel login redirect")
+    def pages(method, path, body=None, team=None):
+        if "/domains?" in path:
+            return (200, {"domains": [{"name": "page2.example.com"}], "pagination": {"next": None}}) if "until=" in path else (200, {"domains": [], "pagination": {"next": 123}})
+        return fake_call(method, path, body, team)
+    assert "page2.example.com" in verify(pages, lambda url: 200 if "page2" in url else "Vercel login redirect")
+    for domains in ({}, {"domains": "x"}, {"domains": [None]}, {"domains": [{"name": "x/y"}]},
+                    {"domains": [], "pagination": {}}):
+        def malformed(method, path, body=None, team=None):
+            return (200, domains) if "/domains?" in path else fake_call(method, path, body, team)
+        verify(malformed)
+
+def test_vercel_login_redirect():
+    for loc in ("https://vercel.com/", "https://vercel.com/docs", "https://vercel.com/login",
+                "https://vercel.com.evil/sso-api?url=https%3A%2F%2Fx%2F", "https://vercel.com/sso-api?url=wrong"):
+        pv.urllib.request.build_opener = redirect_to(loc)
+        assert REAL_ANON("https://x/") != "Vercel login redirect", loc
+    def offline(*_):
+        def open_(url, timeout):
+            raise urllib.error.URLError("offline")
+        return types.SimpleNamespace(open=open_)
+    pv.urllib.request.build_opener = offline
+    assert "unreachable" in REAL_ANON("https://x/")
+
+test_vercel_fail_closed()
+test_vercel_login_redirect()
 
 # team: an id goes as teamId=, a slug as slug=
 class R(io.BytesIO):

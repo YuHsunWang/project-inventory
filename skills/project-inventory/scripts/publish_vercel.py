@@ -10,7 +10,7 @@ without saying so.
 A project this script did not create is never overwritten unless you pass --reuse (once); the
 project id is then remembered in <home>/vercel.json.
 """
-import json, os, platform, re, shutil, subprocess, sys, urllib.error, urllib.request
+import json, os, platform, re, shutil, subprocess, sys, urllib.error, urllib.parse, urllib.request
 from pathlib import Path
 
 API = "https://api.vercel.com"
@@ -49,11 +49,64 @@ def anon_status(url):
         return urllib.request.build_opener(NoRedirect).open(url, timeout=30).status
     except urllib.error.HTTPError as e:
         loc = e.headers.get("Location") or ""
-        if 300 <= e.code < 400 and not loc.startswith("https://vercel.com/"):
-            return f"{e.code} to {loc or '?'}"  # a redirect that is not Vercel's sign-in proves nothing
-        return e.code
-    except urllib.error.URLError as e:
-        return f"unreachable ({e.reason})"
+        target = urllib.parse.urlsplit(loc)
+        query = urllib.parse.parse_qs(target.query)
+        back = query.get("url", [""])[0]
+        if (e.code in (302, 303, 307, 308) and target.scheme == "https" and target.netloc == "vercel.com"
+                and target.path == "/sso-api" and back == url):
+            return "Vercel login redirect"
+        return f"{e.code} to {loc or '?'}" if 300 <= e.code < 400 else e.code
+    except (urllib.error.URLError, TimeoutError, OSError) as e:
+        return f"unreachable ({e})"
+
+
+def verification_failed(reason):
+    sys.exit("FAILED: could not confirm the page is locked: " + reason
+             + ". Deployment may be PUBLIC. In Vercel, open this project's Settings > Deployment Protection, "
+               "enable Vercel Authentication for All Deployments, remove public exceptions and review bypass/share "
+               "settings. Take the deployment offline if needed, then rerun verification before sharing its URL.")
+
+
+def checked_get(path, team):
+    try:
+        st, data = call("GET", path, team=team)
+    except (OSError, ValueError) as e:
+        verification_failed(f"{path}: {e}")
+    if not 200 <= st < 300 or not isinstance(data, dict):
+        verification_failed(f"{path}: API {st}, invalid or unavailable response")
+    return data
+
+
+def checked_host(host):
+    if (not isinstance(host, str) or len(host) > 253 or "." not in host
+            or not all(re.fullmatch(r"[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?", part)
+                       for part in host.split("."))):
+        verification_failed("invalid alias/domain structure")
+    return host
+
+
+def project_domains(project_id, team):
+    hosts, seen, cursor = [], set(), None
+    while True:
+        path = f"/v9/projects/{project_id}/domains?limit=100"
+        if cursor is not None:
+            path += "&until=" + urllib.parse.quote(str(cursor), safe="")
+        data = checked_get(path, team)
+        if not isinstance(data.get("domains"), list):
+            verification_failed("invalid project domains structure")
+        for domain in data["domains"]:
+            if not isinstance(domain, dict):
+                verification_failed("invalid project domain entry")
+            hosts.append(checked_host(domain.get("name")))
+        pagination = data.get("pagination", {"next": None})
+        if not isinstance(pagination, dict) or "next" not in pagination:
+            verification_failed("invalid domains pagination")
+        cursor = pagination["next"]
+        if cursor is None:
+            return hosts
+        if type(cursor) is not int or cursor in seen or len(seen) >= 100:
+            verification_failed("invalid or repeated domains pagination cursor")
+        seen.add(cursor)
 
 
 def main():
@@ -90,7 +143,7 @@ def main():
     st, upd = call("PATCH", f"/v9/projects/{proj['id']}", {"ssoProtection": {"deploymentType": "all"}}, team=team)
     if st >= 300 or (upd.get("ssoProtection") or {}).get("deploymentType") != "all":
         sys.exit(f"FAILED: could not lock the project (no deploy made): {st} {upd.get('error')}")
-    print("locked: Vercel Authentication on all deployments")
+    print("configured: Vercel Authentication on all deployments; verification pending")
 
     env = {**os.environ, "VERCEL_ORG_ID": proj["accountId"], "VERCEL_PROJECT_ID": proj["id"]}
     r = subprocess.run(["vercel", "deploy", str(out), "--prod", "--yes"], env=env, capture_output=True, text=True, timeout=900)
@@ -105,18 +158,25 @@ def main():
         print(log[-1500:])
         sys.exit("FAILED: deploy ran but no deployment URL found in the CLI output")
     url = m.group(0)
-    st, d = call("GET", f"/v13/deployments/{url.removeprefix('https://')}", team=team)
-    hosts = [url.removeprefix("https://"), *d.get("alias", [])]
+    d = checked_get(f"/v13/deployments/{url.removeprefix('https://')}", team)
+    aliases = d.get("alias")
+    if not isinstance(aliases, list):
+        verification_failed("invalid deployment aliases structure")
+    aliases = [checked_host(h) for h in aliases]
+    domains = project_domains(proj["id"], team)
+    policy = checked_get(f"/v9/projects/{proj['id']}", team)
+    if (policy.get("ssoProtection") or {}).get("deploymentType") != "all":
+        verification_failed("project no longer has All Deployments authentication")
+    hosts = list(dict.fromkeys([url.removeprefix("https://"), *aliases, *domains]))
     codes = {h: anon_status(f"https://{h}/") for h in hosts}
-    # locked = the login wall: 401/403, or a redirect to Vercel's sign-in (anon_status turns any other
-    # redirect into text). Anything else (200, 404, 500, unreachable) is not proof of a lock.
-    unproven = [h for h, c in codes.items() if not (c in (401, 403) or isinstance(c, int) and 300 <= c < 400)]
+    # Bare 401/403 can come from a firewall or app; require the Vercel SSO endpoint AND project policy.
+    unproven = [h for h, c in codes.items() if c != "Vercel login redirect"]
     if unproven:
-        sys.exit("FAILED: could not confirm the page is locked: " + ", ".join(f"{h} -> {codes[h]}" for h in unproven)
-                 + ". 200 means PUBLIC. Check the project's Deployment Protection.")
-    main_host = next((h for h in d.get("alias", []) if h.startswith(name + ".") or h.startswith(name + "-") and "-git-" not in h), hosts[0])
+        verification_failed(", ".join(f"{h} -> {codes[h]}" for h in unproven))
+    main_host = next((h for h in aliases if h.startswith(name + ".") or h.startswith(name + "-") and "-git-" not in h), hosts[0])
     print(f"deployed: https://{main_host}")
-    print("anonymous visitor: " + ", ".join(f"{h} -> {c}" for h, c in codes.items()) + "  (401/403/redirect = locked)")
+    print("anonymous visitor: " + ", ".join(f"{h} -> {c}" for h, c in codes.items())
+          + "  (Vercel login redirect and All Deployments policy verified)")
 
 if __name__ == "__main__":
     TOKEN = token()
