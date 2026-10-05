@@ -66,7 +66,7 @@ You choose. The default is a local file.
 |---|---|
 | Local file `~/.project-inventory/out/index.html` | only you |
 | claude.ai Artifact | only you (private) |
-| Vercel | only your logged-in Vercel account. Protection is switched on before the first deploy, and every deploy is checked from outside. |
+| Vercel | Vercel-authorized users; access depends on team/project membership, granted access, sharing and bypass settings ([access rules](https://vercel.com/docs/deployment-protection/methods-to-protect-deployments/vercel-authentication)). Protection is switched on before the first deploy, and every deploy is checked from outside. |
 | GitHub Pages | **everyone**. Claude asks before the first publish. |
 
 ## Scripts (usable without Claude)

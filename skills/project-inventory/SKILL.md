@@ -103,7 +103,7 @@ Talk to the user in their language and write page text (names, tags, diagram) in
 |---|---|---|
 | Local file (default) | `HOME/out/index.html`, open in a browser | only this computer |
 | claude.ai Artifact (Claude Code only) | Artifact tool, publish `HOME/out/artifact.html` (build.py writes it without the html/head/body wrapper the host adds; the same file path every run keeps one URL) | private to the user |
-| Vercel | `python3 SCRIPTS/publish_vercel.py HOME <project-name>` (refuses an existing project it did not create; `--reuse` only after the user confirms that project is for this page) — creates the project, locks it (Vercel Authentication, all deployments) BEFORE deploying, then checks an anonymous visitor is turned away | only the user's logged-in Vercel account |
+| Vercel | `python3 SCRIPTS/publish_vercel.py HOME <project-name>` (refuses an existing project it did not create; `--reuse` only after the user confirms that project is for this page) — creates the project, locks it (Vercel Authentication, all deployments) BEFORE deploying, then checks an anonymous visitor is turned away | Vercel-authorized users; actual access depends on team/project membership, granted access, sharing and bypass settings |
 | GitHub Pages | see below | **everyone on the internet** |
 
 **GitHub Pages is public**, also from a private repo on a free plan. The page lists project

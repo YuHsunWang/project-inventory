@@ -312,4 +312,20 @@ urllib.request.urlopen = lambda req, timeout: urls.append(req.full_url) or R(b"{
 real_call("GET", "/v9/projects/x", team="team_abc"); real_call("GET", "/v9/projects/x", team="my-team")
 assert urls == ["https://api.vercel.com/v9/projects/x?teamId=team_abc", "https://api.vercel.com/v9/projects/x?slug=my-team"], urls
 
+def test_vercel_access_scope():
+    from contextlib import redirect_stdout
+    output = io.StringIO()
+    with redirect_stdout(output):
+        assert deploy("Vercel login redirect", "--team", "team_abc") == "ok"
+    text = output.getvalue()
+    assert "account=acc team=team_abc project=dash (prj_1)" in text
+    assert "Vercel-authorized users" in text and "sharing and bypass settings" in text
+    repo = S.parents[2]
+    for path, bad in [(repo / "README.md", "only your logged-in Vercel account"),
+                      (repo / "說明書.md", "只有登入你 Vercel 帳號的人"),
+                      (S.parent / "SKILL.md", "only the user's logged-in Vercel account")]:
+        assert bad not in path.read_text(), path
+    assert "only the owner's" not in pv.__doc__
+
+test_vercel_access_scope()
 print("OK")

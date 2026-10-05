@@ -1,4 +1,5 @@
-"""Deploy <home>/out to a Vercel project that only the owner's logged-in Vercel account can open.
+"""Deploy <home>/out with Vercel Authentication for authorized users.
+Access depends on team/project membership, granted access, sharing and bypass settings.
 
     python3 publish_vercel.py <home> <project-name> [--team <team id or slug>] [--reuse]
 
@@ -174,6 +175,9 @@ def main():
     if unproven:
         verification_failed(", ".join(f"{h} -> {codes[h]}" for h in unproven))
     main_host = next((h for h in aliases if h.startswith(name + ".") or h.startswith(name + "-") and "-git-" not in h), hosts[0])
+    print(f"scope: account={proj['accountId']} team={team or proj['accountId']} project={name} ({proj['id']})")
+    print("access: Vercel-authorized users; actual access depends on team/project membership, "
+          "granted access, sharing and bypass settings")
     print(f"deployed: https://{main_host}")
     print("anonymous visitor: " + ", ".join(f"{h} -> {c}" for h, c in codes.items())
           + "  (Vercel login redirect and All Deployments policy verified)")
