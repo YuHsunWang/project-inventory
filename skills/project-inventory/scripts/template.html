@@ -2,6 +2,7 @@
 <html lang="__LANG__">
 <head>
 <meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="__CSP__">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>__TITLE__</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -371,7 +372,14 @@ const mdOf = iso => iso ? `${+iso.slice(5,7)}/${+iso.slice(8,10)}` : "";
 const P = D.projects;
 const tkOf = p => p.facts.tickets;
 const hasTk = p => tkOf(p).length > 0 || !!((p.sources || {}).linear || (p.sources || {}).notion);
-const ext = (u, text, cls = "") => u ? `<a${cls ? ` class="${cls}"` : ""} href="${esc(u)}" target="_blank" rel="noopener">${text}</a>` : text;
+const imageSrc = s => typeof s === "string" && /^data:image\/(?:png|jpeg|gif|webp);base64,[A-Za-z0-9+/]+={0,2}$/.test(s);
+const httpURL = u => { try { const v = new URL(u); return ["http:", "https:"].includes(v.protocol); } catch { return false; } };
+const mockText = m => Array.isArray(m) ? m.map(s => String(s.text ?? "")).join("") : String(m);
+const mockHTML = m => Array.isArray(m) ? m.map(s => {
+  const text = esc(s.text), emphasis = ["bold", "dim", "bad"].includes(s.emphasis) ? s.emphasis : "";
+  return emphasis === "bold" ? `<b>${text}</b>` : emphasis ? `<span class="${emphasis}">${text}</span>` : text;
+}).join("") : esc(m);
+const ext = (u, text, cls = "") => httpURL(u) ? `<a${cls ? ` class="${esc(cls)}"` : ""} href="${esc(u)}" target="_blank" rel="noopener">${text}</a>` : text;
 function shortLabel(t){ const s = String(t).split(/[，。：；:]/)[0]; return s.length > 18 ? s.slice(0,17) + "…" : s; }
 
 const ICON = {
@@ -410,12 +418,12 @@ function mediaKinds(list){
   (list||[]).forEach(m => { if (m.src || m.missing) k.add(T.m_shot); if (m.math) k.add(T.m_math); if (m.mock) k.add(T.m_mock); if (m.link) k.add(T.m_link); });
   return [...k];
 }
-function renderMedia(list){  // mock is HTML from inventory.json (<b>, <span class="dim|bad">); everything else is escaped
+function renderMedia(list){  // All content is text; emphasis has a fixed tag/class allowlist.
   return (list||[]).map(m => {
     if (m.missing) return `<figure><figcaption><span class="tagx bad">${T.m_missing}</span><code>${esc(m.missing)}</code> ${esc(m.caption||"")}</figcaption></figure>`;
-    if (m.src) return `<figure><img src="${m.src}" alt="${esc(m.caption||"")}" loading="lazy" class="${m.phone?"phone":""}"><figcaption><span class="tagx shot">${T.m_shot}</span>${esc(m.caption||"")}</figcaption></figure>`;
+    if (m.src && imageSrc(m.src)) return `<figure><img src="${esc(m.src)}" alt="${esc(m.caption||"")}" loading="lazy" class="${m.phone?"phone":""}"><figcaption><span class="tagx shot">${T.m_shot}</span>${esc(m.caption||"")}</figcaption></figure>`;
     if (m.math) return `<figure><div class="mathbox">${m.math.map(t=>`<div class="eq">\\[${esc(t)}\\]</div>`).join("")}${m.p?`<p>${esc(m.p)}</p>`:""}</div><figcaption><span class="tagx math">${T.m_math}</span>${T.math_cap}</figcaption></figure>`;
-    if (m.mock) return `<figure><pre class="mock${m.mock.replace(/<[^>]+>/g,"").split("\n").filter(x => /\S {2,}\S/.test(x)).length >= 2 ? " cols" : ""}">${m.mock}</pre><figcaption><span class="tagx ${m.real?"real":"mock"}">${m.real?T.m_real:T.m_mock}</span>${esc(m.cap||"")}</figcaption></figure>`;
+    if (m.mock) return `<figure><pre class="mock${mockText(m.mock).split("\n").filter(x => /\S {2,}\S/.test(x)).length >= 2 ? " cols" : ""}">${mockHTML(m.mock)}</pre><figcaption><span class="tagx ${m.real?"real":"mock"}">${m.real?T.m_real:T.m_mock}</span>${esc(m.cap||"")}</figcaption></figure>`;
     if (m.link) return `<figure>${ext(m.link[1], esc(m.link[0]), "golink")}</figure>`;
     return "";
   }).join("");
@@ -431,18 +439,18 @@ function renderRoad(p){
   const idsOf = n => [...new Set([...(n.tickets || []), ...tks.filter(t => t.node === n.id).map(t => t.id)])].filter(id => sm[id]);
   const tksOfN = n => { const ids = idsOf(n); return [ids.filter(t => sm[t] === "done"), ids.filter(t => sm[t] === "wait"), ids.filter(t => sm[t] === "open")]; };
   const did = n => `d-${p.key}-${n.id}`;
-  const leaf = t => `<button type="button" class="leaf" data-go="t-${esc(p.key)}-${esc(t)}" title="${esc(txt[t]||"")}"><span class="id ${sm[t]}">${esc(t)}</span>${esc(shortLabel(txt[t]||""))}</button>`;
+  const leaf = t => `<button type="button" class="leaf" data-go="t-${esc(p.key)}-${esc(t)}" title="${esc(txt[t]||"")}"><span class="id ${esc(sm[t])}">${esc(t)}</span>${esc(shortLabel(txt[t]||""))}</button>`;
   const nodeBtn = (n, br) => {
     const [d, w, o] = tksOfN(n), kinds = mediaKinds(n.media);
     const cnt = (d.length ? `<span class="c done">✓ ${d.length}</span>` : "") + (w.length ? `<span class="c wait">${w.length} ${T.c_wait}</span>` : "") + (o.length ? `<span class="c open">${o.length} ${T.c_open}</span>` : "");
-    return `<button type="button" class="node${br ? " br" : ""}" data-id="${esc(n.id)}" aria-expanded="false" aria-controls="${did(n)}">
+    return `<button type="button" class="node${br ? " br" : ""}" data-id="${esc(n.id)}" aria-expanded="false" aria-controls="${esc(did(n))}">
       <span class="n">${esc(n.id)}</span><span class="ic">${icon(n.icon)}</span>
       <span class="t">${esc(n.title)}</span><span class="s">${esc((n.sub || "").replace(/\n/g, ""))}</span>
       <span class="more">${kinds.map(k => `<span>${k}</span>`).join("")}${cnt}<span class="x">${T.open_x}</span></span></button>`;
   };
   const detail = (n, pos) => {
     const [d, w, o] = tksOfN(n), tl = (lab, ids) => ids.length ? `<div class="tks"><b>${lab}</b>${ids.map(leaf).join("")}</div>` : "";
-    return `<div class="detail${pos}" id="${did(n)}" hidden>
+    return `<div class="detail${pos}" id="${esc(did(n))}" hidden>
       <h5><span class="dn">${esc(n.id)}</span>${esc(n.title)}</h5>
       ${n.detail ? `<p class="dtext">${esc(n.detail)}</p>` : ""}
       <div class="media">${renderMedia(n.media)}</div>
@@ -660,7 +668,7 @@ function todoText(t){
   return T[t.t];
 }
 function todoRows(list){
-  return list.map(t => `<a class="todo pc" style="--pc0:${esc(t.color)}" href="${t.go}"><span class="tn">${t.n ?? ""}</span><span class="tt">${todoText(t)}</span><span class="tp">${esc(t.pname || "")}</span><span class="ta" aria-hidden="true">›</span></a>`).join("");
+  return list.map(t => `<a class="todo pc" style="--pc0:${esc(t.color)}" href="${esc(String(t.go).startsWith("#") ? t.go : "#")}"><span class="tn">${t.n ?? ""}</span><span class="tt">${todoText(t)}</span><span class="tp">${esc(t.pname || "")}</span><span class="ta" aria-hidden="true">›</span></a>`).join("");
 }
 const PANELS = [["road", "road"], ["progress", "progress"], ["tickets", "tickets"], ["facts", "facts"]];
 const panelsOf = p => PANELS.filter(([k]) => k !== "tickets" || hasTk(p));

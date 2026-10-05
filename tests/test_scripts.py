@@ -55,6 +55,43 @@ assert "data:image/png;base64," in page and str(shot) not in page, "screenshot m
 assert '"missing":' in page, "a missing screenshot is shown as missing, not dropped"
 assert "cdnjs.cloudflare.com/ajax/libs/mathjax" in page
 
+# --- security #4: exercise the actual JavaScript sinks from built HTML --------------------------
+def test_html_trust_boundary():
+    from html.parser import HTMLParser
+    class SafeHTML(HTMLParser):
+        def handle_starttag(self, tag, attrs):
+            assert tag not in ("script", "iframe", "object"), (tag, attrs)
+            for name, value in attrs:
+                assert not name.lower().startswith("on"), (tag, attrs)
+                if name == "href":
+                    assert value.startswith(("#", "http://", "https://")), value
+                if name == "src":
+                    assert value.startswith("data:image/png;base64,"), value
+    inv = json.loads((home / "inventory.json").read_text())
+    inv["projects"][0]["nodes"][0]["media"].extend([
+        {"mock": "</script><script>window.__audit_xss=1</script>"},
+        {"src": '\" onerror=\"window.__audit_xss=1'},
+        {"link": ["bad", "javascript:window.__audit_xss=1"]}])
+    (home / "inventory.json").write_text(json.dumps(inv))
+    result = run("build.py", str(home))
+    assert result.returncode == 0, result.stderr
+    built = (home / "out/index.html").read_text()
+    assert "Content-Security-Policy" in built and "sha256-" in built
+    assert "WARN p: step 1: rejected unsafe image source" in result.stdout
+    result = subprocess.run(["node", str(Path(__file__).with_name("html_security.js"))],
+                            input=built, capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+    fragments = json.loads(result.stdout)
+    for fragment in fragments:
+        SafeHTML().feed(fragment)
+    assert "<b>&lt;img onerror=x&gt;</b>" in "".join(fragments)
+    assert '<a href="https://example.com"' in fragments[-1]
+    # Restore the fixture for the remaining build tests.
+    inv["projects"][0]["nodes"][0]["media"] = inv["projects"][0]["nodes"][0]["media"][:-3]
+    (home / "inventory.json").write_text(json.dumps(inv))
+
+test_html_trust_boundary()
+
 # --- build logic --------------------------------------------------------------------------------
 import build, datetime as dt
 today = dt.date(2026, 10, 3)

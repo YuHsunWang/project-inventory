@@ -31,7 +31,7 @@
          "media": [
            {"shot": "shots/dedupe.png", "caption": "What a duplicate looks like", "phone": false},
            {"math": ["s = \\frac{n_{good}}{n_{good}+n_{bad}}"], "p": "Plain-words reading of the formula"},
-           {"mock": "in   12 posts\n<b>out  9 posts</b>", "cap": "A run's input and output", "real": true},
+           {"mock": [{"text": "in   12 posts\n"}, {"text": "out  9 posts", "emphasis": "bold"}], "cap": "A run's input and output", "real": true},
            {"link": ["Live site", "https://example.com"]}
          ]}
       ],
@@ -51,9 +51,11 @@
     a missing file shows as missing and prints a `WARN`. `phone: true` keeps a tall phone shot narrow.
   - `math`: TeX strings; the page loads MathJax (cdnjs) only when some step has one. `p` explains it.
   - `mock`: text shown in a monospace box; columns line up when 2+ lines have double spaces. It is
-    HTML: `<b>`, `<span class="dim">`, `<span class="bad">` highlight; escape `<` and `&` yourself.
+    plain text (HTML is displayed literally). For emphasis, use an array of `{text, emphasis}`
+    spans; `emphasis` is `bold`, `dim`, or `bad`. Text is always escaped.
     `real: true` labels it real output instead of a sketch.
-  - `link`: `[text, url]`.
+  - `link`: `[text, url]`; only absolute HTTP/HTTPS URLs become links.
+  - `src` is build output: only base64 PNG/JPEG/GIF/WebP data URIs are rendered; SVG is forbidden.
 - Every `sources` key is optional. A project with none of them still shows its diagram.
 - `data[].kind` and what `column` means:
 

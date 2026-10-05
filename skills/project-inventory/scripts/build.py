@@ -5,7 +5,7 @@
 Screenshots named in a step's `media` are embedded in the page, so the one file works as a local
 file, a claude.ai Artifact, on Vercel and on GitHub Pages.
 """
-import base64, datetime as dt, html as htmllib, json, mimetypes, sys
+import base64, hashlib, re, datetime as dt, html as htmllib, json, mimetypes, sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -88,6 +88,10 @@ def embed_media(nodes, home, warn):
     """Screenshots -> data: URIs inside the page. A missing file is shown as missing, never dropped."""
     for n in nodes:
         for m in n.get("media", []):
+            if "src" in m and not re.fullmatch(r"data:image/(?:png|jpeg|gif|webp);base64,[A-Za-z0-9+/]+={0,2}", str(m["src"])):
+                m.pop("src")
+                m["missing"] = "rejected unsafe image source"
+                warn(f"step {n.get('id')}: rejected unsafe image source")
             if "shot" in m:
                 path = Path(m.pop("shot")).expanduser()
                 path = path if path.is_absolute() else home / path
@@ -135,6 +139,12 @@ def main():
     html = html.replace("__LANG__", htmllib.escape(page["lang"])).replace("__TITLE__", htmllib.escape(page["title"]))
     html = html.replace("<!--__MATHJAX__-->", MATHJAX if has_math else "")
     html = html.replace("/*__DATA__*/null", json.dumps(page, ensure_ascii=False).replace("</", "<\\/").replace("<!--", "<\\!--"))
+    hashes = ["'sha256-" + base64.b64encode(hashlib.sha256(s.encode()).digest()).decode() + "'"
+              for s in re.findall(r"<script>(.*?)</script>", html, re.S)]
+    csp = ("default-src 'none'; script-src " + " ".join(hashes) + " https://cdnjs.cloudflare.com; "
+           "style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; "
+           "img-src data:; object-src 'none'; base-uri 'none'; form-action 'none'")
+    html = html.replace("__CSP__", htmllib.escape(csp, quote=True))
     out = home / "out" / "index.html"
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(html, encoding="utf-8")
