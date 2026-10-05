@@ -6,11 +6,10 @@ For each project the page shows:
 
 - **How it works**: a diagram of the project's steps, each with an icon. Claude drafts it from your code and you confirm it. A step can open to screenshots, formulas or a sketch of its input and output.
 - **Tickets** from Linear and/or Notion: done, waiting for your review, open, canceled.
-- **GitHub**: open PRs.
-- **Local git**: branch, uncommitted files, unpushed commits.
+- **Facts**, in two tables. *Local*: checkouts (branch, uncommitted files), data files, Obsidian notes. *Cloud*: each checkout's GitHub remote and unpushed commits, open PRs, the Linear project, the Notion page.
 - **Obsidian**: open note tasks (`- [ ]` lines).
 - **Data freshness**: the newest date read from inside your data files (not file timestamps).
-- **Progress**: commits per week, open and done tickets over the last 90 days (rebuilt from ticket dates, so it shows on the first run), recent work.
+- **Progress**: commits per week and open/done tickets over the last 90 days (rebuilt from ticket dates, so they show on the first run). Below that, the whole history week by week: each week has a 2–3 sentence plain-words summary, and opens to every commit, finished ticket and new PR. Four weeks show at first; a button loads four more.
 
 The home page lists everything that waits on you, across all projects.
 
@@ -43,7 +42,9 @@ Notion need that tool's own connector (or `LINEAR_API_KEY` for Linear).
 Say "inventory my projects" or run `/project-inventory`.
 
 - **First run.** Claude asks which projects to include and where each one lives. It finds data files and asks which ones to watch, then drafts each diagram. Everything is saved to `~/.project-inventory/inventory.json`.
-- **Later runs.** Claude re-reads every source and rebuilds the page.
+- **Later runs.** Claude re-reads every source and rebuilds the page. It also writes the summary for any week that has none yet, or got new work since its summary was written (usually just the current week). On the first run that means every past week, so the first run takes longer.
+
+Week summaries are kept in `~/.project-inventory/summaries.json` and are not rewritten once a week is over.
 
 ## Requirements
 
@@ -83,7 +84,9 @@ python3 $S/check_page.py ~/.project-inventory  # headless browser check, every t
 python3 $S/publish_vercel.py ~/.project-inventory <vercel-project-name>
 ```
 
-Run without Claude, the scripts do not refresh Notion, or Linear unless `LINEAR_API_KEY` is set.
+Run without Claude, the scripts do not refresh Notion, or Linear unless `LINEAR_API_KEY` is set,
+and they write no week summaries: new weeks show "no summary yet" until the next Claude run
+(`build.py` lists them in `out/summaries-needed.json`).
 The page then says those sources were not read, and `collect.py` exits 1. So chain the two with
 `;`, not `&&` — with `&&` the page would never be rebuilt:
 
