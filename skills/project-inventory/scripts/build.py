@@ -5,7 +5,7 @@
 Screenshots named in a step's `media` are embedded in the page, so the one file works as a local
 file, a claude.ai Artifact, on Vercel and on GitHub Pages.
 """
-import base64, hashlib, re, datetime as dt, html as htmllib, json, mimetypes, sys
+import base64, hashlib, re, datetime as dt, html as htmllib, json, struct, sys, zlib
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -84,6 +84,84 @@ def history(f, sums):
              "fresh": (sums.get(w) or {}).get("n") == len(its)} for w, its in weeks.items()]
 
 
+MAX_SHOT = 8 * 2**20
+MAX_PIXELS = 16_000_000
+
+
+def checked_png(raw):
+    """Validate PNG chunks, CRCs and bounded decoded scanlines; never embed opaque file contents."""
+    if not raw.startswith(b"\x89PNG\r\n\x1a\n"):
+        raise ValueError("only PNG screenshots are supported (export other images as PNG)")
+    offset, chunks, payload, header, palette = 8, [], bytearray(), None, False
+    while offset < len(raw):
+        if offset + 12 > len(raw):
+            raise ValueError("truncated PNG chunk")
+        size = int.from_bytes(raw[offset:offset + 4], "big")
+        kind = raw[offset + 4:offset + 8]
+        end = offset + 12 + size
+        if end > len(raw):
+            raise ValueError("truncated PNG chunk")
+        data = raw[offset + 8:end - 4]
+        if zlib.crc32(kind + data) != int.from_bytes(raw[end - 4:end], "big"):
+            raise ValueError("broken PNG checksum")
+        if not chunks and kind != b"IHDR":
+            raise ValueError("missing PNG header")
+        if kind == b"IHDR":
+            if chunks or size != 13:
+                raise ValueError("invalid PNG header")
+            header = struct.unpack(">IIBBBBB", data)
+        elif kind == b"PLTE":
+            if palette or b"IDAT" in chunks or not size or size % 3 or size > 768:
+                raise ValueError("invalid PNG palette")
+            palette = True
+        elif kind == b"IDAT":
+            if b"IDAT" in chunks and chunks[-1] != b"IDAT":
+                raise ValueError("non-contiguous PNG image data")
+            payload.extend(data)
+        elif kind == b"IEND":
+            if size or end != len(raw):
+                raise ValueError("invalid PNG end or trailing content")
+            chunks.append(kind)
+            break
+        elif kind not in (b"tRNS",) and not (kind[0] & 32):
+            raise ValueError("unsupported critical PNG chunk")
+        chunks.append(kind)
+        offset = end
+    if not header or not chunks or chunks[-1] != b"IEND" or not payload:
+        raise ValueError("incomplete PNG")
+    w, h, depth, color, compression, filtering, interlace = header
+    depths = {0: (1, 2, 4, 8, 16), 2: (8, 16), 3: (1, 2, 4, 8), 4: (8, 16), 6: (8, 16)}
+    if not w or not h or w * h > MAX_PIXELS:
+        raise ValueError("PNG dimensions exceed 16 million pixels or are empty")
+    if depth not in depths.get(color, ()) or compression or filtering or interlace not in (0, 1):
+        raise ValueError("invalid PNG encoding")
+    if color == 3 and not palette:
+        raise ValueError("missing PNG palette")
+    channels = {0: 1, 2: 3, 3: 1, 4: 2, 6: 4}[color]
+    passes = [(0, 0, 1, 1)] if not interlace else [(0,0,8,8), (4,0,8,8), (0,4,4,8),
+                                                               (2,0,4,4), (0,2,2,4), (1,0,2,2), (0,1,1,2)]
+    rows = []
+    for x, y, dx, dy in passes:
+        pw, ph = max(0, (w - x + dx - 1) // dx), max(0, (h - y + dy - 1) // dy)
+        if pw and ph:
+            rows.append((1 + (pw * channels * depth + 7) // 8, ph))
+    expected = sum(size * n for size, n in rows)
+    decoder = zlib.decompressobj()
+    try:
+        decoded = decoder.decompress(payload, expected + 1)
+    except zlib.error as e:
+        raise ValueError("broken PNG compressed data") from e
+    if len(decoded) != expected or not decoder.eof or decoder.unused_data or decoder.unconsumed_tail:
+        raise ValueError("invalid PNG scanline size or compressed stream")
+    offset = 0
+    for size, count in rows:
+        for _ in range(count):
+            if decoded[offset] > 4:
+                raise ValueError("invalid PNG scanline filter")
+            offset += size
+    return "image/png"
+
+
 def embed_media(nodes, home, warn):
     """Screenshots -> data: URIs inside the page. A missing file is shown as missing, never dropped."""
     for n in nodes:
@@ -95,12 +173,23 @@ def embed_media(nodes, home, warn):
             if "shot" in m:
                 path = Path(m.pop("shot")).expanduser()
                 path = path if path.is_absolute() else home / path
-                if path.is_file():
-                    mime = mimetypes.guess_type(path.name)[0] or "image/png"
-                    m["src"] = f"data:{mime};base64,{base64.b64encode(path.read_bytes()).decode()}"
-                else:
+                m.pop("src", None)  # a rejected shot cannot fall back to a supplied source
+                try:
+                    if not path.is_file():
+                        raise FileNotFoundError(f"screenshot not found: {path}")
+                    if not 0 < path.stat().st_size <= MAX_SHOT:
+                        raise ValueError("screenshot is empty or exceeds 8 MiB")
+                    with path.open("rb") as image:
+                        raw = image.read(MAX_SHOT + 1)
+                    if len(raw) > MAX_SHOT:
+                        raise ValueError("screenshot exceeds 8 MiB")
+                    mime = checked_png(raw)
+                    m["src"] = f"data:{mime};base64,{base64.b64encode(raw).decode()}"
+                    print(f"ASSET step {n.get('id')}: {path.resolve()} ({len(raw)} bytes, {mime})")
+                except (OSError, ValueError) as e:
                     m["missing"] = str(path)
-                    warn(f"step {n.get('id')}: screenshot not found: {path}")
+                    warn(f"step {n.get('id')}: {e}" if isinstance(e, FileNotFoundError)
+                         else f"step {n.get('id')}: screenshot rejected: {path}: {e}")
 
 
 def main():

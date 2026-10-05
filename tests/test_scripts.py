@@ -2,7 +2,7 @@
 
     python3 tests/test_scripts.py
 """
-import io, json, subprocess, urllib.error, sys, tempfile, types, urllib.request
+import base64, struct, zlib, io, json, subprocess, urllib.error, sys, tempfile, types, urllib.request
 from pathlib import Path
 
 S = Path(__file__).resolve().parent.parent / "skills/project-inventory/scripts"
@@ -43,7 +43,12 @@ assert "<title>A&amp;B &lt;i&gt;x&lt;/i&gt;</title>" in page, "title must be HTM
 assert "libs/mathjax" not in page, "no formula on the page -> MathJax is not loaded"
 
 # --- build: a step's screenshot is embedded, a missing one is shown and warned, a formula loads MathJax
-shot = tmp / "s.png"; shot.write_bytes(b"\x89PNG fake")
+def png_chunk(kind, data):
+    return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data))
+
+PNG = (b"\x89PNG\r\n\x1a\n" + png_chunk(b"IHDR", struct.pack(">IIBBBBB", 1, 1, 8, 6, 0, 0, 0))
+       + png_chunk(b"IDAT", zlib.compress(b"\x00\xff\x00\x00\xff")) + png_chunk(b"IEND", b""))
+shot = tmp / "s.png"; shot.write_bytes(PNG)
 inv = json.loads((home / "inventory.json").read_text())
 inv["projects"][0]["nodes"] = [{"id": 1, "title": "x", "icon": "gear", "media": [
     {"shot": str(shot), "caption": "ok"}, {"shot": "nope.png", "caption": "gone"}, {"math": ["a+b"]}]}]
@@ -94,6 +99,37 @@ test_html_trust_boundary()
 
 # --- build logic --------------------------------------------------------------------------------
 import build, datetime as dt
+
+def test_shot_validation():
+    for name, raw in [("private.txt", b"AUDIT_FAKE_PRIVATE_MARKER"), ("empty.png", b""),
+                      ("broken.png", b"\x89PNG\r\n\x1a\nBAD"), ("vector.svg", b"<svg onload='x'/>") ,
+                      ("oversized.png", PNG + b"x" * build.MAX_SHOT),
+                      ("truncated.png", PNG[:-8]), ("checksum.png", PNG[:-1] + b"x"),
+                      ("trailing.png", PNG + b"PRIVATE")]:
+        file = tmp / name; file.write_bytes(raw)
+        nodes = [{"id": 1, "media": [{"shot": str(file), "src": "data:image/png;base64,eA=="}]}]
+        warnings = []
+        build.embed_media(nodes, home, warnings.append)
+        assert "src" not in nodes[0]["media"][0], name
+        assert warnings and "screenshot rejected" in warnings[0], (name, warnings)
+        inv = json.loads((home / "inventory.json").read_text())
+        previous = inv["projects"][0]["nodes"][0]["media"]
+        inv["projects"][0]["nodes"][0]["media"] = [{"shot": str(file)}]
+        (home / "inventory.json").write_text(json.dumps(inv))
+        result = run("build.py", str(home))
+        assert result.returncode == 0 and "screenshot rejected" in result.stdout, result.stderr
+        assert '"src":' not in (home / "out/index.html").read_text(), name
+        inv["projects"][0]["nodes"][0]["media"] = previous
+        (home / "inventory.json").write_text(json.dumps(inv))
+    assert build.checked_png(PNG) == "image/png"
+    for path in (shot, home / "relative.png"):
+        path.write_bytes(PNG)
+        nodes = [{"id": 1, "media": [{"shot": str(path) if path == shot else "relative.png"}]}]
+        warnings = []
+        build.embed_media(nodes, home, warnings.append)
+        assert not warnings and nodes[0]["media"][0]["src"].startswith("data:image/png;base64,")
+
+test_shot_validation()
 today = dt.date(2026, 10, 3)
 s = build.ticket_series([
     {"state": "done", "created": "2026-09-01", "completed": "2026-09-10"},
