@@ -954,6 +954,7 @@ def test_vercel_access_scope():
 test_vercel_access_scope()
 from test_notion_contract import test_notion_adapter_contract
 test_notion_adapter_contract()
-from test_wave3 import test_install_paths
+from test_wave3 import test_install_paths, test_artifact_fragment
 test_install_paths()
+test_artifact_fragment()
 print("OK")

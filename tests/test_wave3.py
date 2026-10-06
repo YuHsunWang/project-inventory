@@ -3,6 +3,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -38,3 +39,21 @@ def test_install_paths():
     skill = "project-inventory"
     for doc in ("README.md", "說明書.md", "skills/project-inventory/SKILL.md"):
         assert f'/{plugin["name"]}:{skill}' in (ROOT / doc).read_text()
+
+
+def test_artifact_fragment():
+    """Reproducible output is a local fragment, with the same page data, not a publication."""
+    with tempfile.TemporaryDirectory() as td:
+        home = Path(td)
+        (home / "inventory.json").write_text(json.dumps({"projects": [{"key": "demo", "name": "Demo"}]}))
+        for script in ("collect.py", "build.py"):
+            result = subprocess.run([sys.executable, str(S / script), str(home)], capture_output=True, text=True)
+            assert result.returncode == 0, result.stdout + result.stderr
+        page = (home / "out/index.html").read_text()
+        fragment = (home / "out/artifact.html").read_text()
+        for wrapper in ("<!doctype", "<html", "<head>", "<body>", "<meta"):
+            assert wrapper not in fragment.lower(), wrapper
+        assert "<style>" in fragment and "<script>" in fragment
+        import re
+        payload = r"const D = (.*?);\n"
+        assert re.search(payload, page).group(1) == re.search(payload, fragment).group(1)

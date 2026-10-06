@@ -25,11 +25,11 @@ HOME/gathered/<date>.json    tickets/PRs you fetched through MCP tools  (you wri
 HOME/facts/<date>.json       one snapshot per run                       (collect.py)
 HOME/summaries.json          one plain-words summary per project-week   (you write it)
 HOME/out/index.html          the page                                   (build.py)
-HOME/out/artifact.html       same page for a claude.ai Artifact          (build.py)
+HOME/out/artifact.html       HTML fragment for manual host import          (build.py)
 ```
 
-`SCRIPTS` = the `scripts/` folder next to this file. Not running in Claude Code? Everything works
-the same except the Artifact publish option and `/schedule`; MCP steps need the matching
+`SCRIPTS` = the `scripts/` folder next to this file. Not running in Claude Code? The Python scripts are portable;
+`/schedule` is host-specific and Artifact import/publication remains unverified. MCP steps need the matching
 connector in your own tool, and without one, say which source was not read. Schemas for every file: `reference/schema.md`.
 Talk to the user in their language and write page text (names, tags, diagram) in it too; set
 `"lang"` in inventory.json (`zh-TW` and `en` have page labels; anything else falls back to `en`).
@@ -127,9 +127,14 @@ Talk to the user in their language and write page text (names, tags, diagram) in
 | Option | How | Who can see it |
 |---|---|---|
 | Local file (default) | `HOME/out/index.html`, open in a browser | only this computer |
-| claude.ai Artifact (Claude Code only) | Artifact tool, publish `HOME/out/artifact.html` (build.py writes it without the html/head/body wrapper the host adds; the same file path every run keeps one URL) | private to the user |
+| HTML for manual Artifact import | `HOME/out/artifact.html` is generated without document wrappers/meta tags; offer it for manual import only if the chosen host accepts it. No publishing API, capability detection or identity storage exists. | Host-dependent; publishing/sharing/access unverified. |
 | Vercel | `python3 SCRIPTS/publish_vercel.py HOME <project-name>` (refuses an existing project it did not create; `--reuse` only after the user confirms that project is for this page) — creates the project, locks it (Vercel Authentication, all deployments) BEFORE deploying, then checks an anonymous visitor is turned away | Vercel-authorized users; actual access depends on team/project membership, granted access, sharing and bypass settings |
 | GitHub Pages | see below | **everyone on the internet** |
+
+Artifact end-to-end acceptance is **pending**: record the host/version, verify import,
+create/update identity and URL behavior, external fonts/MathJax script restrictions,
+CSP handling and sharing permissions before claiming support. The local file path
+cannot establish artifact identity, a stable URL or private access.
 
 **Standard GitHub Pages sites are public.** Check the account plan and repo visibility first:
 

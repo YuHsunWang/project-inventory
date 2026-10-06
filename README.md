@@ -92,9 +92,17 @@ You choose. The default is a local file.
 | Option | Who can see it |
 |---|---|
 | Local file `~/.project-inventory/out/index.html` | only you |
-| claude.ai Artifact | only you (private) |
+| HTML for manual import into claude.ai Artifact | Host-dependent; publication, sharing and access are unverified. |
 | Vercel | Vercel-authorized users; access depends on team/project membership, granted access, sharing and bypass settings ([access rules](https://vercel.com/docs/deployment-protection/methods-to-protect-deployments/vercel-authentication)). Protection is switched on before the first deploy, and every deploy is checked from outside. |
 | GitHub Pages | **everyone**. Claude asks before the first publish. |
+
+`build.py` also writes `out/artifact.html`: an HTML fragment with styles/scripts and
+page content, without the document wrapper or meta tags. It can be offered for manual
+import into a compatible host. This repository has no Artifact publishing API, host
+capability detection or saved artifact identity; the file path does not preserve a URL.
+End-to-end host import/publishing is **pending**. Before claiming support, record the
+host/version and test create/update identity, stable URL, external fonts/MathJax scripts,
+CSP handling and sharing permissions. No private or fixed-URL guarantee is made.
 
 ### GitHub Pages plan and preview
 
