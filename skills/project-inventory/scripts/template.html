@@ -338,7 +338,7 @@ const L = {
   notickets:"這個專案沒有接 Linear 或 Notion。",
   facts_hint:"本機是這台電腦上的資料夾和資料；雲端是 GitHub、Linear、Notion 上的狀態。", f_local:"本機", f_cloud:"雲端", gh:"GitHub", remote_none:"沒有設定 GitHub", no_up:"這條分支還沒推上去", repo:"程式碼", branch:"分支", ahead:"還沒推", behind:"落後 GitHub", dirtyf:"改到一半的檔", last:"最後一次改動",
   local_only:"只在本機，沒有 GitHub", data:"資料", newest:"最新到", days:"天前", limit:"超過 X 天算過期", stale1:"過期", ok1:"新鮮",
-  notes:"筆記待辦", notes_open:"個還沒勾", notes_done:"個已勾", pr_open:"開著的 PR", errs:"沒抓到的東西",
+  notes:"筆記待辦", notes_todo:"個筆記待辦還沒勾", k_notes:"筆記待辦", notes_truncated:"僅顯示前 A 個，共 B 個", notes_open:"個還沒勾", notes_done:"個已勾", pr_open:"開著的 PR", errs:"沒抓到的東西",
   foot:["待辦：Linear／Notion", "等你合併：GitHub 的 PR", "git 狀態、資料日期：這台電腦"]},
  "en": {all:"All projects", projects:"projects", todo_h:"Waiting on you", nothing:"Nothing waits on you", projects_h:"Projects", back:"‹ All projects",
   prs:"PRs wait for your merge", review:"tickets are done and wait for review", dirty:"files have uncommitted changes", unpushed:"commits are not pushed",
@@ -367,7 +367,7 @@ const L = {
   notickets:"No Linear or Notion source.",
   facts_hint:"Local: folders and data on this computer. Cloud: state on GitHub, Linear, Notion.", f_local:"Local", f_cloud:"Cloud", gh:"GitHub", remote_none:"No GitHub remote", no_up:"branch not pushed yet", repo:"Code", branch:"Branch", ahead:"Unpushed", behind:"Behind GitHub", dirtyf:"Uncommitted files", last:"Last commit",
   local_only:"Local only, no GitHub", data:"Data", newest:"Newest", days:"days ago", limit:"Stale after X days", stale1:"stale", ok1:"fresh",
-  notes:"Note tasks", notes_open:"open", notes_done:"done", pr_open:"Open PRs", errs:"What failed",
+  notes:"Note tasks", notes_todo:"open note tasks", k_notes:"Note tasks", notes_truncated:"Showing first A of B tasks", notes_open:"open", notes_done:"done", pr_open:"Open PRs", errs:"What failed",
   foot:["Tickets: Linear / Notion", "Waiting for merge: GitHub PRs", "Git state, data dates: this computer"]}
 };
 const T = L[D.lang] || L[D.lang.split("-")[0]] || L.en;
@@ -670,7 +670,11 @@ function renderFacts(p){
   }
   for (const d of f.data) local.push([`${T.data} · ${esc(d.label)}`, d.error ? `<span class="st bad" style="margin-left:0">${esc(d.error)}</span><div class="small"><code>${esc(d.path)}</code></div>`
     : `${T.newest} <b>${esc(d.newest.slice(0, 10))}</b>（${d.age_days} ${T.days}）<span class="st ${d.stale ? "bad" : "ok"}">${d.stale ? T.stale1 : T.ok1}</span><div class="small"><code>${esc(d.path)}</code> · ${X(T.limit, d.max_age_days)}</div>`]);
-  for (const o of f.obsidian) local.push([T.notes, `${o.open} ${T.notes_open} · ${o.done} ${T.notes_done} <div class="small"><code>${esc(o.path)}</code></div>${o.items.length ? `<details><summary>${o.open} ${T.notes_open}</summary>${o.items.map(i => `<div class="small">☐ ${esc(i.text)} · ${esc(i.file)}</div>`).join("")}</details>` : ""}`]);
+  for (const [index, o] of f.obsidian.entries()){
+    const total = o.total ?? o.open, shown = o.shown ?? o.items.length;
+    const hint = shown < total ? `<div class="hint">${T.notes_truncated.replace("A", shown).replace("B", total)}</div>` : "";
+    local.push([`<span${index === 0 ? ` id="d-${esc(p.key)}-notes"` : ""}>${T.notes}</span>`, `${o.open} ${T.notes_open} · ${o.done} ${T.notes_done} <div class="small"><code>${esc(o.path)}</code></div>${hint}${o.items.length ? `<details><summary>${shown} / ${total} ${T.notes_open}</summary>${o.items.map(i => `<div class="small">☐ ${esc(i.text)} · ${esc(i.file)}${i.line ? `:${esc(i.line)}` : ""}</div>`).join("")}</details>` : ""}`]);
+  }
   for (const r of p.notes || []) local.push([esc(r[0]), esc(r[1])]);
   if (f.prs.length) cloud.push([T.pr_open, f.prs.map(x => `<div>${ext(x.url, `#${esc(x.number)}`)} ${esc(x.title)} <span class="small">${esc(x.repo || "")} · ${mdOf(x.createdAt)}</span></div>`).join("")]);
   if (src.linear) cloud.push(["Linear", esc(src.linear.project)]);
@@ -721,7 +725,7 @@ function spark(weekly){
 }
 function renderHome(){
   const all = P.flatMap(p => p.todo.map(t => ({...t, pname:p.name, color:p.color})));
-  const KIND = [["pr","k_pr","--wait"],["review","k_review","--accent"],["git","k_git","--open"],["data","k_data","--bad"],["err","k_err","--bad"]];
+  const KIND = [["notes","k_notes","--open"],["pr","k_pr","--wait"],["review","k_review","--accent"],["git","k_git","--open"],["data","k_data","--bad"],["err","k_err","--bad"]];
   const tiles = KIND.map(([k, lab, col]) => {
     const rows = all.filter(t => t.kind === k); if (!rows.length) return "";
     const v = rows.every(t => t.n != null) ? rows.reduce((a,t) => a + t.n, 0) : rows.length;
@@ -743,7 +747,7 @@ function renderHome(){
 function typeset(el){ if (!window.MathJax) return; if (MathJax.typesetPromise) MathJax.typesetPromise([el]).catch(()=>{}); else setTimeout(()=>typeset(el), 400); }
 let pendingGo = null;
 function route(){
-  const [key, panel] = decodeURIComponent(location.hash.slice(1)).split("/"), p = P.find(x => x.key === key);
+  const [key, panel, anchor] = decodeURIComponent(location.hash.slice(1)).split("/"), p = P.find(x => x.key === key);
   $("#home").hidden = !!p;
   document.querySelectorAll("section.proj").forEach(s => s.hidden = !p || s.id !== key);
   if (p){
@@ -755,6 +759,7 @@ function route(){
   document.querySelectorAll("#menuitems a").forEach(a => a.setAttribute("aria-current", a.dataset.k === (p ? key : "home") ? "page" : "false"));
   $("#menulabel").textContent = p ? p.name : T.all;
   toggleMenu(false);
+  if (p && panel === "facts" && anchor === "notes") pendingGo = `d-${key}-notes`;
   if (!pendingGo) window.scrollTo(0, 0);
   drawAllCharts();
   if (pendingGo){ const id = pendingGo; pendingGo = null; requestAnimationFrame(() => go(id)); }

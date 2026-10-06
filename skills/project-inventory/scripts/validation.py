@@ -190,6 +190,28 @@ def validate_rows(rows, path, prs=False, node_ids=None):
     return out
 
 
+def validate_notes(rows, path):
+    for i, row in enumerate(typed(rows, list, path)):
+        at = f"{path}[{i}]"
+        typed(row, dict, at)
+        for field in ("open", "done"):
+            if typed(row.get(field), int, at + "." + field) < 0:
+                fail(at + "." + field, "must be nonnegative")
+        items = typed(row.get("items"), list, at + ".items")
+        for j, item in enumerate(items):
+            ip = f"{at}.items[{j}]"
+            typed(item, dict, ip)
+            for field in ("text", "file"):
+                string(item.get(field), ip + "." + field)
+            if "line" in item and typed(item["line"], int, ip + ".line") < 1:
+                fail(ip + ".line", "must be positive")
+        if "total" in row or "shown" in row:
+            total = typed(row.get("total"), int, at + ".total")
+            shown = typed(row.get("shown"), int, at + ".shown")
+            if total != row["open"] or shown != len(items) or not 0 <= shown <= min(total, 50):
+                fail(at, "inconsistent notes total/shown counts")
+
+
 def validate_project_rows(projects, inv, path):
     typed(projects, dict, path)
     configured = {p["key"]: p for p in inv["projects"]}
@@ -214,6 +236,7 @@ def validate_project_rows(projects, inv, path):
                 optional_date(state.get(field), sp + "." + field)
             if "complete" in state and not isinstance(state["complete"], bool):
                 fail(sp + ".complete", "expected bool")
+        validate_notes(data.get("obsidian", []), at + ".obsidian")
         for i, error in enumerate(typed(data.get("errors", []), list, at + ".errors")):
             string(error, f"{at}.errors[{i}]")
     return projects

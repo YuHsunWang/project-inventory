@@ -181,7 +181,8 @@ Per project: `sources` (source-level provenance/state), `tickets` (fresh rows on
 behind, dirty, last_commit, weekly commit counts for 12 weeks, recent commits for 14 days),
 `weekly` (the project's commits per week across all its checkouts, each commit counted once),
 `commits` (the whole history, newest 3000 per checkout, deduped), `prs`,
-`obsidian` (open/done counts, first 50 open items), `data` (newest, age_days, stale, or error),
+`obsidian` (open/done counts, `total` open tasks, `shown` items, first 50 open items with
+relative `file` and 1-based `line`; fenced code is skipped, nested lists are included), `data` (newest, age_days, stale, or error),
 `errors`.
 
 

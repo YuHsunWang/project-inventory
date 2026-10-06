@@ -708,6 +708,53 @@ os.environ.pop("LINEAR_API_KEY", None)
 from test_contracts import run_validation_tests
 run_validation_tests(tmp, run)
 
+def test_notes_tasks_counts_fences_nested():
+    from validation import validate_notes
+    for count in (0, 1, 51):
+        vault = tmp / f"notes-{count}"; vault.mkdir()
+        # Longer fences cannot be closed by a shorter marker; tilde fences also hide examples.
+        prefix = "````md\n- [ ] example\n```\n- [x] example done\n````\n~~~\n- [ ] example2\n~~~\n"
+        lines = ["  " * (i % 3) + f"{['-', '*', '+', '1.'][i % 4]} [ ] task {i}" for i in range(count)]
+        (vault / "tasks.md").write_text(prefix + "\n".join(lines) + "\n  - [X] actual done\n")
+        excluded = vault / ".trash"; excluded.mkdir(); (excluded / "ignored.md").write_text("- [ ] ignored")
+        notes = collect.obsidian_tasks(vault)
+        assert (notes["open"], notes["done"], notes["total"], notes["shown"]) == (count, 1, count, min(count, 50))
+        assert [i["line"] for i in notes["items"]] == list(range(9, 9 + min(count, 50)))
+        assert all(i["file"] == "tasks.md" for i in notes["items"])
+        validate_notes([notes], "notes")
+        root = fixture(f"notes-home-{count}", {"obsidian": [{"path": str(vault)}]})
+        assert run("collect.py", str(root)).returncode == 0
+        p = page_data(root)["projects"][0]
+        todos = p["todo"]
+        assert len(todos) == bool(count)
+        if count:
+            assert todos[0]["kind"] == "notes" and todos[0]["n"] == count
+            assert todos[0]["go"] == "#p/facts/notes"
+        output = subprocess.run(["node", str(Path(__file__).with_name("html_todos.js"))],
+            input=(root / "out/index.html").read_text(), text=True, capture_output=True)
+        assert output.returncode == 0, output.stderr
+        homepage = json.loads(output.stdout)["home"]
+        assert ("Nothing waits on you" in homepage) == (count == 0)
+        if count:
+            assert f'>{count}</span>' in homepage and 'href="#p/facts/notes"' in homepage
+        facts = rendered(root)[0]["facts"]
+        assert ('id="d-p-notes"' in facts)
+        if count:
+            assert "tasks.md:9" in facts
+        assert ("Showing first 50 of 51 tasks" in facts) == (count == 51)
+        inv = json.loads((root / "inventory.json").read_text()); inv["lang"] = "zh-TW"
+        (root / "inventory.json").write_text(json.dumps(inv)); page_data(root)
+        assert ("僅顯示前 50 個，共 51 個" in rendered(root)[0]["facts"]) == (count == 51)
+    broken = dict(notes, shown=49)
+    try:
+        validate_notes([broken], "notes")
+    except ValueError as error:
+        assert "total/shown" in str(error)
+    else:
+        raise AssertionError("inconsistent task counts accepted")
+
+
+test_notes_tasks_counts_fences_nested()
 # --- Vercel -----------------------------------------------------------------------------------
 vhome = tmp / "vhome"; (vhome / "out").mkdir(parents=True); (vhome / "out/index.html").write_text("x")
 pv.TOKEN = "t"

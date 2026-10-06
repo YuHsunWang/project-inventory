@@ -18,7 +18,7 @@ from pathlib import Path
 from validation import validate_inventory, validate_gathered, validate_snapshot, normalize_date, calendar_date, date_order, timezone
 
 RECENT_DAYS, WEEKS, HISTORY = 14, 12, 3000  # HISTORY: newest commits kept per checkout for the progress tab
-TASK = re.compile(r"^\s*[-*]\s+\[( |x|X)\]\s+(.*)$")
+TASK = re.compile(r"^\s*(?:[-*+]|\d+[.)])\s+\[( |x|X)\]\s+(.*)$")
 
 
 # never stop to ask for a password: fail instead (cron has no one to answer). An ssh passphrase
@@ -176,20 +176,32 @@ def linear_tickets(project):
 
 def obsidian_tasks(folder):
     """Markdown task lines `- [ ]` / `- [x]` under a vault folder (skips .obsidian and .trash)."""
-    open_, done = [], 0
+    items, open_, done = [], 0, 0
     root = Path(folder).expanduser()
     if not root.is_dir():
         raise RuntimeError(f"folder not found: {root}")
     for f in sorted(root.rglob("*.md")):
         if any(part in (".obsidian", ".trash") for part in f.parts):
             continue
-        for line in f.read_text(encoding="utf-8", errors="replace").splitlines():
+        fence = None
+        for number, line in enumerate(f.read_text(encoding="utf-8", errors="replace").splitlines(), 1):
+            marker = re.match(r"^\s*(`{3,}|~{3,})(.*)$", line)
+            if fence:
+                if marker and marker[1][0] == fence[0] and len(marker[1]) >= len(fence) and not marker[2].strip():
+                    fence = None
+                continue
+            if marker and (marker[1][0] == "~" or "`" not in marker[2]):
+                fence = marker[1]
+                continue
             m = TASK.match(line)
             if m and m.group(1) == " ":
-                open_.append({"text": m.group(2).strip()[:160], "file": str(f.relative_to(root))})
+                open_ += 1
+                if len(items) < 50:
+                    items.append({"text": m.group(2).strip()[:160], "file": str(f.relative_to(root)), "line": number})
             elif m:
                 done += 1
-    return {"path": str(root), "open": len(open_), "done": done, "items": open_[:50]}
+    return {"path": str(root), "open": open_, "done": done, "total": open_, "shown": len(items), "items": items}
+
 
 
 def sql_identifier(name):

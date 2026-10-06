@@ -36,6 +36,9 @@ def todos(p, f):
             parts.append([None, "no_upstream"])
         if parts:
             out.append({"kind": "git", "n": None, "where": r["label"], "parts": parts, "go": f"#{k}/facts"})
+    notes = sum(o["open"] for o in f.get("obsidian", []))
+    if notes:
+        out.append({"kind": "notes", "n": notes, "t": "notes_todo", "go": f"#{k}/facts/notes"})
     stale = [d for d in f["data"] if d.get("stale")]
     if stale:
         out.append({"kind": "data", "n": len(stale), "t": "stale", "go": f"#{k}/facts"})
