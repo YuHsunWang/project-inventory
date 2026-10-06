@@ -124,3 +124,22 @@ def test_ui_copy_defaults():
     assert result.returncode == 0, result.stdout + result.stderr
     example = json.loads((S.parent / "reference/example-inventory.json").read_text())
     assert [n["icon"] for n in example["projects"][0]["nodes"]] == ["globe", "chart"]
+
+
+def test_zero_service_demo():
+    with tempfile.TemporaryDirectory() as td:
+        home = Path(td) / "demo"
+        script = S.parent / "reference/demo.py"
+        result = subprocess.run([sys.executable, str(script), str(home)], capture_output=True, text=True)
+        assert result.returncode == 0, result.stderr
+        inv = json.loads((home / "inventory.json").read_text())
+        assert inv["projects"][0]["sources"] == {}
+        for name in ("collect.py", "build.py"):
+            result = subprocess.run([sys.executable, str(S / name), str(home)], capture_output=True, text=True)
+            assert result.returncode == 0, result.stdout + result.stderr
+        facts = json.loads(next((home / "facts").glob("*.json")).read_text())["projects"]["myapp"]
+        assert not facts["errors"] and not facts["data"][0]["stale"]
+        original = (home / "inventory.json").read_bytes()
+        result = subprocess.run([sys.executable, str(script), str(home)], capture_output=True, text=True)
+        assert result.returncode != 0 and "Refusing to overwrite" in result.stderr
+        assert (home / "inventory.json").read_bytes() == original
