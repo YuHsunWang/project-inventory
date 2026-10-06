@@ -49,4 +49,4 @@ browser check. Never write tests to the original inventory home.
 - For UI reports: language, theme, viewport and genuine browser screenshot.
 - For source reports: source status/completeness and before/after error counts.
 
-A LICENSE is an open owner decision; this file does not grant a license.
+Contributions are accepted under the [MIT License](LICENSE).

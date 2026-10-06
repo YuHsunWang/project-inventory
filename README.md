@@ -200,6 +200,5 @@ Week summaries are written by the assistant, not by Python. Source failures rema
 
 Development and reporting: [CONTRIBUTING.md](CONTRIBUTING.md).
 Branch fixes: [CHANGELOG.md](CHANGELOG.md).
-Run `mkdir -p .tmp && TMPDIR="$PWD/.tmp" python3 tests/test_scripts.py`; expected final line: `OK`.
-A **LICENSE remains an open owner decision**; no license grant is asserted here.
-CI setup is deferred to wave 4 (#26).
+Full check: `python3 tests/release_gate.py`; GitHub CI runs the same command on pushes and PRs to main.
+License: [MIT](LICENSE).

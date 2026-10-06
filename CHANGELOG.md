@@ -32,6 +32,6 @@ Fixes on this branch, grouped by issue (not claims of live service acceptance):
   contributing instructions and this changelog.
 - #29: supply icon fallback/defaults, use remote-neutral copy and label only current weeks.
 
-Still open: owner license choice. Host loading/version
+Licensed under MIT. Host loading/version
 checks, real Notion integration and Artifact end-to-end publishing remain unverified;
 these entries do not imply a published release or deployment.
