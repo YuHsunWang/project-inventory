@@ -15,6 +15,7 @@ blocks stale rebuilds and the last page retains its data/time with a failure ban
 """
 import argparse, csv, datetime as dt, json, os, re, shutil, sqlite3, subprocess, sys, uuid, urllib.error, urllib.request
 from pathlib import Path
+from validation import validate_inventory, validate_gathered, validate_snapshot
 
 RECENT_DAYS, WEEKS, HISTORY = 14, 12, 3000  # HISTORY: newest commits kept per checkout for the progress tab
 TASK = re.compile(r"^\s*[-*]\s+\[( |x|X)\]\s+(.*)$")
@@ -117,7 +118,7 @@ LINEAR_NAME_Q = """query($name:String!){
   projects(first:2, includeArchived:true, filter:{name:{eq:$name}}){ nodes{ id name archivedAt } } }"""
 LINEAR_Q = """query($id:ID!, $after:String){
   issues(first:100, after:$after, includeArchived:true, filter:{project:{id:{eq:$id}}}){
-    nodes{ identifier title url createdAt completedAt canceledAt state{ name type } }
+    nodes{ id identifier title url createdAt completedAt canceledAt state{ name type } }
     pageInfo{ hasNextPage endCursor } } }"""
 
 
@@ -162,7 +163,7 @@ def linear_tickets(project):
         for i in page["nodes"]:
             st = i["state"]
             state = {"completed": "done", "canceled": "dead"}.get(st["type"]) or ("wait" if "review" in st["name"].lower() else "open")
-            out.append({"id": i["identifier"], "title": i["title"], "state": state, "url": i["url"], "source": "linear",
+            out.append({"id": i["identifier"], "source_id": i.get("id", i["identifier"]), "title": i["title"], "state": state, "url": i["url"], "source": "linear",
                         "created": i["createdAt"][:10], "completed": (i["completedAt"] or "")[:10] or None,
                         "canceled": (i["canceledAt"] or "")[:10] or None})
         if not page["pageInfo"]["hasNextPage"]:
@@ -289,10 +290,10 @@ def gathered_state(g, name, run_id, attempted_at, previous=None):
 
 
 def collect_snapshot(home, requested_run=None, script_only=False):
-    inv = json.loads((home / "inventory.json").read_text(encoding="utf-8"))
+    inv = validate_inventory(json.loads((home / "inventory.json").read_text(encoding="utf-8")))
     today = dt.date.today()
     gathered_f = home / "gathered" / f"{today}.json"
-    gathered = json.loads(gathered_f.read_text(encoding="utf-8")) if gathered_f.exists() else {}
+    gathered = validate_gathered(json.loads(gathered_f.read_text(encoding="utf-8")) if gathered_f.exists() else {}, inv, str(gathered_f))
     previous_files = sorted(x for x in (home / "facts").glob("*.json") if x.stem <= today.isoformat())
     previous = json.loads(previous_files[-1].read_text(encoding="utf-8")) if previous_files else {}
     offered = gathered.get("_run", {}).get("run_id")
@@ -381,6 +382,7 @@ def collect_snapshot(home, requested_run=None, script_only=False):
                 f["data"].append({"label": d.get("label", d["path"]), "path": d["path"], "error": str(e)})
         failed += len(f["errors"])
         snap["projects"][p["key"]] = f
+    validate_snapshot(snap, inv)
     out = home / "facts" / f"{today}.json"
     atomic_write(out, json.dumps(snap, ensure_ascii=False, indent=1))
     for k, f in snap["projects"].items():

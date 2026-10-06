@@ -89,7 +89,7 @@
     "read": ["linear"],
     "tickets": [
       {"id": "DEV-12", "title": "…", "state": "done", "url": "https://linear.app/…",
-       "source": "linear", "created": "2026-09-01", "completed": "2026-09-20", "canceled": null,
+       "source": "linear", "source_id": "full-provider-issue-UUID", "created": "2026-09-01", "completed": "2026-09-20", "canceled": null,
        "benefit": "optional plain-words note"}
     ],
     "prs": [],          // only when gh is missing: [{"number", "title", "url", "createdAt", "repo"}]
@@ -108,8 +108,8 @@ without metadata is stale, never fresh. Linear with an API key is re-read on eve
 Only fresh tickets/PRs feed counts and trends; old tickets remain in `stale_tickets`.
 
 `state` is one of `done`, `wait` (finished, waiting for the user's review/merge), `open`, `dead`
-(canceled). Notion rows use the page URL as `url` and a short id (e.g. the row's ID property or
-the first 8 chars of the page id) as `id`.
+(canceled). Notion rows use the page URL as `url`, the full page UUID as `source_id`, and a short
+display label as `id`. Never use a shortened Notion ID as the unique identity.
 
 ## summaries.json (written by Claude, kept across runs)
 
@@ -142,3 +142,23 @@ Legacy snapshots lacking source provenance are shown as stale, with their rows r
 `refresh.json` records `run_id`, `attempted_at`, `status` (`running`, `ok`, `partial`, `fatal`),
 `snapshot` (the exact absolute snapshot path), and `error`. `collect.py HOME --refresh` runs
 collection and build together; fatal failures stop rebuilding and mark last-good output.
+
+## Machine validation
+
+`collect.py` validates inventory and the consumed gathered file before reading sources;
+`build.py` validates inventory and snapshot ticket/PR rows before rendering. Invalid
+input exits 2 with a field path, such as `projects[3].key: duplicate "cvs"`.
+The shared `validation.py` uses only Python's standard library.
+
+Project keys are unique and contain only ASCII letters, digits, `_` and `-`.
+DOM IDs `home`, `projects`, `brand`, `menubtn`, `menulabel`, `stamp`, `menu`,
+`menuitems`, `foot`, and prefixes `d-`/`t-` are reserved. Node IDs are unique
+integers within a project; `on` must reference a spine node (no self/branch references).
+States use the enum above. Supplied dates must be ISO calendar dates or timestamps;
+null/empty ticket lifecycle dates mean unknown, not zero. URLs must be absolute
+HTTP/HTTPS URLs. Data kinds use the table above and `max_age_days` is nonnegative.
+
+Tickets dedupe by `(source, source_id)` and PRs by `(repo, number)`, keeping the
+first valid row. Legacy Linear identifiers and full Notion page URLs provide stable
+fallback identities; a short Notion display ID alone is rejected. Missing lifecycle
+dates are allowed so the chart can report incomplete history.

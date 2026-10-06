@@ -8,6 +8,7 @@ file, a claude.ai Artifact, on Vercel and on GitHub Pages.
 import argparse, base64, hashlib, re, datetime as dt, html as htmllib, json, struct, sys, zlib
 from pathlib import Path
 from collect import atomic_write
+from validation import validate_inventory, validate_snapshot
 
 HERE = Path(__file__).resolve().parent
 STATES = ("wait", "open", "done", "dead")
@@ -227,11 +228,11 @@ def build_page(home, snapshot=None, run_id=None):
         if run_id and run_id != manifest["run_id"]:
             raise ValueError("run_id does not match the latest refresh; rerun collect.py HOME --refresh")
         snapshot, run_id = expected, manifest["run_id"]
-    inv = json.loads((home / "inventory.json").read_text(encoding="utf-8"))
+    inv = validate_inventory(json.loads((home / "inventory.json").read_text(encoding="utf-8")))
     snaps = sorted((home / "facts").glob("*.json"))
     if not snaps and snapshot is None:
         raise ValueError("no snapshot in facts/ - run collect.py HOME --refresh first")
-    snap = json.loads((snapshot or snaps[-1]).read_text(encoding="utf-8"))
+    snap = validate_snapshot(json.loads((snapshot or snaps[-1]).read_text(encoding="utf-8")), inv)
     if run_id and snap.get("run_id") != run_id:
         raise ValueError("snapshot run_id differs from this refresh; rerun collect.py HOME --refresh")
     today = dt.date.fromisoformat(snap["date"])

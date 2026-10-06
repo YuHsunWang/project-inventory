@@ -27,7 +27,7 @@ home = tmp / "home"; (home / "gathered").mkdir(parents=True)
 (home / "gathered" / "2000-01-01.json").write_text("{}")
 (home / "inventory.json").write_text(json.dumps({"title": "A&B <i>x</i>", "projects": [{
     "key": "p", "name": "P", "color": "#c00",
-    "sources": {"notion": {"url": "x"}, "local": [{"label": "a", "path": str(a)}, {"label": "a-wt", "path": str(tmp / "a-wt")},
+    "sources": {"notion": {"url": "https://notion.so/fixture"}, "local": [{"label": "a", "path": str(a)}, {"label": "a-wt", "path": str(tmp / "a-wt")},
                                                   {"label": "b", "path": str(b)}]}}]}))
 r = run("collect.py", str(home))
 # Notion not gathered -> partial exit 1; build remains allowed, with a hint naming the other date
@@ -76,7 +76,7 @@ def test_html_trust_boundary():
     inv["projects"][0]["nodes"][0]["media"].extend([
         {"mock": "</script><script>window.__audit_xss=1</script>"},
         {"src": '\" onerror=\"window.__audit_xss=1'},
-        {"link": ["bad", "javascript:window.__audit_xss=1"]}])
+        {"link": ["safe", "https://example.com"]}])
     (home / "inventory.json").write_text(json.dumps(inv))
     result = run("build.py", str(home))
     assert result.returncode == 0, result.stderr
@@ -272,7 +272,7 @@ def page_data(root):
     page = (root / "out/index.html").read_text()
     return json.loads(re.search(r"const D = (.*?);\nconst L", page, re.S)[1].replace("<\\/", "</"))
 
-OLD_TICKET = {"id": "N-1", "title": "old", "source": "notion", "state": "wait", "created": "2026-09-01"}
+OLD_TICKET = {"id": "N-1", "url": "https://notion.so/full-page-id", "title": "old", "source": "notion", "state": "wait", "created": "2026-09-01"}
 
 def test_commit_count_uncapped_worktrees_branches_and_repos():
     repo = tmp / "busy"; repo.mkdir(); git(repo, "init", "-q")
@@ -408,7 +408,7 @@ def test_github_mcp_with_unauthed_cli():
     root = fixture("github-mcp-cli", {"github": ["o/r"]})
     gather(root, source="github:o/r")
     path = next((root / "gathered").glob("*.json"))
-    g = json.loads(path.read_text()); g["p"]["prs"] = [{"number": 1, "repo": "o/r"}]
+    g = json.loads(path.read_text()); g["p"]["prs"] = [{"number": 1, "repo": "o/r", "title": "PR"}]
     path.write_text(json.dumps(g))
     with patch.object(collect.shutil, "which", return_value="gh"), patch.object(collect, "run", side_effect=RuntimeError("not logged in")) as api, redirect_stdout(io.StringIO()):
         code, path, _ = collect.collect_snapshot(root)
@@ -422,7 +422,7 @@ test_github_mcp_with_unauthed_cli()
 
 
 def test_same_day_reuse():
-    root = fixture("same-day", {"notion": {"url": "x"}})
+    root = fixture("same-day", {"notion": {"url": "https://notion.so/fixture"}})
     rid = gather(root, tickets=[OLD_TICKET])
     first = run("collect.py", str(root)); assert first.returncode == 0, first.stdout + first.stderr
     assert snapshot(root)["run_id"] == rid
@@ -448,7 +448,7 @@ def test_cron_takeover():
     assert f["sources"]["linear"]["status"] == "ok" and f["tickets"] == []
 
 def test_failed_source_keeps_tickets():
-    root = fixture("failed-old", {"notion": {"url": "x"}})
+    root = fixture("failed-old", {"notion": {"url": "https://notion.so/fixture"}})
     gather(root, status="failed", tickets=[OLD_TICKET])
     result = run("collect.py", str(root)); assert result.returncode == 1
     f = snapshot(root)["projects"]["p"]
@@ -572,7 +572,7 @@ def test_manifest_write_failure():
     assert run("collect.py", str(root), "--refresh").returncode == 0
 
 def test_refresh_manifest_and_partial():
-    root = fixture("partial-refresh", {"notion": {"url": "x"}})
+    root = fixture("partial-refresh", {"notion": {"url": "https://notion.so/fixture"}})
     gather(root, tickets=[OLD_TICKET])
     result = run("collect.py", str(root), "--refresh", "--script-only")
     assert result.returncode == 1 and "built " in result.stdout, result.stdout + result.stderr
@@ -589,7 +589,7 @@ def test_five_ticket_states():
     labels = {"empty": "Read successfully, 0 tickets.", "not_connected": "No Linear or Notion source.",
               "failed": "Ticket read failed", "partial": "Ticket read partly failed", "stale": "Ticket data is stale"}
     for status in labels:
-        root = fixture("state-" + status, {} if status == "not_connected" else {"notion": {"url": "x"}})
+        root = fixture("state-" + status, {} if status == "not_connected" else {"notion": {"url": "https://notion.so/fixture"}})
         if status != "not_connected":
             gather(root, status="failed" if status == "failed" else "ok", tickets=[OLD_TICKET] if status in ("failed", "stale", "partial") else [])
         if status == "partial":
@@ -631,7 +631,7 @@ def test_five_ticket_states():
 
 
 def test_partial_ticket_read():
-    root = fixture("partial-source", {"notion": {"url": "x"}})
+    root = fixture("partial-source", {"notion": {"url": "https://notion.so/fixture"}})
     gather(root, status="partial", tickets=[OLD_TICKET])
     assert run("collect.py", str(root)).returncode == 1
     p = page_data(root)["projects"][0]
@@ -640,7 +640,7 @@ def test_partial_ticket_read():
 
 
 def test_old_and_legacy_ticket_states():
-    root = fixture("aged-state", {"notion": {"url": "x"}})
+    root = fixture("aged-state", {"notion": {"url": "https://notion.so/fixture"}})
     gather(root, tickets=[OLD_TICKET]); assert run("collect.py", str(root)).returncode == 0
     path = root / "facts" / f"{dt.date.today()}.json"
     snap = snapshot(root)
@@ -659,7 +659,7 @@ def test_old_and_legacy_ticket_states():
 
 
 def test_last_success_across_days():
-    root = fixture("last-read-yesterday", {"notion": {"url": "x"}})
+    root = fixture("last-read-yesterday", {"notion": {"url": "https://notion.so/fixture"}})
     gather(root); assert run("collect.py", str(root)).returncode == 0
     snap = snapshot(root); last = snap["projects"]["p"]["sources"]["notion"]["fetched_at"]
     current = root / "facts" / f"{dt.date.today()}.json"
@@ -683,6 +683,9 @@ test_cron_takeover()
 test_failed_source_keeps_tickets()
 test_mcp_prs_per_repo()
 os.environ.pop("LINEAR_API_KEY", None)
+
+from test_contracts import run_validation_tests
+run_validation_tests(tmp, run)
 
 # --- Vercel -----------------------------------------------------------------------------------
 vhome = tmp / "vhome"; (vhome / "out").mkdir(parents=True); (vhome / "out/index.html").write_text("x")
