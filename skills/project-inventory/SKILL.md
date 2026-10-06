@@ -74,7 +74,13 @@ Talk to the user in their language and write page text (names, tags, diagram) in
    - Notion: query the database (or read the page's to-do blocks). Map its status property the
      same way; say which values you mapped how the first time and save that in inventory.json
      (`sources.notion.status_map`).
-   - GitHub PRs only if `gh` is not installed: use the GitHub MCP, put them under `prs`.
+   - GitHub PRs: scripts paginate every open PR with `gh api graphql`. If `gh` is missing,
+     not logged in (`gh auth status` fails), or cannot read the repo, use GitHub MCP instead.
+     Follow every returned cursor, put normalized `number`, `title`, `url`, `createdAt`,
+     `isDraft`, `headRefName`, and `repo` under `prs`. Mark the per-repo source `ok` and
+     `complete: true` only after the final page, including zero PRs. A denied later page is
+     `failed`/`partial` with its error, never a complete short list. A fresh MCP gather takes
+     precedence even when `gh` is installed; collect.py otherwise reports CLI failures.
    - Create a unique `_run.run_id` for this gather. For each source write
      `run_id`, `attempted_at`, `fetched_at`, `status`, `complete`, and `error` under `sources`
      (see schema). Track MCP PRs per `github:<owner/repo>`. Never reuse a gather run.

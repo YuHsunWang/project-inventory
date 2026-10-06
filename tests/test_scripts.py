@@ -225,6 +225,53 @@ def page_data(root):
 
 OLD_TICKET = {"id": "N-1", "title": "old", "source": "notion", "state": "wait", "created": "2026-09-01"}
 
+def test_github_pr_pagination():
+    for count in (0, 50, 51, 101):
+        calls = []
+        def api(cmd, **kwargs):
+            page = len(calls); calls.append(cmd)
+            assert cmd[:3] == ["gh", "api", "graphql"]
+            assert (f"after=c{page}" in cmd) if page else not any(x.startswith("after=") for x in cmd)
+            nodes = [{"number": n, "title": str(n)} for n in range(page * 50, min(count, (page + 1) * 50))]
+            return json.dumps({"data": {"repository": {"pullRequests": {"nodes": nodes,
+                "pageInfo": {"hasNextPage": (page + 1) * 50 < count, "endCursor": f"c{page + 1}"}}}}})
+        with patch.object(collect, "run", side_effect=api):
+            prs = collect.gh_prs("o/r")
+        assert len(prs) == count and all(p["repo"] == "o/r" for p in prs)
+        assert len(calls) == max(1, (count + 49) // 50)
+
+
+def test_github_denied_second_page():
+    first = json.dumps({"data": {"repository": {"pullRequests": {"nodes": [{"number": n} for n in range(50)],
+        "pageInfo": {"hasNextPage": True, "endCursor": "next"}}}}})
+    root = fixture("github-denied", {"github": ["o/r"]})
+    with patch.object(collect.shutil, "which", return_value="gh"), patch.object(collect, "run", side_effect=[first, RuntimeError("permission denied")]), redirect_stdout(io.StringIO()):
+        code, path, _ = collect.collect_snapshot(root)
+    f = json.loads(path.read_text())["projects"]["p"]
+    assert code == 1 and f["prs"] == []
+    assert f["sources"]["github:o/r"]["status"] == "failed" and not f["sources"]["github:o/r"]["complete"]
+    assert any("PR page 2: permission denied" in e for e in f["errors"])
+    assert run("build.py", str(root)).returncode == 0
+    assert "permission denied" in (root / "out/index.html").read_text()
+
+
+def test_github_mcp_with_unauthed_cli():
+    root = fixture("github-mcp-cli", {"github": ["o/r"]})
+    gather(root, source="github:o/r")
+    path = next((root / "gathered").glob("*.json"))
+    g = json.loads(path.read_text()); g["p"]["prs"] = [{"number": 1, "repo": "o/r"}]
+    path.write_text(json.dumps(g))
+    with patch.object(collect.shutil, "which", return_value="gh"), patch.object(collect, "run", side_effect=RuntimeError("not logged in")) as api, redirect_stdout(io.StringIO()):
+        code, path, _ = collect.collect_snapshot(root)
+    assert code == 0 and len(json.loads(path.read_text())["projects"]["p"]["prs"]) == 1
+    api.assert_not_called()
+
+
+test_github_pr_pagination()
+test_github_denied_second_page()
+test_github_mcp_with_unauthed_cli()
+
+
 def test_same_day_reuse():
     root = fixture("same-day", {"notion": {"url": "x"}})
     rid = gather(root, tickets=[OLD_TICKET])

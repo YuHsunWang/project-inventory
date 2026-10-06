@@ -81,10 +81,34 @@ def weekly(dates, today):
     return [{"week": s.isoformat(), "n": sum(s <= d < s + dt.timedelta(days=7) for d in ds)} for s in starts]
 
 
+GH_PRS_Q = """query($owner:String!, $repo:String!, $after:String){
+  repository(owner:$owner, name:$repo){ pullRequests(first:50, after:$after, states:OPEN){
+    nodes{ number title url createdAt isDraft headRefName }
+    pageInfo{ hasNextPage endCursor } } } }"""
+
+
 def gh_prs(repo):
-    out = run(["gh", "pr", "list", "-R", repo, "--state", "open", "--limit", "50",
-               "--json", "number,title,url,createdAt,isDraft,headRefName"])
-    return [{**p, "repo": repo} for p in json.loads(out)]
+    owner, name = repo.split("/", 1)
+    prs, after = [], None
+    while True:
+        cmd = ["gh", "api", "graphql", "-f", f"query={GH_PRS_Q}",
+               "-f", f"owner={owner}", "-f", f"repo={name}"]
+        if after:
+            cmd += ["-f", f"after={after}"]
+        try:
+            res = json.loads(run(cmd))
+            if res.get("errors"):
+                raise RuntimeError(res["errors"][0].get("message"))
+            page = res["data"]["repository"]["pullRequests"]
+        except Exception as e:
+            raise RuntimeError(f"PR page {len(prs) // 50 + 1}: {e}") from e
+        prs += [{**p, "repo": repo} for p in page["nodes"]]
+        if not page["pageInfo"]["hasNextPage"]:
+            return prs
+        cursor = page["pageInfo"]["endCursor"]
+        if not cursor or cursor == after:
+            raise RuntimeError("PR pagination did not advance")
+        after = cursor
 
 
 LINEAR_Q = """query($name:String!, $after:String){
