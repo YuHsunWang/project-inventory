@@ -41,6 +41,10 @@ Talk to the user in their language and write page text (names, tags, diagram) in
    Obsidian vault folders. Never include a project the user did not confirm.
 2. **Sources per project.** Fill `sources` (see schema): `linear`, `notion`, `github`, `local`,
    `obsidian`. Check each one actually answers now (one MCP call / one `git -C <path> status`).
+   For Linear, confirm and save `sources.linear.project_id` (project UUID) and `project`
+   (display name), including archived projects. Same names can span teams: show the candidate
+   IDs/team names and let the user choose; never merge them. Legacy name-only settings work
+   only with one match; migrate by saving its confirmed UUID, especially before a rename.
    A source with no connector: tell the user which connector to add, leave it out for now.
 3. **Data to watch.** Look for data the project produces (data/, *.csv, *.parquet, *.sqlite,
    *.jsonl, generated JSON). Show the candidates; for each one the user keeps, find the
@@ -65,7 +69,7 @@ Talk to the user in their language and write page text (names, tags, diagram) in
    can differ from the date you believe it is (time zones, runs near midnight).
    - Linear: skip this if `LINEAR_API_KEY` is set in the environment — collect.py then reads
      Linear itself (faster, exact). Otherwise: every issue of the project, archived ones included (`list_issues` with the
-     project, `includeArchived: true`, `limit: 250`; it returns one page at a time — pass the
+     confirmed project UUID (resolve legacy names uniquely first), `includeArchived: true`, `limit: 250`; it returns one page at a time — pass the
      returned `cursor` back until there is no next page).
      Map exactly as collect.py does: status type completed → `done`, canceled → `dead`, status
      name containing "review" → `wait`, everything else → `open`. Ask for the `createdAt`,

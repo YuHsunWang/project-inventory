@@ -179,19 +179,68 @@ assert collect.clean_url("git@github.com:o/r.git") == "https://github.com/o/r"
 assert collect.GIT_ENV["GIT_TERMINAL_PROMPT"] == "0"
 
 
-# --- Linear: an empty project is fine, a wrong name is an error -------------------------------
-def fake_linear(projects):
-    body = {"data": {"projects": {"nodes": projects}, "issues": {"nodes": [], "pageInfo": {"hasNextPage": False}}}}
-    return lambda req, timeout: io.BytesIO(json.dumps(body).encode())
+# --- Linear project identity is independent of its display name ------------------------------
+from unittest.mock import patch
 
-collect.os.environ["LINEAR_API_KEY"] = "k"
-urllib.request.urlopen = fake_linear([{"id": "1"}])
-assert collect.linear_tickets("New") == []
-urllib.request.urlopen = fake_linear([])
-try:
-    collect.linear_tickets("Typo"); raise AssertionError("missing project must raise")
-except RuntimeError as e:
-    assert "no Linear project named" in str(e)
+
+def test_linear_project_identity():
+    issue = {"identifier": "L-1", "title": "one project", "url": "https://linear.app/i",
+             "createdAt": "2026-10-01", "completedAt": None, "canceledAt": None,
+             "state": {"name": "Open", "type": "unstarted"}}
+    for spec, archived, empty in [({"project_id": "a", "project": "Old name"}, None, False),
+                                  ({"project_id": "a"}, "2026-09-01", False),
+                                  ({"project_id": "a"}, None, True),
+                                  ({"project": "Unique"}, "2026-09-01", True)]:
+        requests = []
+        def api(req, timeout):
+            q = json.loads(req.data); requests.append(q)
+            variables = q["variables"]
+            if q["query"] == collect.LINEAR_PROJECT_Q:
+                assert variables == {"id": "a"}
+                data = {"project": {"id": "a", "name": "Renamed", "archivedAt": archived}}
+            elif q["query"] == collect.LINEAR_NAME_Q:
+                assert "includeArchived:true" in q["query"]
+                data = {"projects": {"nodes": [{"id": "a", "name": "Unique", "archivedAt": archived}]}}
+            else:
+                assert variables["id"] == "a" and "name" not in variables
+                assert "project:{id:{eq:$id}}" in q["query"] and "includeArchived:true" in q["query"]
+                more = not empty and variables["after"] is None
+                data = {"issues": {"nodes": [issue] if more else [],
+                    "pageInfo": {"hasNextPage": more, "endCursor": "cursor" if more else None}}}
+            return io.BytesIO(json.dumps({"data": data}).encode())
+        with patch.dict(collect.os.environ, {"LINEAR_API_KEY": "fixture"}), patch.object(urllib.request, "urlopen", side_effect=api):
+            tickets = collect.linear_tickets(spec)
+        assert len(tickets) == (0 if empty else 1)
+        assert len(requests) == (2 if empty else 3)
+        if not empty:
+            assert requests[-1]["variables"]["after"] == "cursor"
+
+
+def test_linear_legacy_migration_and_permissions():
+    cases = [({"projects": {"nodes": [{"id": "a"}, {"id": "b"}]}}, {"project": "Same"}, "ambiguous"),
+             ({"projects": {"nodes": []}}, {"project": "Old"}, "renamed or inaccessible"),
+             ({"project": None}, {"project_id": "hidden"}, "not found or inaccessible")]
+    for data, spec, expected in cases:
+        with patch.dict(collect.os.environ, {"LINEAR_API_KEY": "fixture"}), patch.object(urllib.request, "urlopen", return_value=io.BytesIO(json.dumps({"data": data}).encode())) as api:
+            try:
+                collect.linear_tickets(spec); raise AssertionError("must not mix or silently lose projects")
+            except RuntimeError as e:
+                assert expected in str(e), str(e)
+                if expected == "ambiguous":
+                    assert "project_id" in str(e) and "a, b" in str(e)
+            assert api.call_count == 1, "issues must not be read after unresolved identity"
+    for response in ({"errors": [{"message": "permission denied"}], "data": None},
+                     urllib.error.HTTPError("url", 403, "Forbidden", {}, None)):
+        kwargs = {"side_effect": response} if isinstance(response, Exception) else {"return_value": io.BytesIO(json.dumps(response).encode())}
+        with patch.dict(collect.os.environ, {"LINEAR_API_KEY": "fixture"}), patch.object(urllib.request, "urlopen", **kwargs):
+            try:
+                collect.linear_tickets({"project_id": "hidden"}); raise AssertionError("permission error required")
+            except RuntimeError as e:
+                assert "permission denied" in str(e) or "HTTP 403" in str(e)
+
+
+test_linear_project_identity()
+test_linear_legacy_migration_and_permissions()
 
 
 # --- wave 1b: collection failures must remain visible -----------------------------------------

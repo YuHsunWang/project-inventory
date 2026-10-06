@@ -15,7 +15,7 @@
       "tag": "One sentence: what this project is for.",
       "links": [["Live site", "https://example.com"]],
       "sources": {
-        "linear":   {"project": "CVS Radar"},
+        "linear":   {"project_id": "confirmed-project-UUID", "project": "CVS Radar"},
         "notion":   {"url": "https://www.notion.so/...", "status_map": {"Done": "done", "In progress": "open"}},
         "github":   ["owner/repo"],                              // open PRs (gh CLI)
         "local":    [{"label": "main checkout", "path": "~/code/cvs-radar"}],
@@ -58,6 +58,12 @@
     `real: true` labels it real output instead of a sketch.
   - `link`: `[text, url]`; only absolute HTTP/HTTPS URLs become links.
   - `src` is build output: only base64 PNG/JPEG/GIF/WebP data URIs are rendered; SVG is forbidden.
+- `sources.linear.project_id` is the confirmed Linear project UUID; `project` is its display
+  name and may change without changing identity. Setup and MCP reads must select that UUID.
+  Legacy `{ "project": "name" }` configurations still work when exactly one accessible project
+  matches, including archived projects. Multiple matches require choosing and saving a UUID;
+  a renamed or inaccessible legacy project reports a migration/permission error. IDs are unique
+  across teams, so no team filter is needed once the UUID is confirmed.
 - Every `sources` key is optional. A project with none of them still shows its diagram.
 - `data[].kind` and what `column` means:
 

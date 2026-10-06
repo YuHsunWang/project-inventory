@@ -111,30 +111,53 @@ def gh_prs(repo):
         after = cursor
 
 
-LINEAR_Q = """query($name:String!, $after:String){
-  projects(filter:{name:{eq:$name}}){ nodes{ id } }
-  issues(first:100, after:$after, includeArchived:true, filter:{project:{name:{eq:$name}}}){
+LINEAR_PROJECT_Q = """query($id:String!){ project(id:$id){ id name archivedAt } }"""
+LINEAR_NAME_Q = """query($name:String!){
+  projects(first:2, includeArchived:true, filter:{name:{eq:$name}}){ nodes{ id name archivedAt } } }"""
+LINEAR_Q = """query($id:ID!, $after:String){
+  issues(first:100, after:$after, includeArchived:true, filter:{project:{id:{eq:$id}}}){
     nodes{ identifier title url createdAt completedAt canceledAt state{ name type } }
     pageInfo{ hasNextPage endCursor } } }"""
 
 
+def linear_query(query, variables):
+    req = urllib.request.Request("https://api.linear.app/graphql",
+                                 data=json.dumps({"query": query, "variables": variables}).encode(),
+                                 headers={"Authorization": os.environ["LINEAR_API_KEY"], "Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=60) as r:
+            res = json.load(r)
+    except urllib.error.HTTPError as e:
+        raise RuntimeError(f"Linear HTTP {e.code}") from e
+    if res.get("errors"):
+        raise RuntimeError(res["errors"][0].get("message"))
+    if not res.get("data"):
+        raise RuntimeError("Linear returned no accessible data")
+    return res["data"]
+
+
 def linear_tickets(project):
-    """Issues of one Linear project, straight from the API ($LINEAR_API_KEY), no Claude needed."""
+    """Read one stable project ID; legacy names must resolve to exactly one accessible project."""
+    spec = {"project": project} if isinstance(project, str) else project
+    project_id = spec.get("project_id")
+    if project_id:
+        found = linear_query(LINEAR_PROJECT_Q, {"id": project_id}).get("project")
+        if not found or found["id"] != project_id:
+            raise RuntimeError(f"Linear project ID {project_id!r} not found or inaccessible (check permissions)")
+    else:
+        name = spec.get("project")
+        if not name:
+            raise RuntimeError("set sources.linear.project_id to the confirmed Linear project UUID")
+        projects = linear_query(LINEAR_NAME_Q, {"name": name})["projects"]["nodes"]
+        if not projects:
+            raise RuntimeError(f"no Linear project named {name!r} (renamed or inaccessible); set sources.linear.project_id to its confirmed UUID")
+        if len(projects) != 1:
+            ids = ", ".join(p["id"] for p in projects)
+            raise RuntimeError(f"ambiguous Linear project name {name!r}; choose a project and set sources.linear.project_id (candidates: {ids})")
+        project_id = projects[0]["id"]
     out, after = [], None
     while True:
-        req = urllib.request.Request("https://api.linear.app/graphql",
-                                     data=json.dumps({"query": LINEAR_Q, "variables": {"name": project, "after": after}}).encode(),
-                                     headers={"Authorization": os.environ["LINEAR_API_KEY"], "Content-Type": "application/json"})
-        try:
-            with urllib.request.urlopen(req, timeout=60) as r:
-                res = json.load(r)
-        except urllib.error.HTTPError as e:
-            raise RuntimeError(f"HTTP {e.code}")
-        if res.get("errors"):
-            raise RuntimeError(res["errors"][0].get("message"))
-        if not res["data"]["projects"]["nodes"]:
-            raise RuntimeError(f"no Linear project named {project!r} (check the exact name)")
-        page = res["data"]["issues"]
+        page = linear_query(LINEAR_Q, {"id": project_id, "after": after})["issues"]
         for i in page["nodes"]:
             st = i["state"]
             state = {"completed": "done", "canceled": "dead"}.get(st["type"]) or ("wait" if "review" in st["name"].lower() else "open")
@@ -143,7 +166,10 @@ def linear_tickets(project):
                         "canceled": (i["canceledAt"] or "")[:10] or None})
         if not page["pageInfo"]["hasNextPage"]:
             return out
-        after = page["pageInfo"]["endCursor"]
+        cursor = page["pageInfo"]["endCursor"]
+        if not cursor or cursor == after:
+            raise RuntimeError("Linear pagination did not advance")
+        after = cursor
 
 
 def obsidian_tasks(folder):
@@ -270,7 +296,7 @@ def collect_snapshot(home, requested_run=None, script_only=False):
             tickets = [t for t in g.get("tickets", []) if t.get("source") == name]
             if name == "linear" and os.environ.get("LINEAR_API_KEY"):
                 try:
-                    tickets = linear_tickets(src[name]["project"])
+                    tickets = linear_tickets(src[name])
                     state = source_state(run_id, attempted_at, dt.datetime.now().astimezone().isoformat(timespec="seconds"), "ok", True)
                     f["errors"] = [e for e in f["errors"] if not e.startswith("linear:")]
                 except Exception as e:
