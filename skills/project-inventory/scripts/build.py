@@ -59,10 +59,13 @@ def ticket_series(tickets, today, days=90):
 
 def now(f, today):
     """The facts behind the project's one-line status: last change, tickets done this week, waiting."""
-    commits = {c["hash"]: c["date"] for r in f["repos"] for c in r["recent"]}
+    since = (today - dt.timedelta(days=14)).isoformat()
+    # Older snapshots have project history but no aggregate; prefer it over capped repo lists.
+    history_commits = f.get("commits", [c for r in f["repos"] for c in r["recent"]])
+    commits = {c["hash"]: c["date"] for c in history_commits if c["date"] >= since}
     last = max(commits.values(), default=None) or max((r["last_commit"][:10] for r in f["repos"] if r["last_commit"]), default=None)
     week = (today - dt.timedelta(days=7)).isoformat()
-    return {"last": last, "c14": len(commits), "err": bool(f["errors"]),
+    return {"last": last, "c14": f.get("commit_count_14", len(commits)), "err": bool(f["errors"]),
             "done7": sum(1 for t in f["tickets"] if t.get("state") == "done" and (t.get("completed") or "") >= week),
             "wait": sum(1 for t in f["tickets"] if t.get("state") == "wait")}
 

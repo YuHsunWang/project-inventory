@@ -274,6 +274,55 @@ def page_data(root):
 
 OLD_TICKET = {"id": "N-1", "title": "old", "source": "notion", "state": "wait", "created": "2026-09-01"}
 
+def test_commit_count_uncapped_worktrees_branches_and_repos():
+    repo = tmp / "busy"; repo.mkdir(); git(repo, "init", "-q")
+    old = (dt.date.today() - dt.timedelta(days=30)).isoformat() + "T12:00:00+00:00"
+    subprocess.run(["git", "-c", "user.email=a@b", "-c", "user.name=a", "commit", "-q", "--allow-empty", "-m", "old"],
+                   cwd=repo, check=True, capture_output=True,
+                   env={**os.environ, "GIT_AUTHOR_DATE": old, "GIT_COMMITTER_DATE": old})
+    for n in range(45):
+        git(repo, "commit", "-q", "--allow-empty", "-m", f"busy {n}")
+    wt = tmp / "busy-wt"
+    git(repo, "worktree", "add", "-q", "-b", "side", str(wt))
+    git(wt, "commit", "-q", "--allow-empty", "-m", "only on side branch")
+    clone = tmp / "busy-clone"
+    git(tmp, "clone", "-q", "--no-hardlinks", str(repo), str(clone))
+    git(clone, "remote", "remove", "origin")
+    other = tmp / "independent"; other.mkdir(); git(other, "init", "-q")
+    git(other, "commit", "-q", "--allow-empty", "-m", "independent commit")
+    root = fixture("busy-home", {"local": [{"label": p.name, "path": str(p)} for p in (repo, wt, clone, other)]})
+    with redirect_stdout(io.StringIO()):
+        code, path, _ = collect.collect_snapshot(root)
+    f = json.loads(path.read_text())["projects"]["p"]
+    assert code == 0 and f["commit_count_14"] == 47, f["errors"]
+    assert sum(w["n"] for w in f["weekly"]) == 48  # includes one old commit
+    assert len(f["repos"][0]["recent"]) == 40
+    assert all(len(c["hash"]) == 40 for c in f["commits"])
+    assert build.now(f, dt.date.today())["c14"] == 47
+    assert page_data(root)["projects"][0]["now"]["c14"] == 47
+    # The summary must also survive display history being much smaller than the recent set.
+    with patch.object(collect, "HISTORY", 10), redirect_stdout(io.StringIO()):
+        code, path, _ = collect.collect_snapshot(root)
+    f = json.loads(path.read_text())["projects"]["p"]
+    assert code == 0 and f["commit_count_14"] == 47 and len(f["commits"]) < 47
+    assert page_data(root)["projects"][0]["now"]["c14"] == 47
+
+
+def test_commit_count_legacy_snapshot():
+    since = dt.date.today()
+    recent = [{"hash": f"{n:040x}", "date": since.isoformat(), "subject": str(n)} for n in range(45)]
+    f = {"commits": recent, "repos": [{"recent": recent[:40], "last_commit": None}], "errors": [], "tickets": []}
+    assert build.now(f, since)["c14"] == 45
+    f["commits"].append({"hash": "old", "date": "2000-01-01", "subject": "old"})
+    assert build.now(f, since)["c14"] == 45
+    del f["commits"]
+    assert build.now(f, since)["c14"] == 40  # very old snapshots only retain the display list
+
+
+test_commit_count_uncapped_worktrees_branches_and_repos()
+test_commit_count_legacy_snapshot()
+
+
 def test_sqlite_identifier_validation():
     import sqlite3
     path = tmp / "quoted.sqlite"

@@ -53,7 +53,7 @@ def git_state(path, today):
             upstream = None
     if fetch_error:
         ahead = behind = None
-    log = g("log", "--all", "-n", str(HISTORY), "--format=%h%x09%cs%x09%s")
+    log = g("log", "--all", "--format=%H%x09%cs%x09%s")
     commits = [dict(zip(("hash", "date", "subject"), l.split("\t", 2))) for l in log.splitlines() if l]
     recent_since = (today - dt.timedelta(days=RECENT_DAYS)).isoformat()
     return {
@@ -64,7 +64,8 @@ def git_state(path, today):
         "last_commit": g("log", "-1", "--format=%cs %s") if g("rev-list", "-n1", "--all") else None,
         "weekly": weekly([c["date"] for c in commits], today),
         "recent": [c for c in commits if c["date"] >= recent_since][:40],
-        "_commits": commits,  # popped by main: the project's history and weekly counts, deduped across checkouts
+        "_recent_hashes": [c["hash"] for c in commits if c["date"] >= recent_since],
+        "_commits": commits[:HISTORY],  # display history stays bounded; aggregate is computed before truncation
     }
 
 
@@ -314,7 +315,7 @@ def collect_snapshot(home, requested_run=None, script_only=False):
         old = previous.get("projects", {}).get(p["key"], {}).get("sources", {})
         f = {"errors": list(g.get("errors", [])), "tickets": [], "stale_tickets": [],
              "sources": {}, "repos": [], "prs": [], "obsidian": [], "data": []}
-        commits = {}
+        commits, recent_hashes = {}, set()
         for name in ("linear", "notion"):
             if not src.get(name):
                 continue
@@ -334,6 +335,8 @@ def collect_snapshot(home, requested_run=None, script_only=False):
         for r in src.get("local", []):
             try:
                 st = git_state(Path(r["path"]).expanduser(), today)
+                # A full SHA is one event per project, even across worktrees, clones or forks.
+                recent_hashes.update(st.pop("_recent_hashes"))
                 for c in st.pop("_commits"):
                     commits.setdefault(c["hash"], {**c, "where": r["label"]})
                 name = f"git:{r['path']}"
@@ -347,6 +350,7 @@ def collect_snapshot(home, requested_run=None, script_only=False):
                 f["repos"].append({"label": r["label"], "path": r["path"], "last_fetched_at": last_fetch, **st})
             except Exception as e:
                 f["errors"].append(f'git {r["path"]}: {e}')
+        f["commit_count_14"] = len(recent_hashes)
         f["weekly"] = weekly([c["date"] for c in commits.values()], today)
         f["commits"] = sorted(commits.values(), key=lambda c: c["date"], reverse=True)
         for repo in src.get("github", []):
