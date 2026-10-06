@@ -91,7 +91,7 @@ MAX_PIXELS = 16_000_000
 def checked_png(raw):
     """Validate PNG chunks, CRCs and bounded decoded scanlines; never embed opaque file contents."""
     if not raw.startswith(b"\x89PNG\r\n\x1a\n"):
-        raise ValueError("only PNG screenshots are supported (export other images as PNG)")
+        raise ValueError("only PNG, WebP or JPEG screenshots are supported")
     offset, chunks, payload, header, palette = 8, [], bytearray(), None, False
     while offset < len(raw):
         if offset + 12 > len(raw):
@@ -162,6 +162,19 @@ def checked_png(raw):
     return "image/png"
 
 
+def checked_image(raw):
+    """PNG is fully decoded; WebP/JPEG only get container checks (RIFF length, SOI/EOI markers)."""
+    if raw[:4] == b"RIFF" and raw[8:12] == b"WEBP":
+        if int.from_bytes(raw[4:8], "little") + 8 != len(raw):
+            raise ValueError("truncated or padded WebP")
+        return "image/webp"
+    if raw[:3] == b"\xff\xd8\xff":
+        if not raw.endswith(b"\xff\xd9"):
+            raise ValueError("truncated JPEG")
+        return "image/jpeg"
+    return checked_png(raw)
+
+
 def embed_media(nodes, home, warn):
     """Screenshots -> data: URIs inside the page. A missing file is shown as missing, never dropped."""
     for n in nodes:
@@ -183,7 +196,7 @@ def embed_media(nodes, home, warn):
                         raw = image.read(MAX_SHOT + 1)
                     if len(raw) > MAX_SHOT:
                         raise ValueError("screenshot exceeds 8 MiB")
-                    mime = checked_png(raw)
+                    mime = checked_image(raw)
                     m["src"] = f"data:{mime};base64,{base64.b64encode(raw).decode()}"
                     print(f"ASSET step {n.get('id')}: {path.resolve()} ({len(raw)} bytes, {mime})")
                 except (OSError, ValueError) as e:

@@ -47,8 +47,8 @@
 - `icon` (optional): spider, brain, box, gear, shield, clock, truck, globe, eye, flame, check, dice,
   table, hand, cards, play, coin, quiz, scale, pipe, lake, flask, chart, book, plug.
 - `media` (optional): what opens when a step is clicked, in order.
-  - `shot`: a validated PNG file (maximum 8 MiB and 16 million pixels) (absolute, `~/…`, or relative to HOME). `build.py` embeds it in the page;
-    invalid or missing files show as missing and print a `WARN`; other formats must be exported as PNG.
+  - `shot`: a PNG, WebP or JPEG file (maximum 8 MiB and 16 million pixels) (absolute, `~/…`, or relative to HOME). `build.py` embeds it in the page;
+    invalid or missing files show as missing and print a `WARN`; other formats (SVG, GIF, …) must be exported first.
     Only paths explicitly listed in `shot` are read (including approved external absolute paths);
     each embedded file is listed as `ASSET` with its resolved path, size and MIME for pre-publish review. `phone: true` keeps a tall phone shot narrow.
   - `math`: TeX strings; the page loads MathJax (cdnjs) only when some step has one. `p` explains it.

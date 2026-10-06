@@ -100,12 +100,17 @@ test_html_trust_boundary()
 # --- build logic --------------------------------------------------------------------------------
 import build, datetime as dt
 
+WEBP = b"RIFF" + (12).to_bytes(4, "little") + b"WEBPVP8L\0\0\0\0"
+JPEG = b"\xff\xd8\xff\xe0" + b"\0" * 4 + b"\xff\xd9"
+
+
 def test_shot_validation():
     for name, raw in [("private.txt", b"AUDIT_FAKE_PRIVATE_MARKER"), ("empty.png", b""),
                       ("broken.png", b"\x89PNG\r\n\x1a\nBAD"), ("vector.svg", b"<svg onload='x'/>") ,
                       ("oversized.png", PNG + b"x" * build.MAX_SHOT),
                       ("truncated.png", PNG[:-8]), ("checksum.png", PNG[:-1] + b"x"),
-                      ("trailing.png", PNG + b"PRIVATE")]:
+                      ("trailing.png", PNG + b"PRIVATE"),
+                      ("truncated.webp", WEBP[:-2]), ("truncated.jpg", JPEG[:-2])]:
         file = tmp / name; file.write_bytes(raw)
         nodes = [{"id": 1, "media": [{"shot": str(file), "src": "data:image/png;base64,eA=="}]}]
         warnings = []
@@ -122,6 +127,8 @@ def test_shot_validation():
         inv["projects"][0]["nodes"][0]["media"] = previous
         (home / "inventory.json").write_text(json.dumps(inv))
     assert build.checked_png(PNG) == "image/png"
+    # the real dashboards ship WebP screenshots: they must still embed
+    assert (build.checked_image(WEBP), build.checked_image(JPEG)) == ("image/webp", "image/jpeg")
     for path in (shot, home / "relative.png"):
         path.write_bytes(PNG)
         nodes = [{"id": 1, "media": [{"shot": str(path) if path == shot else "relative.png"}]}]
