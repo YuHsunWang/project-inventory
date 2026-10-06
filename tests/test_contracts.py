@@ -104,6 +104,8 @@ def run_validation_tests(tmp, run):
     test_gathered_contract_and_dedupe()
     test_contract_cli_failures(tmp / 'contracts', run)
     test_timezone_normalization_and_boundary(tmp)
+    test_ticket_unknown_coverage()
+    test_unknown_curve_rendering(tmp, run)
 
 
 def test_timezone_normalization_and_boundary(tmp):
@@ -135,3 +137,52 @@ def test_timezone_normalization_and_boundary(tmp):
         con.execute('CREATE TABLE dates (day TEXT)')
         con.executemany('INSERT INTO dates VALUES (?)', [('2026-10-05T00:15:00+08:00',), ('2026-10-04T23:30:00Z',)])
     assert collect.newest_date({'kind': 'sqlite', 'path': str(db), 'column': 'day', 'table': 'dates'}, 'Asia/Taipei') == '2026-10-05T07:30:00+08:00'
+
+
+def test_ticket_unknown_coverage():
+    import build
+    today = dt.date(2026, 10, 6)
+    rows = [ticket(created=None), ticket(state='done', completed=None),
+            ticket(state='dead', canceled=None), ticket(completed='2026-10-02'),
+            ticket(reopened='2026-10-04'), ticket(state='done', completed='2026-10-02'),
+            ticket(state='dead', canceled='2026-10-03'), ticket(),
+            ticket(state='done', completed='2026-09-30'), ticket(created='2099-01-01')]
+    series = build.ticket_series(rows, today)
+    assert series['coverage']['known'] == 3 and series['coverage']['total'] == 10
+    assert series['coverage']['ratio'] == .3
+    assert series['coverage']['reasons'] == {'missing_created': 1, 'missing_completed': 1,
+        'missing_canceled': 1, 'reopened': 2, 'inconsistent_dates': 1, 'future_date': 1}
+    assert series['unknown'] == [7] * 90
+    assert [series[k][-1] for k in ('done', 'open', 'canceled', 'unknown')] == [1, 1, 1, 7]
+    at = series['days'].index('2026-10-01')
+    assert series['open'][at] == 3 and series['done'][at] == series['canceled'][at] == 0
+    assert sum(series[k][-1] for k in ('done', 'open', 'canceled', 'unknown')) == len(rows)
+    normalized = build.ticket_series([ticket(created='2026-10-04T23:30:00Z')], today, zone='Asia/Taipei')
+    assert normalized['open'][normalized['days'].index('2026-10-04')] == 0
+    assert normalized['open'][normalized['days'].index('2026-10-05')] == 1
+
+
+def test_unknown_curve_rendering(tmp, run):
+    import uuid, subprocess, re
+    root = tmp / 'unknown-curve'; (root / 'gathered').mkdir(parents=True)
+    (root / 'inventory.json').write_text(json.dumps({'lang': 'en', 'projects': [
+        {'key': 'p', 'name': 'P', 'sources': {'notion': {'url': 'https://notion.so/project'}}}]}))
+    rid = uuid.uuid4().hex; stamp = dt.datetime.now().astimezone().isoformat()
+    rows = [ticket(state='done', completed=None), ticket(source_id='page2', created=None),
+            ticket(source_id='page3', state='dead'), ticket(source_id='page4', reopened='2026-10-04')]
+    (root / 'gathered' / f'{dt.date.today()}.json').write_text(json.dumps({'_run': {'run_id': rid}, 'p': {
+        'sources': {'notion': {'run_id': rid, 'status': 'ok', 'complete': True, 'fetched_at': stamp}}, 'tickets': rows}}))
+    result = run('collect.py', str(root), '--refresh'); assert result.returncode == 0, result.stderr
+    def render():
+        result = subprocess.run(['node', str(Path(__file__).with_name('html_collection.js'))],
+            input=(root / 'out/index.html').read_text(), text=True, capture_output=True)
+        assert result.returncode == 0, result.stderr
+        return json.loads(result.stdout)[0]['trends']
+    html = render()
+    for text in ('estimated from available dates', 'History unknown', 'History date coverage 0/4',
+                 '1 missing completed date', '1 missing created date', '1 missing canceled date', '1 reopened'):
+        assert text in html, (text, html)
+    inv = json.loads((root / 'inventory.json').read_text()); inv['lang'] = 'zh-TW'
+    (root / 'inventory.json').write_text(json.dumps(inv))
+    assert run('build.py', str(root)).returncode == 0
+    assert '依現有日期估算' in render() and '歷史未知' in render()

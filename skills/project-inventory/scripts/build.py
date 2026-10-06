@@ -44,17 +44,43 @@ def todos(p, f):
     return out
 
 
-def ticket_series(tickets, today, days=90):
-    """Per day: tickets done so far, and tickets open (created, not yet done or canceled).
-    Rebuilt from the tickets' own dates, so the chart has history from the first run."""
-    def end(t):  # a done/canceled ticket without its date stops counting as open from the day it was made
-        return t.get("completed") or t.get("canceled") or (t.get("created") if t.get("state") in ("done", "dead") else None)
-    out = {"days": [], "done": [], "open": []}
+def ticket_series(tickets, today, days=90, zone="UTC"):
+    """Estimate history only for rows with a coherent lifecycle; report the rest as unknown."""
+    known, reasons = [], {}
+    for i, t in enumerate(tickets):
+        dates = {field: calendar_date(t[field], zone, f"tickets[{i}].{field}") if t.get(field) else None
+                 for field in ("created", "completed", "canceled", "reopened")}
+        state = t.get("state")
+        end = dates["completed"] if state == "done" else dates["canceled"] if state == "dead" else None
+        reason = None
+        if not dates["created"]:
+            reason = "missing_created"
+        elif dates["reopened"] or (state in ("open", "wait") and (dates["completed"] or dates["canceled"])):
+            reason = "reopened"
+        elif state == "done" and not end:
+            reason = "missing_completed"
+        elif state == "dead" and not end:
+            reason = "missing_canceled"
+        elif any(d and d > today for d in dates.values()):
+            reason = "future_date"
+        elif (end and end < dates["created"]) or (dates["completed"] and dates["canceled"]):
+            reason = "inconsistent_dates"
+        if reason:
+            reasons[reason] = reasons.get(reason, 0) + 1
+        else:
+            known.append((dates["created"], end, state))
+    unknown = len(tickets) - len(known)
+    out = {"days": [], "done": [], "open": [], "canceled": [], "unknown": [],
+           "coverage": {"known": len(known), "total": len(tickets),
+                        "ratio": len(known) / len(tickets) if tickets else 1, "reasons": reasons}}
     for n in range(days - 1, -1, -1):
-        d = (today - dt.timedelta(days=n)).isoformat()
-        out["days"].append(d)
-        out["done"].append(sum(1 for t in tickets if t.get("state") == "done" and (t.get("completed") or "9")[:10] <= d))
-        out["open"].append(sum(1 for t in tickets if (t.get("created") or "9")[:10] <= d and not (end(t) or "9")[:10] <= d))
+        d = today - dt.timedelta(days=n)
+        out["days"].append(d.isoformat())
+        out["done"].append(sum(state == "done" and end <= d for created, end, state in known))
+        out["open"].append(sum(created <= d and (end is None or end > d) for created, end, state in known))
+        out["canceled"].append(sum(state == "dead" and end <= d for created, end, state in known))
+        # Unknown is a current undated pool, not an invented creation/completion history.
+        out["unknown"].append(unknown)
     return out
 
 
@@ -255,7 +281,7 @@ def build_page(home, snapshot=None, run_id=None):
         projects.append({**p, "facts": f, "ticket_state": availability, "counts": {s: sum(t.get("state") == s for t in f["tickets"]) for s in STATES},
                          "todo": todos(p, f), "now": now(f, today), "history": history(f, sums.get(p["key"], {})),
                          "weekly": f.get("weekly") if f["repos"] else None,
-                         "trend_tickets": ticket_series(f["tickets"], today) if availability["status"] in ("ready", "empty") else None})
+                         "trend_tickets": ticket_series(f["tickets"], today, zone=zone) if availability["status"] in ("ready", "empty") else None})
     for p in projects:
         weeks = [{"week": w["week"], "n": len(w["items"]), "old": w["summary"],
                   "items": [f'{x["date"]} {x["kind"]}: {x["text"]}' for x in w["items"]]} for w in p["history"] if not w["fresh"]]

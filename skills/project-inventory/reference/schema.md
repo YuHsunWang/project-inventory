@@ -102,7 +102,7 @@
     "read": ["linear"],
     "tickets": [
       {"id": "DEV-12", "title": "…", "state": "done", "url": "https://linear.app/…",
-       "source": "linear", "source_id": "full-provider-issue-UUID", "created": "2026-09-01", "completed": "2026-09-20", "canceled": null,
+       "source": "linear", "source_id": "full-provider-issue-UUID", "created": "2026-09-01", "completed": "2026-09-20", "canceled": null, "reopened": null,
        "benefit": "optional plain-words note"}
     ],
     "prs": [],          // only when gh is missing: [{"number", "title", "url", "createdAt", "repo"}]
@@ -175,3 +175,22 @@ Tickets dedupe by `(source, source_id)` and PRs by `(repo, number)`, keeping the
 first valid row. Legacy Linear identifiers and full Notion page URLs provide stable
 fallback identities; a short Notion display ID alone is rejected. Missing lifecycle
 dates are allowed so the chart can report incomplete history.
+
+## Ticket history coverage
+
+The 90-day curve is **estimated from available dates**, not an exact event history.
+Every ticket needs `created`; `done` also needs `completed`, and `dead` needs
+`canceled`. Missing dates, future dates, reversed lifecycle dates, or conflicting
+completion/cancellation dates go into `unknown` and a coverage reason count.
+`reopened` is an optional ISO date/timestamp indicating a reopen. An open/review
+ticket retaining a completed/canceled date also signals a reopen; either case
+requires unknown history because the current state cannot reconstruct transitions.
+Adapters should supply `reopened` when the provider exposes it; a reopen that clears
+all old dates is undetectable without that signal. No event-sequence system is assumed.
+
+Dated cancellations have their own cumulative series. Unknown rows are excluded
+from done/open/canceled estimates and shown as a constant current unknown pool
+across the window; this does not claim they existed on every historical day.
+The chart, tooltip and number table show all four series, alongside known/total
+coverage and missing-date/reopen counts. On the snapshot day their sum equals
+the ticket total. Current-state counters still include all tickets.

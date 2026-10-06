@@ -324,7 +324,7 @@ const L = {
   m_shot:"截圖", m_math:"公式", m_mock:"示意", m_real:"真實", m_link:"連結", m_missing:"找不到圖檔", math_cap:"從程式碼和文件抄下來的，不是自己編的。",
   t_wait:"等你確認", t_open:"還沒做", t_done:"做完的事", where:"程式在哪：",
   trends:"趨勢", trends_hint:"把游標移到圖上（手機用手指按住）看每一天的數字。",
-  tk_chart:"待辦數量變化", tk_chart_sub:"近 90 天。用待辦的建立、完成、取消日期倒推。", s_done:"累計做完", s_done_s:"做完", s_open:"還沒做完（含等你確認）", s_open_s:"沒做完",
+  tk_chart:"待辦數量變化", tk_chart_sub:"近 90 天，依現有日期估算；未知線為目前無法還原歷史的待辦數。", s_canceled:"累計取消", s_canceled_s:"取消", s_unknown:"歷史未知", s_unknown_s:"未知", tk_coverage:"歷史日期涵蓋 A／B 張；C 張未納入歷史估算。", tk_reasons:{missing_created:"缺建立日期", missing_completed:"缺完成日期", missing_canceled:"缺取消日期", reopened:"重新開啟，缺狀態歷程", future_date:"未來日期", inconsistent_dates:"日期順序矛盾"}, s_done:"累計做完", s_done_s:"做完", s_open:"還沒做完（含等你確認）", s_open_s:"沒做完",
   wk_chart:"每週改動次數", wk_sub:"近 12 週，共改了 X 次。", wk_none:"這段時間沒有改動。", wk_tip:"改了 X 次", wk_this:"這週",
   table:"看數字表", th_date:"日期", th_week:"那週一", th_n:"改動次數",
   activity:"每週進度", act_hint:"每週一段白話說明，點開看那週每一筆改動。新的在最上面。", noact:"還沒有任何紀錄。", nosum:"這週還沒寫說明。", more_wk:"再看更早 4 週",
@@ -353,7 +353,7 @@ const L = {
   m_shot:"Screenshot", m_math:"Formula", m_mock:"Sketch", m_real:"Real", m_link:"Link", m_missing:"image not found", math_cap:"Copied from the code and docs, not made up.",
   t_wait:"In review", t_open:"Open", t_done:"Done", where:"Code: ",
   trends:"Trends", trends_hint:"Hover a chart (or press and hold on a phone) to see each day.",
-  tk_chart:"Tickets over time", tk_chart_sub:"Last 90 days, rebuilt from each ticket's created, done and canceled dates.", s_done:"Done so far", s_done_s:"done", s_open:"Not done (incl. in review)", s_open_s:"open",
+  tk_chart:"Tickets over time", tk_chart_sub:"Last 90 days, estimated from available dates; unknown is the current pool without reconstructable history.", s_canceled:"Canceled so far", s_canceled_s:"canceled", s_unknown:"History unknown", s_unknown_s:"unknown", tk_coverage:"History date coverage A/B tickets; C excluded from history estimates.", tk_reasons:{missing_created:"missing created date", missing_completed:"missing completed date", missing_canceled:"missing canceled date", reopened:"reopened without state history", future_date:"future date", inconsistent_dates:"inconsistent dates"}, s_done:"Done so far", s_done_s:"done", s_open:"Not done (incl. in review)", s_open_s:"open",
   wk_chart:"Commits per week", wk_sub:"Last 12 weeks, X commits.", wk_none:"No commits in this period.", wk_tip:"X commits", wk_this:"",
   table:"Show the numbers", th_date:"Date", th_week:"Week of", th_n:"Commits",
   activity:"Week by week", act_hint:"A plain-words summary per week; open it for every change. Newest first.", noact:"Nothing yet.", nosum:"No summary for this week yet.", more_wk:"4 earlier weeks",
@@ -604,12 +604,15 @@ function renderTrends(p){
   const t = p.trend_tickets;
   if (!ticketComplete(p)) h += ticketNotice(p);
   if (t){
-    const s = [{name:T.s_done, short:T.s_done_s, cls:"--viz-done", vals:t.done}, {name:T.s_open, short:T.s_open_s, cls:"--viz-open", vals:t.open, dashed:true}];
+    const s = [{name:T.s_done, short:T.s_done_s, cls:"--viz-done", vals:t.done}, {name:T.s_open, short:T.s_open_s, cls:"--viz-open", vals:t.open, dashed:true},
+      {name:T.s_canceled, short:T.s_canceled_s, cls:"--muted", vals:t.canceled}, {name:T.s_unknown, short:T.s_unknown_s, cls:"--viz-open", vals:t.unknown, dashed:true}];
+    const coverage = T.tk_coverage.replace("A", t.coverage.known).replace("B", t.coverage.total).replace("C", t.unknown.at(-1));
+    const reasons = Object.entries(t.coverage.reasons).map(([reason,n]) => `${n} ${T.tk_reasons[reason]}`).join("; ");
     const wk = t.days.map((d,i)=>[d,i]).filter(([,i]) => (t.days.length-1-i) % 7 === 0);
-    h += `<div class="card"><h4>${T.tk_chart}</h4><p class="sub">${T.tk_chart_sub}</p>
+    h += `<div class="card"><h4>${T.tk_chart}</h4><p class="sub">${T.tk_chart_sub}</p><p class="small" data-history-coverage>${esc(coverage)}${reasons ? ` ${esc(reasons)}.` : ""}</p>
       <div class="lg">${s.map(x=>`<span>${lineSwatch(x.cls, x.dashed)}${esc(x.name)}</span>`).join("")}</div>
       ${chartSlot({kind:"line", days:t.days, series:s, label:`${p.name} ${T.tk_chart}`})}
-      ${tableOf([T.th_date, T.s_done, T.s_open], wk.map(([d,i])=>[mdOf(d), t.done[i], t.open[i]]))}</div>`;
+      ${tableOf([T.th_date, T.s_done, T.s_open, T.s_canceled, T.s_unknown], wk.map(([d,i])=>[mdOf(d), t.done[i], t.open[i], t.canceled[i], t.unknown[i]]))}</div>`;
   }
   if (p.weekly){
     const tot = p.weekly.reduce((a,b)=>a+b.n,0);
