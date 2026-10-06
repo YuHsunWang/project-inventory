@@ -19,10 +19,10 @@ BIG = 8 * 2**20  # claude.ai Artifacts stop at 16 MB; warn well before that
 
 
 def todos(p, f):
-    """What waits on the owner. kind: pr / review / git / data / err. A checkout's git problems are one row."""
+    """Items to inspect. kind: pr / review / notes / git / data / err. A checkout's git problems are one row."""
     k, out = p["key"], []
     if f["prs"]:
-        out.append({"kind": "pr", "n": len(f["prs"]), "t": "prs", "go": f"#{k}/facts"})
+        out.append({"kind": "pr", "n": len(f["prs"]), "t": "prs", "drafts": sum(pr.get("isDraft", False) for pr in f["prs"]), "go": f"#{k}/facts"})
     wait = [t for t in f["tickets"] if t.get("state") == "wait"]
     if wait:
         out.append({"kind": "review", "n": len(wait), "t": "review", "go": f"#{k}/tickets"})
@@ -44,7 +44,8 @@ def todos(p, f):
         out.append({"kind": "data", "n": len(stale), "t": "stale", "go": f"#{k}/facts"})
     if f["errors"]:
         out.append({"kind": "err", "n": len(f["errors"]), "t": "errors", "go": f"#{k}/facts"})
-    return out
+    priority = {"err": 0, "data": 1, "review": 2, "pr": 3, "notes": 4, "git": 5}
+    return sorted(out, key=lambda t: priority[t["kind"]])
 
 
 def ticket_series(tickets, today, days=90, zone="UTC"):

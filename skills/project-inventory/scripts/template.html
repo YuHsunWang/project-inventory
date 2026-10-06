@@ -312,13 +312,13 @@ footer p{margin:4px 0;max-width:80ch}
 const D = /*__DATA__*/null;
 const L = {
  "zh-TW": {all:"全部專案", projects:"個專案", todo_h:"要處理的事", nothing:"目前沒有要處理的事", projects_h:"專案", back:"‹ 全部專案",
-  prs:"個修改在 GitHub 等你合併", review:"件待辦做好了、等你確認", dirty:"個檔改到一半，還沒存起來", unpushed:"次改動還沒備份到 GitHub",
+  prs:"個開啟中的 PR", review:"件待辦做好了、等你確認", dirty:"個檔改到一半，還沒存起來", unpushed:"次改動還沒備份到 GitHub",
   fetch_failed:"遠端更新失敗；遠端比較未知", last_fetch:"最後成功取得遠端資料：",
   no_upstream:"這條分支還沒推上 GitHub", stale:"份資料沒更新到最新", errors:"項資料這次沒抓到", join:"、",
-  k_pr:"等你合併", k_review:"等你確認", k_git:"程式還沒備份", k_data:"資料沒更新", k_err:"這次沒抓到",
+  k_pr:"開啟中的 PR", k_review:"等你確認", k_git:"本機未同步事項（依工作目錄彙總）", k_data:"資料沒更新", k_err:"這次沒抓到",
   road:"運作流程", progress:"進度", tickets:"待辦", facts:"基本資料", updated:"更新：",
   now_last:"最近一次改動：<b>X</b>", now_done7:"這 7 天做完 <b>X</b> 張", now_wait:"<b>X</b> 張等你確認", now_c14:"這 14 天改了 <b>X</b> 次", now_none:"沒有改動紀錄", now_err:"有資料沒抓到", dot:"。",
-  d_weeks:"12 週改了 X 次", d_open:"還沒做 X 張", d_wait:"等你確認 X 張", d_todo:"X 件等你",
+  d_weeks:"12 週改了 X 次", d_open:"還沒做 X 張", d_wait:"等你確認 X 張", d_todo:"X 類待處理事項",
   road_hint:"中間由上往下是主要流程，兩邊是接在旁邊的支線。點方塊看說明。", road_hint_tk:"方塊上的數字是待辦：✓ 是做完的，藍色等你確認，橘色還沒做；點開方塊就有清單。",
   noroad:"還沒畫流程圖。", open_x:"點開 ▾", close_x:"收起 ▴", c_wait:"等你確認", c_open:"沒做",
   m_shot:"截圖", m_math:"公式", m_mock:"示意", m_real:"真實", m_link:"連結", m_missing:"找不到圖檔", math_cap:"從程式碼和文件抄下來的，不是自己編的。",
@@ -338,16 +338,16 @@ const L = {
   notickets:"這個專案沒有接 Linear 或 Notion。",
   facts_hint:"本機是這台電腦上的資料夾和資料；雲端是 GitHub、Linear、Notion 上的狀態。", f_local:"本機", f_cloud:"雲端", gh:"GitHub", remote_none:"沒有設定 GitHub", no_up:"這條分支還沒推上去", repo:"程式碼", branch:"分支", ahead:"還沒推", behind:"落後 GitHub", dirtyf:"改到一半的檔", last:"最後一次改動",
   local_only:"只在本機，沒有 GitHub", data:"資料", newest:"最新到", days:"天前", limit:"超過 X 天算過期", stale1:"過期", ok1:"新鮮",
-  notes:"筆記待辦", notes_todo:"個筆記待辦還沒勾", k_notes:"筆記待辦", notes_truncated:"僅顯示前 A 個，共 B 個", notes_open:"個還沒勾", notes_done:"個已勾", pr_open:"開著的 PR", errs:"沒抓到的東西",
-  foot:["待辦：Linear／Notion", "等你合併：GitHub 的 PR", "git 狀態、資料日期：這台電腦"]},
- "en": {all:"All projects", projects:"projects", todo_h:"Waiting on you", nothing:"Nothing waits on you", projects_h:"Projects", back:"‹ All projects",
-  prs:"PRs wait for your merge", review:"tickets are done and wait for review", dirty:"files have uncommitted changes", unpushed:"commits are not pushed",
+  notes:"筆記待辦", notes_todo:"個筆記待辦還沒勾", k_notes:"筆記待辦", notes_truncated:"僅顯示前 A 個，共 B 個", notes_open:"個還沒勾", notes_done:"個已勾", pr_open:"開啟中的 PR", errs:"沒抓到的東西",
+  foot:["待辦：Linear／Notion", "開啟中的 PR：GitHub", "git 狀態、資料日期：這台電腦"]},
+ "en": {all:"All projects", projects:"projects", todo_h:"Items to inspect", nothing:"No items to inspect", projects_h:"Projects", back:"‹ All projects",
+  prs:"open PRs", review:"tickets are done and wait for review", dirty:"files have uncommitted changes", unpushed:"commits are not pushed",
   fetch_failed:"Remote refresh failed; remote comparison unknown", last_fetch:"Last successful fetch: ",
   no_upstream:"branch is not on GitHub yet", stale:"datasets are stale", errors:"sources failed this run", join:", ",
-  k_pr:"PRs to merge", k_review:"To review", k_git:"Not backed up", k_data:"Stale data", k_err:"Failed",
+  k_pr:"Open PRs", k_review:"To review", k_git:"Local unsynced items (by checkout)", k_data:"Stale data", k_err:"Failed",
   road:"How it works", progress:"Progress", tickets:"Tickets", facts:"Facts", updated:"Updated ",
   now_last:"Last change: <b>X</b>", now_done7:"<b>X</b> done in the last 7 days", now_wait:"<b>X</b> in review", now_c14:"<b>X</b> commits in 14 days", now_none:"No commits yet", now_err:"some sources failed", dot:". ",
-  d_weeks:"X commits in 12 weeks", d_open:"X open", d_wait:"X in review", d_todo:"X waiting on you",
+  d_weeks:"X commits in 12 weeks", d_open:"X open", d_wait:"X in review", d_todo:"X categories of items to inspect",
   road_hint:"The main flow runs top to bottom; side branches hang left and right. Click a box for details.", road_hint_tk:"Numbers on a box are tickets: ✓ done, blue in review, orange open; open the box for the list.",
   noroad:"No diagram yet.", open_x:"Open ▾", close_x:"Close ▴", c_wait:"in review", c_open:"open",
   m_shot:"Screenshot", m_math:"Formula", m_mock:"Sketch", m_real:"Real", m_link:"Link", m_missing:"image not found", math_cap:"Copied from the code and docs, not made up.",
@@ -368,7 +368,7 @@ const L = {
   facts_hint:"Local: folders and data on this computer. Cloud: state on GitHub, Linear, Notion.", f_local:"Local", f_cloud:"Cloud", gh:"GitHub", remote_none:"No GitHub remote", no_up:"branch not pushed yet", repo:"Code", branch:"Branch", ahead:"Unpushed", behind:"Behind GitHub", dirtyf:"Uncommitted files", last:"Last commit",
   local_only:"Local only, no GitHub", data:"Data", newest:"Newest", days:"days ago", limit:"Stale after X days", stale1:"stale", ok1:"fresh",
   notes:"Note tasks", notes_todo:"open note tasks", k_notes:"Note tasks", notes_truncated:"Showing first A of B tasks", notes_open:"open", notes_done:"done", pr_open:"Open PRs", errs:"What failed",
-  foot:["Tickets: Linear / Notion", "Waiting for merge: GitHub PRs", "Git state, data dates: this computer"]}
+  foot:["Tickets: Linear / Notion", "Open PRs: GitHub", "Git state, data dates: this computer"]}
 };
 const T = L[D.lang] || L[D.lang.split("-")[0]] || L.en;
 const X = (s, ...v) => v.reduce((a, x, i) => a.replace(["X","Y","Z"][i], x), s);
@@ -676,7 +676,7 @@ function renderFacts(p){
     local.push([`<span${index === 0 ? ` id="d-${esc(p.key)}-notes"` : ""}>${T.notes}</span>`, `${o.open} ${T.notes_open} · ${o.done} ${T.notes_done} <div class="small"><code>${esc(o.path)}</code></div>${hint}${o.items.length ? `<details><summary>${shown} / ${total} ${T.notes_open}</summary>${o.items.map(i => `<div class="small">☐ ${esc(i.text)} · ${esc(i.file)}${i.line ? `:${esc(i.line)}` : ""}</div>`).join("")}</details>` : ""}`]);
   }
   for (const r of p.notes || []) local.push([esc(r[0]), esc(r[1])]);
-  if (f.prs.length) cloud.push([T.pr_open, f.prs.map(x => `<div>${ext(x.url, `#${esc(x.number)}`)} ${esc(x.title)} <span class="small">${esc(x.repo || "")} · ${mdOf(x.createdAt)}</span></div>`).join("")]);
+  if (f.prs.length) cloud.push([T.pr_open, f.prs.map(x => `<div>${ext(x.url, `#${esc(x.number)}`)} ${esc(x.title)}${x.isDraft ? ` <span class="st hist">Draft</span>` : ""} <span class="small">${esc(x.repo || "")} · ${mdOf(x.createdAt)}</span></div>`).join("")]);
   if (src.linear) cloud.push(["Linear", esc(src.linear.project)]);
   if (src.notion) cloud.push(["Notion", ext(src.notion.url, esc(src.notion.url))]);
   const tbl = (head, rows) => rows.length ? `<h3>${head}</h3><div class="facts"><table>${rows.map(([a, b]) => `<tr><th>${a}</th><td>${b}</td></tr>`).join("")}</table></div>` : "";
@@ -696,7 +696,7 @@ function nowLine(p){
 }
 function todoText(t){
   if (t.kind === "git") return `${esc(t.where)}：${t.parts.map(([n, k]) => (n != null ? `${n} ` : "") + T[k]).join(T.join)}`;
-  return T[t.t];
+  return T[t.t] + (t.kind === "pr" && t.drafts ? ` (Draft ${t.drafts})` : "");
 }
 function todoRows(list){
   return list.map(t => `<a class="todo pc" style="--pc0:${esc(t.color)}" href="${esc(String(t.go).startsWith("#") ? t.go : "#")}"><span class="tn">${t.n ?? ""}</span><span class="tt">${todoText(t)}</span><span class="tp">${esc(t.pname || "")}</span><span class="ta" aria-hidden="true">›</span></a>`).join("");
@@ -724,7 +724,8 @@ function spark(weekly){
   return `<svg class="spark" viewBox="0 0 ${W} ${H}" aria-hidden="true">${weekly.map((w,i)=>w.n?`<rect x="${(i*bw+1).toFixed(1)}" y="${(H - H*w.n/max).toFixed(1)}" width="${(bw-2).toFixed(1)}" height="${(H*w.n/max).toFixed(1)}" rx="1"/>`:"").join("")}</svg>`;
 }
 function renderHome(){
-  const all = P.flatMap(p => p.todo.map(t => ({...t, pname:p.name, color:p.color})));
+  const priority = {err:0, data:1, review:2, pr:3, notes:4, git:5};
+  const all = P.flatMap(p => p.todo.map(t => ({...t, pname:p.name, color:p.color}))).sort((a,b) => priority[a.kind] - priority[b.kind]);
   const KIND = [["notes","k_notes","--open"],["pr","k_pr","--wait"],["review","k_review","--accent"],["git","k_git","--open"],["data","k_data","--bad"],["err","k_err","--bad"]];
   const tiles = KIND.map(([k, lab, col]) => {
     const rows = all.filter(t => t.kind === k); if (!rows.length) return "";

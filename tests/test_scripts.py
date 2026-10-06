@@ -734,7 +734,7 @@ def test_notes_tasks_counts_fences_nested():
             input=(root / "out/index.html").read_text(), text=True, capture_output=True)
         assert output.returncode == 0, output.stderr
         homepage = json.loads(output.stdout)["home"]
-        assert ("Nothing waits on you" in homepage) == (count == 0)
+        assert ("No items to inspect" in homepage) == (count == 0)
         if count:
             assert f'>{count}</span>' in homepage and 'href="#p/facts/notes"' in homepage
         facts = rendered(root)[0]["facts"]
@@ -755,6 +755,62 @@ def test_notes_tasks_counts_fences_nested():
 
 
 test_notes_tasks_counts_fences_nested()
+def test_todo_pr_draft_order_aggregate():
+    import copy
+    root = fixture("todo-semantics", {"local": [{"label": "checkout", "path": str(a)}]})
+    assert run("collect.py", str(root)).returncode == 0
+    snap = snapshot(root); facts = snap["projects"]["p"]
+    facts["repos"][0]["dirty"] = 2
+    facts["prs"] = [{"number": 1, "repo": "o/r", "title": "Other person's PR", "isDraft": True,
+                      "url": "https://github.com/o/r/pull/1", "reviewRequests": ["someone-else"]}]
+    facts["tickets"] = [dict(id=f"N-{n}", source="notion", source_id=f"full-{n}",
+                              title="Review", state="wait") for n in range(20)]
+    facts["sources"]["notion"] = collect.source_state(snap["run_id"], snap["generated_at"], snap["generated_at"], "ok", True)
+    inv = json.loads((root / "inventory.json").read_text()); inv["lang"] = "zh-TW"
+    inv["projects"][0]["sources"]["notion"] = {"url": "https://notion.so/fixture"}
+    for key in ("late", "stale"):
+        other = copy.deepcopy(facts)
+        other.update(prs=[], tickets=[], repos=[], obsidian=[], sources={}, data=[], errors=[])
+        if key == "late":
+            other["errors"] = ["github: denied"]
+        else:
+            other["data"] = [dict(label="old", path="old.csv", newest="2026-01-01", stale=True, age_days=200, max_age_days=1)]
+        snap["projects"][key] = other
+        inv["projects"].append(dict(key=key, name=key, color="#c00", sources={}))
+    (root / "inventory.json").write_text(json.dumps(inv))
+    (root / "facts" / f"{dt.date.today()}.json").write_text(json.dumps(snap))
+    data = page_data(root); p = data["projects"][0]
+    assert [(t["kind"], t["n"]) for t in p["todo"]] == [("review", 20), ("pr", 1), ("git", None)]
+    assert p["todo"][1]["drafts"] == 1, "Draft is still an open PR, never promised as ready to merge"
+    result = subprocess.run(["node", str(Path(__file__).with_name("html_todos.js"))],
+        input=(root / "out/index.html").read_text(), text=True, capture_output=True)
+    assert result.returncode == 0, result.stderr
+    homepage = json.loads(result.stdout)["home"]
+    # Match row hrefs only, excluding project cards; later projects' risks must come first.
+    import re
+    rows = re.findall(r'<a class="todo pc"[^>]*href="([^"]+)"', homepage)
+    assert rows == ["#late/facts", "#stale/facts", "#p/tickets", "#p/facts", "#p/facts"]
+    assert "3 類待處理事項" in homepage and "21 類" not in homepage
+    assert '>20</b>' in homepage and "本機未同步事項（依工作目錄彙總）" in homepage
+    assert "開啟中的 PR" in homepage and "Draft 1" in homepage and "等你合併" not in homepage
+    facts_html = rendered(root)[0]["facts"]
+    assert "Draft</span>" in facts_html and "Other person&#39;s PR" in facts_html
+    assert "等你合併" not in facts_html
+    # Non-drafts and other people's review requests remain neutral open PRs.
+    facts["prs"][0]["isDraft"] = False
+    inv["lang"] = "en"; (root / "inventory.json").write_text(json.dumps(inv))
+    (root / "facts" / f"{dt.date.today()}.json").write_text(json.dumps(snap))
+    data = page_data(root)
+    assert data["projects"][0]["todo"][1]["drafts"] == 0
+    assert "Draft</span>" not in rendered(root)[0]["facts"]
+    result = subprocess.run(["node", str(Path(__file__).with_name("html_todos.js"))],
+        input=(root / "out/index.html").read_text(), text=True, capture_output=True)
+    homepage = json.loads(result.stdout)["home"]
+    assert "3 categories of items to inspect" in homepage and "Open PRs" in homepage
+    assert "merge" not in homepage and "Draft" not in homepage
+
+
+test_todo_pr_draft_order_aggregate()
 # --- Vercel -----------------------------------------------------------------------------------
 vhome = tmp / "vhome"; (vhome / "out").mkdir(parents=True); (vhome / "out/index.html").write_text("x")
 pv.TOKEN = "t"
