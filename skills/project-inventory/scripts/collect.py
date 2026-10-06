@@ -208,7 +208,12 @@ def database_newest(con, src, col):
     actual = next((c for c in columns if c.lower() == col.lower()), None) if isinstance(col, str) else None
     if actual is None:
         raise RuntimeError(f"column {col!r} not found in {src} (columns: {', '.join(columns[:8])})")
-    values = [r[0] for r in con.execute(f"SELECT {sql_identifier(actual)} FROM {src}")]
+    top, rows = con.execute(f"SELECT MAX({sql_identifier(actual)}), COUNT(*) FROM {src}").fetchone()
+    if rows and isinstance(top, (dt.date, dt.datetime)):
+        return [str(top)]  # native date type: SQL MAX is exact, no need to pull millions of 1-min rows
+    # Text dates may mix offsets, so they are parsed one by one. DuckDB's execute() returns
+    # the connection itself (not iterable), hence fetchall().
+    values = [r[0] for r in con.execute(f"SELECT {sql_identifier(actual)} FROM {src}").fetchall()]
     if not values:
         raise RuntimeError(f"empty table/source {src}: no values in column {col!r}")
     return [str(value) for value in values if value is not None]

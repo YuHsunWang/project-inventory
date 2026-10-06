@@ -370,8 +370,29 @@ def test_duckdb_identifier_validation():
     assert len(calls) == 4 and all(read_only for _, read_only in calls)
 
 
+def test_real_duckdb():
+    # The sqlite stand-in above iterates cursors; real DuckDB's execute() returns a non-iterable
+    # connection. This broke all 12 real DuckDB sources once, so run the real engine when present.
+    try:
+        import duckdb
+    except ImportError:
+        print("SKIPPED test_real_duckdb: duckdb not installed"); return
+    path = tmp / "real.duckdb"
+    con = duckdb.connect(str(path))
+    con.execute("CREATE TABLE native (d DATE); INSERT INTO native VALUES ('2026-10-01'), ('2026-10-05')")
+    con.execute("CREATE TABLE text (d VARCHAR); INSERT INTO text VALUES ('2026-10-05T23:30:00+08:00'), ('2026-10-05T16:00:00Z')")
+    con.execute("CREATE TABLE stamp (t TIMESTAMP); INSERT INTO stamp VALUES ('2026-10-05 16:15:00')")
+    con.close()
+    assert collect.newest_date({"kind": "duckdb", "path": str(path), "table": "native", "column": "d"}) == "2026-10-05"
+    # native TIMESTAMPs print as "YYYY-MM-DD HH:MM:SS" (space, not T): still a valid date
+    assert collect.newest_date({"kind": "duckdb", "path": str(path), "table": "stamp", "column": "t"}).startswith("2026-10-05")
+    # 16:00Z is later than 23:30+08:00 (=15:30Z): text dates must be parsed, not compared as strings
+    assert collect.newest_date({"kind": "duckdb", "path": str(path), "table": "text", "column": "d"}, "UTC") == "2026-10-05T16:00:00+00:00"
+
+
 test_sqlite_identifier_validation()
 test_duckdb_identifier_validation()
+test_real_duckdb()
 
 
 def test_github_pr_pagination():

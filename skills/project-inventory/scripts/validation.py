@@ -37,7 +37,7 @@ def parse_date(value, path="date"):
     try:
         if re.fullmatch(r"\d{4}-\d{2}-\d{2}", value):
             return dt.date.fromisoformat(value)
-        if not re.match(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}", value):
+        if not re.match(r"^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}", value):  # SQL engines print a space
             raise ValueError()
         return dt.datetime.fromisoformat(value.replace("Z", "+00:00"))
     except ValueError:
