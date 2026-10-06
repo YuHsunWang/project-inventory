@@ -96,6 +96,23 @@ You choose. The default is a local file.
 | Vercel | Vercel-authorized users; access depends on team/project membership, granted access, sharing and bypass settings ([access rules](https://vercel.com/docs/deployment-protection/methods-to-protect-deployments/vercel-authentication)). Protection is switched on before the first deploy, and every deploy is checked from outside. |
 | GitHub Pages | **everyone**. Claude asks before the first publish. |
 
+### GitHub Pages plan and preview
+
+| Repository / plan | Standard Pages path |
+|---|---|
+| GitHub Free, public repo | Supported; repository and site are public. |
+| GitHub Free, private repo | Not supported. Keep the page local or choose another host; never automatically change repo visibility. |
+| GitHub Pro / Team, private repo | Supported; the repository stays private but the standard site is public. |
+
+See [GitHub's plan requirements](https://docs.github.com/en/pages/getting-started-with-github-pages/what-is-github-pages).
+Enterprise access-controlled Pages is a separate option that this workflow has not verified.
+Before publishing, open the local page and review the embedded facts and assets: project
+names, tickets, branches, file paths and screenshots may be exposed. For a minimal public
+page, use a separate inventory home with only approved project names/tags/diagram text,
+empty `sources` and `data`, and omit `notes`, node `paths` and `media`. Collect and build that
+home and preview it again; there is no automatic redaction switch. Confirm the account
+plan, repository visibility and exact public content before creating a repo or pushing.
+
 ## Scripts (usable without Claude)
 
 The scripts are in `skills/project-inventory/scripts/`. To run them by hand, clone this repo

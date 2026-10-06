@@ -131,14 +131,29 @@ Talk to the user in their language and write page text (names, tags, diagram) in
 | Vercel | `python3 SCRIPTS/publish_vercel.py HOME <project-name>` (refuses an existing project it did not create; `--reuse` only after the user confirms that project is for this page) — creates the project, locks it (Vercel Authentication, all deployments) BEFORE deploying, then checks an anonymous visitor is turned away | Vercel-authorized users; actual access depends on team/project membership, granted access, sharing and bypass settings |
 | GitHub Pages | see below | **everyone on the internet** |
 
-**GitHub Pages is public**, also from a private repo on a free plan. The page lists project
-names, tickets, branches, file paths and data locations. Before the first Pages publish, say
-this in one plain sentence and get an explicit yes. Then: a repo the user names (create it with
-`gh repo create <name> --private` if needed), copy `out/index.html` to the repo root, commit,
-push, and enable Pages on the repo's default branch (`gh repo view <owner>/<repo> --json defaultBranchRef -q .defaultBranchRef.name`;
-it is not always `main`): `gh api -X POST repos/<owner>/<repo>/pages -f "source[branch]=<branch>" -f "source[path]=/"`.
-Each later run: copy, commit, push. Pushing and creating repos are outward-facing — confirm the
-first time.
+**Standard GitHub Pages sites are public.** Check the account plan and repo visibility first:
+
+| Path | Supported / visibility |
+|---|---|
+| GitHub Free + public repo | Supported; repo and site public. |
+| GitHub Free + private repo | Not supported. Offer local/another host; never change visibility automatically. |
+| GitHub Pro/Team + private repo | Supported; repo private, standard site public. |
+
+[Official plan requirements](https://docs.github.com/en/pages/getting-started-with-github-pages/what-is-github-pages).
+Enterprise access-controlled Pages is separate and unverified in this workflow.
+Preview `out/index.html`, its embedded facts and assets with the user: project names,
+tickets, branches, paths and screenshots can be exposed. Offer a minimal public copy in
+another home: only approved project names/tags/diagram text, empty `sources` and `data`,
+no `notes`, node `paths` or `media`. Collect/build that home; preview again. No automatic
+redaction exists. Get explicit approval for the exact content, plan and visibility before
+publishing. Never make a private repository public to work around a failed deployment.
+
+Use the repo the user names. If creating one, use `gh repo create <name> --public` only
+for the approved Free/public path, or `--private` only with a confirmed supporting paid
+plan. Copy the approved `out/index.html` to its root, commit, push, and enable Pages on
+its default branch (`gh repo view <owner>/<repo> --json defaultBranchRef -q .defaultBranchRef.name`;
+not always `main`): `gh api -X POST repos/<owner>/<repo>/pages -f "source[branch]=<branch>" -f "source[path]=/"`.
+Each later run: preview, copy, commit, push within the agreed publishing scope.
 
 Never send the page anywhere the user did not choose.
 
