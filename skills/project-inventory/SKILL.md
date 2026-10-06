@@ -75,6 +75,9 @@ Talk to the user in their language and write page text (names, tags, diagram) in
      same way; say which values you mapped how the first time and save that in inventory.json
      (`sources.notion.status_map`).
    - GitHub PRs only if `gh` is not installed: use the GitHub MCP, put them under `prs`.
+   - Create a unique `_run.run_id` for this gather. For each source write
+     `run_id`, `attempted_at`, `fetched_at`, `status`, `complete`, and `error` under `sources`
+     (see schema). Track MCP PRs per `github:<owner/repo>`. Never reuse a gather run.
    - List every source you read in `read`. If a source fails, write the error into `errors`
      (start the text with the source name) — never drop it silently.
 2. `python3 SCRIPTS/collect.py HOME` — git (fetches origin first), PRs via `gh`, Obsidian tasks,

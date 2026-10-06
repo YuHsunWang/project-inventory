@@ -194,6 +194,87 @@ except RuntimeError as e:
     assert "no Linear project named" in str(e)
 
 
+# --- wave 1b: collection failures must remain visible -----------------------------------------
+from unittest.mock import patch
+from contextlib import redirect_stdout
+import os, uuid
+
+def fixture(name, sources):
+    root = tmp / name; (root / "gathered").mkdir(parents=True)
+    (root / "inventory.json").write_text(json.dumps({"projects": [
+        {"key": "p", "name": "P", "color": "#c00", "sources": sources}]}))
+    return root
+
+def gather(root, status="ok", source="notion", tickets=None):
+    rid = uuid.uuid4().hex
+    stamp = dt.datetime.now().astimezone().isoformat()
+    (root / "gathered" / f"{dt.date.today()}.json").write_text(json.dumps({"_run": {"run_id": rid}, "p": {
+        "sources": {source: dict(run_id=rid, attempted_at=stamp, fetched_at=stamp,
+          status=status, complete=status == "ok", error=None if status == "ok" else "403")},
+        "tickets": tickets or [], "read": [source] if status == "ok" else [], "errors": []}}))
+    return rid
+
+def snapshot(root):
+    return json.loads((root / "facts" / f"{dt.date.today()}.json").read_text())
+
+def page_data(root):
+    import re
+    result = run("build.py", str(root)); assert result.returncode == 0, result.stdout + result.stderr
+    page = (root / "out/index.html").read_text()
+    return json.loads(re.search(r"const D = (.*?);\nconst L", page, re.S)[1].replace("<\\/", "</"))
+
+OLD_TICKET = {"id": "N-1", "title": "old", "source": "notion", "state": "wait", "created": "2026-09-01"}
+
+def test_same_day_reuse():
+    root = fixture("same-day", {"notion": {"url": "x"}})
+    rid = gather(root, tickets=[OLD_TICKET])
+    first = run("collect.py", str(root)); assert first.returncode == 0, first.stdout + first.stderr
+    assert snapshot(root)["run_id"] == rid
+    assert page_data(root)["projects"][0]["counts"]["wait"] == 1
+    second = run("collect.py", str(root)); assert second.returncode == 1, second.stdout + second.stderr
+    f = snapshot(root)["projects"]["p"]
+    assert snapshot(root)["run_id"] != rid and f["sources"]["notion"]["status"] == "stale"
+    assert f["tickets"] == [] and f["stale_tickets"] == [OLD_TICKET]
+    p = page_data(root)["projects"][0]
+    assert p["counts"]["wait"] == 0 and p["trend_tickets"] is None
+    assert 'stale' in (root / "out/index.html").read_text()
+
+def test_cron_takeover():
+    root = fixture("cron", {"linear": {"project": "P"}})
+    gather(root, source="linear", tickets=[{**OLD_TICKET, "source": "linear"}])
+    with patch.dict(os.environ, {"LINEAR_API_KEY": "fixture"}), patch.object(collect, "linear_tickets", return_value=[]) as api:
+        for _ in range(2):
+            with patch.object(sys, "argv", ["collect.py", str(root)]), redirect_stdout(io.StringIO()):
+                try: collect.main()
+                except SystemExit as e: assert e.code == 0
+        assert api.call_count == 2
+    f = snapshot(root)["projects"]["p"]
+    assert f["sources"]["linear"]["status"] == "ok" and f["tickets"] == []
+
+def test_failed_source_keeps_tickets():
+    root = fixture("failed-old", {"notion": {"url": "x"}})
+    gather(root, status="failed", tickets=[OLD_TICKET])
+    result = run("collect.py", str(root)); assert result.returncode == 1
+    f = snapshot(root)["projects"]["p"]
+    assert f["sources"]["notion"]["status"] == "failed" and f["tickets"] == []
+    p = page_data(root)["projects"][0]
+    assert p["counts"]["wait"] == 0 and p["now"]["wait"] == 0 and p["trend_tickets"] is None
+
+def test_mcp_prs_per_repo():
+    root = fixture("mcp-prs", {"github": ["o/a", "o/b"]})
+    gather(root, source="github:o/a")
+    with patch.object(collect.shutil, "which", return_value=None), patch.object(sys, "argv", ["collect.py", str(root)]), redirect_stdout(io.StringIO()):
+        try: collect.main()
+        except SystemExit as e: assert e.code == 1
+    states = snapshot(root)["projects"]["p"]["sources"]
+    assert states["github:o/a"]["status"] == "ok" and states["github:o/b"]["status"] == "unavailable"
+
+test_same_day_reuse()
+test_cron_takeover()
+test_failed_source_keeps_tickets()
+test_mcp_prs_per_repo()
+os.environ.pop("LINEAR_API_KEY", None)
+
 # --- Vercel -----------------------------------------------------------------------------------
 vhome = tmp / "vhome"; (vhome / "out").mkdir(parents=True); (vhome / "out/index.html").write_text("x")
 pv.TOKEN = "t"

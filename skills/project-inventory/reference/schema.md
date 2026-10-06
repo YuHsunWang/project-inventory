@@ -76,7 +76,10 @@
 
 ```json
 {
+  "_run": {"run_id": "unique UUID for this gather"},
   "cvs": {
+    "sources": {"linear": {"run_id": "same UUID", "attempted_at": "ISO timestamp with offset",
+      "fetched_at": "ISO timestamp with offset", "status": "ok", "complete": true, "error": null}},
     "read": ["linear"],
     "tickets": [
       {"id": "DEV-12", "title": "…", "state": "done", "url": "https://linear.app/…",
@@ -88,6 +91,15 @@
   }
 }
 ```
+
+Each source uses `run_id / attempted_at / fetched_at / status / complete / error`.
+Use `linear`, `notion`, and `github:<owner/repo>` as source keys (PRs are tracked per repo).
+Create a new `_run.run_id` for each gather and copy it into every source record. A successful
+read, including zero rows, is `ok` and `complete: true`; failures are `failed` or `partial`,
+with an error and the last successful `fetched_at` (null if never read).
+Collect consumes a gather run once; a second collect marks reused results stale. Legacy `read`
+without metadata is stale, never fresh. Linear with an API key is re-read on every collect.
+Only fresh tickets/PRs feed counts and trends; old tickets remain in `stale_tickets`.
 
 `state` is one of `done`, `wait` (finished, waiting for the user's review/merge), `open`, `dead`
 (canceled). Notion rows use the page URL as `url` and a short id (e.g. the row's ID property or

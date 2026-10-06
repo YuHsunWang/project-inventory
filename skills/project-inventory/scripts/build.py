@@ -228,7 +228,8 @@ def main():
         projects.append({**p, "facts": f, "counts": {s: sum(t.get("state") == s for t in f["tickets"]) for s in STATES},
                          "todo": todos(p, f), "now": now(f, today), "history": history(f, sums.get(p["key"], {})),
                          "weekly": f.get("weekly") if f["repos"] else None,
-                         "trend_tickets": ticket_series(f["tickets"], today) if has_tk else None})
+                         "trend_tickets": ticket_series(f["tickets"], today) if has_tk and all(
+                             v["status"] == "ok" for k, v in f.get("sources", {}).items() if k in ("linear", "notion")) else None})
     for p in projects:
         weeks = [{"week": w["week"], "n": len(w["items"]), "old": w["summary"],
                   "items": [f'{x["date"]} {x["kind"]}: {x["text"]}' for x in w["items"]]} for w in p["history"] if not w["fresh"]]

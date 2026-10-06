@@ -652,6 +652,8 @@ function renderFacts(p){
   if (src.linear) cloud.push(["Linear", esc(src.linear.project)]);
   if (src.notion) cloud.push(["Notion", ext(src.notion.url, esc(src.notion.url))]);
   const tbl = (head, rows) => rows.length ? `<h3>${head}</h3><div class="facts"><table>${rows.map(([a, b]) => `<tr><th>${a}</th><td>${b}</td></tr>`).join("")}</table></div>` : "";
+  for (const [name, state] of Object.entries(f.sources || {})) cloud.push([esc(name),
+    `<span class="st ${state.status === "ok" ? "ok" : "bad"}">${esc(state.status)}</span> ${esc(state.error || "")}<div class="small">${esc(state.fetched_at || "—")}</div>`]);
   const errs = f.errors.length ? [[T.errs, f.errors.map(e => `<div><span class="st bad" style="margin-left:0">!</span> ${esc(e)}</div>`).join("")]] : [];
   return `<p class="hint">${T.facts_hint}</p>${tbl(T.f_local, local)}${tbl(T.f_cloud, cloud)}${tbl(T.errs, errs)}`;
 }

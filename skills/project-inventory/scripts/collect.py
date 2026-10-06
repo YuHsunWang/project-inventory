@@ -11,7 +11,7 @@ and Linear when $LINEAR_API_KEY is set (then Claude does not need to gather Line
 Nothing here needs a package outside the standard library except parquet/duckdb checks (duckdb).
 Exit 1 when any source failed; the failure is also written into the snapshot, so the page shows it.
 """
-import csv, datetime as dt, json, os, re, shutil, sqlite3, subprocess, sys, urllib.error, urllib.request
+import csv, datetime as dt, json, os, re, shutil, sqlite3, subprocess, sys, uuid, urllib.error, urllib.request
 from pathlib import Path
 
 RECENT_DAYS, WEEKS, HISTORY = 14, 12, 3000  # HISTORY: newest commits kept per checkout for the progress tab
@@ -190,30 +190,65 @@ def data_check(spec, today):
             "age_days": age, "max_age_days": limit, "stale": age > limit}
 
 
+def source_state(run_id, attempted_at, fetched_at=None, status="unavailable", complete=False, error=None):
+    return dict(run_id=run_id, attempted_at=attempted_at, fetched_at=fetched_at,
+                status=status, complete=complete, error=error)
+
+
+def gathered_state(g, name, run_id, attempted_at, previous=None):
+    m = g.get("sources", {}).get(name, {})
+    previous = previous or {}
+    error = m.get("error") or next((e for e in g.get("errors", []) if e.startswith(name.split(":")[0] + ":")), None)
+    fresh = (m.get("run_id") == run_id and m.get("fetched_at") and
+             m.get("status") == "ok" and m.get("complete") is True and not error)
+    fetched = m.get("fetched_at") or previous.get("fetched_at")
+    status = "ok" if fresh else ("partial" if m.get("status") == "partial" else "failed") if error else "stale" if fetched or name in g.get("read", []) else "unavailable"
+    return source_state(run_id, m.get("attempted_at") if m.get("run_id") == run_id else attempted_at,
+                        fetched, status, bool(fresh), error or (None if fresh else "not gathered today for this run; gather the source again"))
+
+
 def main():
     home = Path(sys.argv[1] if len(sys.argv) > 1 else "~/.project-inventory").expanduser()
     inv = json.loads((home / "inventory.json").read_text(encoding="utf-8"))
     today = dt.date.today()
     gathered_f = home / "gathered" / f"{today}.json"
     gathered = json.loads(gathered_f.read_text(encoding="utf-8")) if gathered_f.exists() else {}
+    previous_f = home / "facts" / f"{today}.json"
+    previous = json.loads(previous_f.read_text(encoding="utf-8")) if previous_f.exists() else {}
+    offered = gathered.get("_run", {}).get("run_id")
+    run_id = offered if offered and offered != previous.get("run_id") else uuid.uuid4().hex
+    if "--run-id" in sys.argv:
+        run_id = sys.argv[sys.argv.index("--run-id") + 1]
+    attempted_at = dt.datetime.now().astimezone().isoformat(timespec="seconds")
     have_gh = shutil.which("gh") is not None
     # a gathered file under another date usually means Claude's date and this computer's date differ
     others = sorted(x.name for x in (home / "gathered").glob("*.json") if x != gathered_f) if not gathered_f.exists() else []
     other = f"; newest gathered file is {others[-1]}, this computer's date is {today}" if others else ""
     snap = {"date": today.isoformat(), "generated_at": dt.datetime.now().isoformat(timespec="seconds"),
-            "gathered": gathered_f.exists(), "projects": {}}
+            "gathered": gathered_f.exists(), "run_id": run_id, "projects": {}}
     failed = 0
     for p in inv["projects"]:
         src, g = p.get("sources", {}), gathered.get(p["key"], {})
-        f = {"errors": list(g.get("errors", [])), "tickets": g.get("tickets", []),
-             "repos": [], "prs": [], "obsidian": [], "data": []}
+        old = previous.get("projects", {}).get(p["key"], {}).get("sources", {})
+        f = {"errors": list(g.get("errors", [])), "tickets": [], "stale_tickets": [],
+             "sources": {}, "repos": [], "prs": [], "obsidian": [], "data": []}
         commits = {}
-        if src.get("linear") and os.environ.get("LINEAR_API_KEY") and "linear" not in g.get("read", []):
-            try:
-                f["tickets"] = [t for t in f["tickets"] if t.get("source") != "linear"] + linear_tickets(src["linear"]["project"])
-                g = {**g, "read": [*g.get("read", []), "linear"]}
-            except Exception as e:
-                f["errors"].append(f"linear: {e}")
+        for name in ("linear", "notion"):
+            if not src.get(name):
+                continue
+            state = gathered_state(g, name, run_id, attempted_at, old.get(name))
+            tickets = [t for t in g.get("tickets", []) if t.get("source") == name]
+            if name == "linear" and os.environ.get("LINEAR_API_KEY"):
+                try:
+                    tickets = linear_tickets(src[name]["project"])
+                    state = source_state(run_id, attempted_at, dt.datetime.now().astimezone().isoformat(timespec="seconds"), "ok", True)
+                    f["errors"] = [e for e in f["errors"] if not e.startswith("linear:")]
+                except Exception as e:
+                    state = source_state(run_id, attempted_at, state["fetched_at"], "failed", False, str(e))
+            f["sources"][name] = state
+            f["tickets" if state["status"] == "ok" else "stale_tickets"] += tickets
+            if state["status"] != "ok":
+                f["errors"].append(f"{name}: {state['error']}{other}")
         for r in src.get("local", []):
             try:
                 st = git_state(Path(r["path"]).expanduser(), today)
@@ -224,16 +259,21 @@ def main():
                 f["errors"].append(f'git {r["path"]}: {e}')
         f["weekly"] = weekly([c["date"] for c in commits.values()], today)
         f["commits"] = sorted(commits.values(), key=lambda c: c["date"], reverse=True)
-        if "prs" in g:  # Claude fetched PRs through the GitHub MCP (no gh here)
-            f["prs"] = g["prs"]
-        elif src.get("github"):
-            if not have_gh:
-                f["errors"].append("gh CLI not installed: open PRs not read")
-            for repo in src["github"] if have_gh else []:
+        for repo in src.get("github", []):
+            name = f"github:{repo}"
+            state = gathered_state(g, name, run_id, attempted_at, old.get(name))
+            prs = [pr for pr in g.get("prs", []) if pr.get("repo") == repo]
+            if state["status"] != "ok" and have_gh:
                 try:
-                    f["prs"] += gh_prs(repo)
+                    prs = gh_prs(repo)
+                    state = source_state(run_id, attempted_at, dt.datetime.now().astimezone().isoformat(timespec="seconds"), "ok", True)
                 except Exception as e:
-                    f["errors"].append(f"gh {repo}: {e}")
+                    state = source_state(run_id, attempted_at, state["fetched_at"], "failed", False, str(e))
+            f["sources"][name] = state
+            if state["status"] == "ok":
+                f["prs"] += prs
+            else:
+                f["errors"].append(f"{name}: {state['error']}; install gh or gather PRs again")
         for o in src.get("obsidian", []):
             try:
                 f["obsidian"].append(obsidian_tasks(o["path"]))
@@ -245,9 +285,6 @@ def main():
             except Exception as e:
                 f["errors"].append(f'data {d.get("label", d["path"])}: {e}')
                 f["data"].append({"label": d.get("label", d["path"]), "path": d["path"], "error": str(e)})
-        for name in ("linear", "notion"):  # Claude lists what it read in "read"; a silent gap is an error
-            if src.get(name) and name not in g.get("read", []) and not any(e.startswith(name) for e in f["errors"]):
-                f["errors"].append(f"{name}: not gathered today (gathered/{today}.json does not list it in \"read\"){other}")
         failed += len(f["errors"])
         snap["projects"][p["key"]] = f
     out = home / "facts" / f"{today}.json"
