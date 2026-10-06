@@ -11,10 +11,10 @@
 <!--__MATHJAX__-->
 <style>
 :root{
-  --ground:#EDF0EA; --paper:#FAFBF7; --ink:#17201B; --muted:#56625A; --faint:#8B968F; --line:#C9D1C9; --grid:#DDE3DB;
+  --ground:#EDF0EA; --paper:#FAFBF7; --ink:#17201B; --muted:#56625A; --faint:#59675E; --line:#C9D1C9; --grid:#DDE3DB;
   --accent:#0E5B60; --accent-soft:#D5E8E6;
-  --done:#2E7A4C; --done-soft:#DCEFE2; --wait:#2A5FC4; --wait-soft:#DCE6F8;
-  --open:#A86A12; --open-soft:#F6E9CF; --dead:#8A938D; --dead-soft:#E6E9E5; --bad:#B23A22; --bad-soft:#F7DCD5;
+  --done:#286C43; --done-soft:#DCEFE2; --wait:#2A5FC4; --wait-soft:#DCE6F8;
+  --open:#80500C; --open-soft:#F6E9CF; --dead:#59675E; --dead-soft:#E6E9E5; --bad:#B23A22; --bad-soft:#F7DCD5;
   --viz-done:#1F6B40; --viz-open:#B8761A;
   --sans:"Noto Sans TC","PingFang TC","Microsoft JhengHei",system-ui,sans-serif;
   --display:var(--sans);
@@ -26,20 +26,20 @@
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
     color-scheme:dark;
-    --ground:#111513; --paper:#181D1A; --ink:#E4EAE5; --muted:#A1ACA5; --faint:#6F7A73; --line:#2F3833; --grid:#222A25;
+    --ground:#111513; --paper:#181D1A; --ink:#E4EAE5; --muted:#A1ACA5; --faint:#A1ACA5; --line:#2F3833; --grid:#222A25;
     --accent:#6CC4C6; --accent-soft:#1B3334;
     --done:#6FC08F; --done-soft:#19301F; --wait:#7FA6F0; --wait-soft:#1B2640;
-    --open:#E0A94E; --open-soft:#33280F; --dead:#7D8680; --dead-soft:#232826; --bad:#F08A70; --bad-soft:#3A1E18;
+    --open:#E0A94E; --open-soft:#33280F; --dead:#A1ACA5; --dead-soft:#232826; --bad:#F08A70; --bad-soft:#3A1E18;
     --viz-done:#56A876; --viz-open:#B8801F; --shadow:0 1px 2px rgba(0,0,0,.4),0 6px 18px rgba(0,0,0,.28);
   }
   :root:not([data-theme="light"]) .pc{--pc:color-mix(in srgb,var(--pc0) 62%,#fff)}
 }
 :root[data-theme="dark"]{
   color-scheme:dark;
-  --ground:#111513; --paper:#181D1A; --ink:#E4EAE5; --muted:#A1ACA5; --faint:#6F7A73; --line:#2F3833; --grid:#222A25;
+  --ground:#111513; --paper:#181D1A; --ink:#E4EAE5; --muted:#A1ACA5; --faint:#A1ACA5; --line:#2F3833; --grid:#222A25;
   --accent:#6CC4C6; --accent-soft:#1B3334;
   --done:#6FC08F; --done-soft:#19301F; --wait:#7FA6F0; --wait-soft:#1B2640;
-  --open:#E0A94E; --open-soft:#33280F; --dead:#7D8680; --dead-soft:#232826; --bad:#F08A70; --bad-soft:#3A1E18;
+  --open:#E0A94E; --open-soft:#33280F; --dead:#A1ACA5; --dead-soft:#232826; --bad:#F08A70; --bad-soft:#3A1E18;
   --viz-done:#56A876; --viz-open:#B8801F; --shadow:0 1px 2px rgba(0,0,0,.4),0 6px 18px rgba(0,0,0,.28);
 }
 :root[data-theme="dark"] .pc{--pc:color-mix(in srgb,var(--pc0) 62%,#fff)}
@@ -152,7 +152,7 @@ h3{font-family:var(--display);font-size:22px;margin:30px 0 4px;font-weight:700;l
 .node .ic{grid-row:span 2;width:40px;height:40px;border-radius:50%;background:var(--paper);display:grid;place-items:center;border:1.5px solid var(--pc)}
 .node .ic svg{width:28px;height:28px}
 .node .t{font-family:var(--display);font-size:20px;font-weight:700;line-height:1.2}
-.node .s{font-size:13px;color:var(--muted);line-height:1.45}
+.node .s{font-size:13px;color:var(--ink);line-height:1.45}
 .node .n{position:absolute;top:-10px;left:-10px;width:24px;height:24px;border-radius:50%;background:var(--ink);color:var(--paper);font:600 11px var(--mono);display:grid;place-items:center}
 .node .more{grid-column:1/-1;display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
 .node .more span{font-size:11.5px;font-weight:700;padding:1px 8px;border-radius:999px;background:var(--paper);border:1px solid var(--line);color:var(--muted)}
