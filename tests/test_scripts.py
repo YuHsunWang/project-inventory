@@ -274,6 +274,57 @@ def page_data(root):
 
 OLD_TICKET = {"id": "N-1", "title": "old", "source": "notion", "state": "wait", "created": "2026-09-01"}
 
+def test_sqlite_identifier_validation():
+    import sqlite3
+    path = tmp / "quoted.sqlite"
+    with sqlite3.connect(path) as con:
+        con.execute('CREATE TABLE "day""table" ("date""quoted" TEXT, date TEXT)')
+        con.execute('INSERT INTO "day""table" VALUES (?, ?)', ("2026-10-05", "2026-10-04"))
+        con.execute('CREATE TABLE empty (date TEXT)')
+        con.execute('CREATE TABLE nulls (date TEXT)')
+        con.execute('INSERT INTO nulls VALUES (NULL)')
+    spec = {"path": str(path), "kind": "sqlite", "table": 'day"table', "column": 'date"quoted'}
+    assert collect.newest_date(spec) == "2026-10-05"
+    assert collect.newest_date({**spec, "column": "DATE"}) == "2026-10-04"
+    for changes, message in [({"column": "2026-10-05"}, "column '2026-10-05' not found"),
+                             ({"column": "typo"}, "column 'typo' not found"),
+                             ({"table": "missing"}, 'table/source "missing" not found'),
+                             ({"table": 'missing"; DROP TABLE empty; --'}, "not found or unreadable"),
+                             ({"table": "empty", "column": "date"}, "empty table/source"),
+                             ({"table": "nulls", "column": "date"}, "no values in column")]:
+        try:
+            collect.newest_date({**spec, **changes}); raise AssertionError("accurate error required")
+        except RuntimeError as e:
+            assert message in str(e), str(e)
+    with sqlite3.connect(path) as con:
+        assert con.execute('SELECT COUNT(*) FROM empty').fetchone()[0] == 0
+
+
+def test_duckdb_identifier_validation():
+    # Exercise the optional adapter with a stdlib SQL backend; never require/install duckdb.
+    import sqlite3
+    path = tmp / "quoted.sqlite"
+    calls = []
+    def connect(name, read_only):
+        calls.append((name, read_only))
+        return sqlite3.connect(f"file:{name}?mode=ro", uri=True)
+    with patch.dict(sys.modules, {"duckdb": types.SimpleNamespace(connect=connect)}):
+        spec = {"kind": "duckdb", "path": str(path), "table": 'day"table', "column": 'date"quoted'}
+        assert collect.newest_date(spec) == "2026-10-05"
+        for changes, message in [({"column": "2026-10-05"}, "not found"),
+                                 ({"table": "missing"}, "not found or unreadable"),
+                                 ({"table": "empty", "column": "date"}, "empty table/source")]:
+            try:
+                collect.newest_date({**spec, **changes}); raise AssertionError("metadata validation required")
+            except RuntimeError as e:
+                assert message in str(e), str(e)
+    assert len(calls) == 4 and all(read_only for _, read_only in calls)
+
+
+test_sqlite_identifier_validation()
+test_duckdb_identifier_validation()
+
+
 def test_github_pr_pagination():
     for count in (0, 50, 51, 101):
         calls = []

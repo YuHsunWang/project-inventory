@@ -190,6 +190,28 @@ def obsidian_tasks(folder):
     return {"path": str(root), "open": len(open_), "done": done, "items": open_[:50]}
 
 
+def sql_identifier(name):
+    if not isinstance(name, str) or not name:
+        raise RuntimeError(f"invalid SQL identifier {name!r}")
+    return '"' + name.replace('"', '""') + '"'
+
+
+def database_newest(con, src, col):
+    """Validate against result metadata before MAX: SQLite can treat unknown quotes as text."""
+    try:
+        columns = [c[0] for c in con.execute(f"SELECT * FROM {src} LIMIT 0").description]
+    except Exception as e:
+        raise RuntimeError(f"table/source {src} not found or unreadable: {e}") from e
+    # Use the actual metadata spelling after a case-insensitive match, then quote it safely.
+    actual = next((c for c in columns if c.lower() == col.lower()), None) if isinstance(col, str) else None
+    if actual is None:
+        raise RuntimeError(f"column {col!r} not found in {src} (columns: {', '.join(columns[:8])})")
+    value, rows = con.execute(f"SELECT MAX({sql_identifier(actual)}), COUNT(*) FROM {src}").fetchone()
+    if not rows:
+        raise RuntimeError(f"empty table/source {src}: no values in column {col!r}")
+    return [str(value)]
+
+
 def newest_date(spec):
     """Largest value of the date column/field, read from the data itself (never file mtimes)."""
     path, kind, col = Path(spec["path"]).expanduser(), spec["kind"], spec.get("column")
@@ -212,8 +234,10 @@ def newest_date(spec):
         vals = [str(v)]
     elif kind == "sqlite":
         con = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
-        vals = [str(con.execute(f'SELECT MAX("{col}") FROM "{spec["table"]}"').fetchone()[0])]
-        con.close()
+        try:
+            vals = database_newest(con, sql_identifier(spec["table"]), col)
+        finally:
+            con.close()
     elif kind in ("parquet", "duckdb"):
         import duckdb  # only needed for these two kinds
         if kind == "parquet":
@@ -225,9 +249,11 @@ def newest_date(spec):
             src = f"read_parquet({files!r}, hive_partitioning=true, union_by_name=true)"
             con = duckdb.connect()
         else:
-            src, con = f'"{spec["table"]}"', duckdb.connect(str(path), read_only=True)
-        vals = [str(con.execute(f'SELECT MAX("{col}") FROM {src}').fetchone()[0])]
-        con.close()
+            src, con = sql_identifier(spec["table"]), duckdb.connect(str(path), read_only=True)
+        try:
+            vals = database_newest(con, src, col)
+        finally:
+            con.close()
     else:
         raise RuntimeError(f"unknown kind {kind!r} (csv, jsonl, json, sqlite, parquet, duckdb)")
     vals = [v for v in vals if v and v != "None"]
