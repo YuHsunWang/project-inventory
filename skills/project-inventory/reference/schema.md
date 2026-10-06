@@ -45,7 +45,7 @@
 - `nodes` without `on` form the spine, top to bottom, in list order. A node with `on: <spine id>`
   hangs off that spine step, `side` `l` or `r` (default `r`). `zone` on a spine node starts a new
   labelled section. `tickets` ties ticket ids to a step (shown on the step and in its panel).
-- `icon` (optional): spider, brain, box, gear, shield, clock, truck, globe, eye, flame, check, dice,
+- `icon` (optional; missing or unknown values render a gear): spider, brain, box, gear, shield, clock, truck, globe, eye, flame, check, dice,
   table, hand, cards, play, coin, quiz, scale, pipe, lake, flask, chart, book, plug.
 - `media` (optional): what opens when a step is clicked, in order.
   - `shot`: a PNG, WebP or JPEG file (maximum 8 MiB and 16 million pixels) (absolute, `~/…`, or relative to HOME). `build.py` embeds it in the page;

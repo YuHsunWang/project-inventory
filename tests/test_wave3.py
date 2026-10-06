@@ -116,3 +116,11 @@ def test_text_token_contrast():
                 assert ratio(rgb(tokens["ink"]), bg) >= 4.5, (mode, "node", project)
     assert ".node .s{font-size:13px;color:var(--ink)" in css
     return minimum
+
+
+def test_ui_copy_defaults():
+    result = subprocess.run(["node", str(ROOT / "tests/test_ui_copy.js")],
+                            input=(S / "template.html").read_text(), capture_output=True, text=True)
+    assert result.returncode == 0, result.stdout + result.stderr
+    example = json.loads((S.parent / "reference/example-inventory.json").read_text())
+    assert [n["icon"] for n in example["projects"][0]["nodes"]] == ["globe", "chart"]
