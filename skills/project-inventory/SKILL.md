@@ -75,9 +75,14 @@ Talk to the user in their language and write page text (names, tags, diagram) in
      name containing "review" → `wait`, everything else → `open`. Ask for the `createdAt`,
      `completedAt` and `canceledAt` fields and keep them as `created` / `completed` / `canceled`
      (the page's ticket chart is rebuilt from these dates).
-   - Notion: query the database (or read the page's to-do blocks). Map its status property the
-     same way; say which values you mapped how the first time and save that in inventory.json
-     (`sources.notion.status_map`).
+   - Notion: follow the connector playbook in `reference/schema.md#notion-connector-playbook`.
+     Resolve database versus data source identity before querying; paginate every query and
+     recursively paginate child blocks until `has_more: false`. Normalize raw statuses using
+     the saved `sources.notion.status_map`; to-do `checked` maps to done/open. Preserve full
+     page/block IDs, raw status, date availability and date coverage. Unknown statuses or any
+     unread page/child make the source partial/failed, never a complete current list.
+     This contract has offline mock coverage only; validate it in an authorized workspace
+     before claiming a real Notion integration succeeded.
    - GitHub PRs: scripts paginate every open PR with `gh api graphql`. If `gh` is missing,
      not logged in (`gh auth status` fails), or cannot read the repo, use GitHub MCP instead.
      Follow every returned cursor, put normalized `number`, `title`, `url`, `createdAt`,

@@ -849,4 +849,6 @@ def test_vercel_access_scope():
     assert "only the owner's" not in pv.__doc__
 
 test_vercel_access_scope()
+from test_notion_contract import test_notion_adapter_contract
+test_notion_adapter_contract()
 print("OK")

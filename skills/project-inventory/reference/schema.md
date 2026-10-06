@@ -124,6 +124,44 @@ Only fresh tickets/PRs feed counts and trends; old tickets remain in `stale_tick
 (canceled). Notion rows use the page URL as `url`, the full page UUID as `source_id`, and a short
 display label as `id`. Never use a shortened Notion ID as the unique identity.
 
+## Notion connector playbook
+
+This is a connector contract, not a script-side Notion client. `collect.py` consumes normalized
+rows; it does not apply `status_map`. Offline mock validation is in `tests/test_notion_contract.py`.
+A real authorized workspace is still required to verify connector/API behavior.
+
+1. Confirm `sources.notion.url` and the full database or page UUID. For database queries,
+   retrieve the database and resolve its **data source** ID; database ID and data source ID
+   are different identities. If several data sources exist, have the user select one.
+   Save `database_id` and `data_source_id` in the source metadata. Legacy connectors that
+   query database IDs must record that identity and API capability explicitly; never pass
+   a database ID to a data-source query. Page/block mode records `page_id` instead.
+2. Query the selected data source using its connector operation. For every result page,
+   append `results`, pass `next_cursor` back as `start_cursor`, and continue until
+   `has_more: false`. Missing/repeated cursors, permissions errors or interrupted pages
+   mean partial/failed with `complete: false`, an error and the last successful fetch time.
+   Zero rows after the final page is a successful complete read.
+3. In page mode, list child blocks for the full page UUID. Paginate each child list by the
+   same rule, then recursively visit **every** block with `has_children`, including toggles,
+   list items and nested to-dos. Emit only `to_do` blocks; `checked: true` → `done`, false →
+   `open`. Use the full block UUID as `source_id` and retain the full containing `page_id`;
+   sibling tasks must not collapse to their parent page. Never emit code-block examples.
+4. For database pages preserve `raw_status` (status/select property name) and use the exact
+   saved `status_map` → `wait | open | done | dead`. Unknown or absent statuses retain
+   `raw_status`, use `open` as a provisional state and report the source partial with an
+   explicit error; these rows do not feed fresh metrics. Do not guess from translated labels.
+   Use the full page UUID as `source_id`, its URL as `url`, and a short label only as `id`.
+5. Preserve provider `created_time` as `created`. Map `completed`, `canceled`, `reopened`
+   only from confirmed lifecycle properties/events. Never infer completion from
+   `last_edited_time`, current status or checked state. Unavailable dates are null.
+   Each row has `date_availability` mapping these four fields to booleans; the source has
+   `date_coverage` mapping each field to `{known, total}`. Coverage counts date availability,
+   not reliable history: build.py additionally excludes inconsistent/reopened lifecycles.
+6. Gather output follows the source run/provenance contract above, plus source identity and
+   `date_coverage`; normalized tickets include `raw_status` and `date_availability`.
+   `status: ok, complete: true` is allowed only after all query/child pages and status mappings
+   succeed. Record errors with `notion:` and include `notion` in `read` only after a read.
+
 ## summaries.json (written by Claude, kept across runs)
 
 ```json
