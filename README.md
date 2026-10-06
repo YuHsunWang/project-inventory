@@ -22,24 +22,51 @@ The home page lists everything that waits on you, across all projects.
 /plugin install project-inventory@project-inventory
 ```
 
+After installation, start a new Claude Code session (or reload plugins) and run
+`/project-inventory:project-inventory`. The plugin name in
+`.claude-plugin/plugin.json` supplies the namespace; `/project-inventory` is the
+standalone skill command, not the installed plugin command.
+See the [Claude Code plugin loading rules](https://code.claude.com/docs/en/plugins).
+
 ### Other AI coding tools (Codex, Hermes, …)
 
-No MCP server needed. The skill is a folder with `SKILL.md` (the steps) and `scripts/` (plain
-Python), the same layout Codex and Hermes read skills from. Copy the folder in:
+No MCP server needed. From a checkout of this repository, install the skill explicitly:
 
-```
+```sh
+# Clean home / first install: clone once, then enter the checkout.
 git clone https://github.com/YuHsunWang/project-inventory
-cp -r project-inventory/skills/project-inventory ~/.codex/skills/     # Codex
-cp -r project-inventory/skills/project-inventory ~/.hermes/skills/    # Hermes
+cd project-inventory
+# Codex (also works if ~/.codex already exists without a skills folder):
+mkdir -p ~/.codex/skills/project-inventory
+cp -R skills/project-inventory/. ~/.codex/skills/project-inventory/
+test -f ~/.codex/skills/project-inventory/SKILL.md && echo "Codex skill files OK"
+# Hermes (also works if ~/.hermes already exists without a skills folder):
+mkdir -p ~/.hermes/skills/project-inventory
+cp -R skills/project-inventory/. ~/.hermes/skills/project-inventory/
+test -f ~/.hermes/skills/project-inventory/SKILL.md && echo "Hermes skill files OK"
 ```
 
-Any other tool that can run shell commands: tell it to read `skills/project-inventory/SKILL.md`
-and follow it. Claude-only parts: the claude.ai Artifact option and `/schedule`. Linear and
-Notion need that tool's own connector (or `LINEAR_API_KEY` for Linear).
+**Existing install:** enter your existing repository checkout and run the matching
+`mkdir`, `cp`, and `test` lines above. Other skills remain in their own folders.
+**Reinstall:** after updating that checkout, repeat those same lines; files are
+updated in place, without creating a nested `project-inventory` folder. Start a
+new tool session so it discovers the updated skill.
+
+| Host | Verification / version |
+|---|---|
+| Claude Code plugin | Expected compatible; no host version verified. Manual loading check pending: reload/new session, then `/project-inventory:project-inventory`. |
+| Codex standalone | File installation tested in clean, existing and reinstall homes; no host version verified. Manual loading check pending in a new session. |
+| Hermes standalone | Same file installation checks; expected compatible, no host version verified. Manual loading check pending in a new session. |
+
+Any other tool that can run shell commands: tell it to read
+`skills/project-inventory/SKILL.md` and follow it. `/schedule` is a Claude Code
+host feature. Linear and Notion need that tool's own connector (or
+`LINEAR_API_KEY` for Linear).
 
 ## Use
 
-Say "inventory my projects" or run `/project-inventory`.
+Say "inventory my projects" or run `/project-inventory:project-inventory` with the plugin
+(`/project-inventory` for a standalone skill).
 
 - **First run.** Claude asks which projects to include and where each one lives. It finds data files and asks which ones to watch, then drafts each diagram. Everything is saved to `~/.project-inventory/inventory.json`.
 - **Later runs.** Claude re-reads every source and rebuilds the page. It also writes the summary for any week that has none yet, or got new work since its summary was written (usually just the current week). On the first run that means every past week, so the first run takes longer.

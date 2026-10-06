@@ -5,11 +5,17 @@ description: >
   "how it works" diagram, tickets (Linear / Notion), GitHub PRs, git state, Obsidian
   note tasks, data freshness, recent activity and trends, plus a home list of what
   waits on the user. Use when the user says "inventory my projects", "project status",
-  "盤點專案", "專案總覽", "/project-inventory", or asks which data is out of date
+  "盤點專案", "專案總覽", "/project-inventory", "/project-inventory:project-inventory", or asks which data is out of date
   across projects. First run sets up inventory.json with the user; later runs just refresh.
 ---
 
 # project-inventory
+
+Installed plugin command: `/project-inventory:project-inventory`; standalone skill:
+`/project-inventory`. After installation or replacement, reload plugins/start a new
+host session. File-copy checks cover clean, existing and reinstall homes; actual
+Claude Code, Codex and Hermes loading and host versions remain manually unverified.
+See the repository README for explicit installation paths.
 
 All state lives in one folder, `HOME` = `~/.project-inventory` unless the user names another:
 
