@@ -15,7 +15,7 @@ blocks stale rebuilds and the last page retains its data/time with a failure ban
 """
 import argparse, csv, datetime as dt, json, os, re, shutil, sqlite3, subprocess, sys, uuid, urllib.error, urllib.request
 from pathlib import Path
-from validation import validate_inventory, validate_gathered, validate_snapshot
+from validation import validate_inventory, validate_gathered, validate_snapshot, normalize_date, calendar_date, date_order, timezone
 
 RECENT_DAYS, WEEKS, HISTORY = 14, 12, 3000  # HISTORY: newest commits kept per checkout for the progress tab
 TASK = re.compile(r"^\s*[-*]\s+\[( |x|X)\]\s+(.*)$")
@@ -164,8 +164,8 @@ def linear_tickets(project):
             st = i["state"]
             state = {"completed": "done", "canceled": "dead"}.get(st["type"]) or ("wait" if "review" in st["name"].lower() else "open")
             out.append({"id": i["identifier"], "source_id": i.get("id", i["identifier"]), "title": i["title"], "state": state, "url": i["url"], "source": "linear",
-                        "created": i["createdAt"][:10], "completed": (i["completedAt"] or "")[:10] or None,
-                        "canceled": (i["canceledAt"] or "")[:10] or None})
+                        "created": i["createdAt"], "completed": i["completedAt"] or None,
+                        "canceled": i["canceledAt"] or None})
         if not page["pageInfo"]["hasNextPage"]:
             return out
         cursor = page["pageInfo"]["endCursor"]
@@ -208,13 +208,13 @@ def database_newest(con, src, col):
     actual = next((c for c in columns if c.lower() == col.lower()), None) if isinstance(col, str) else None
     if actual is None:
         raise RuntimeError(f"column {col!r} not found in {src} (columns: {', '.join(columns[:8])})")
-    value, rows = con.execute(f"SELECT MAX({sql_identifier(actual)}), COUNT(*) FROM {src}").fetchone()
-    if not rows:
+    values = [r[0] for r in con.execute(f"SELECT {sql_identifier(actual)} FROM {src}")]
+    if not values:
         raise RuntimeError(f"empty table/source {src}: no values in column {col!r}")
-    return [str(value)]
+    return [str(value) for value in values if value is not None]
 
 
-def newest_date(spec):
+def newest_date(spec, zone="UTC"):
     """Largest value of the date column/field, read from the data itself (never file mtimes)."""
     path, kind, col = Path(spec["path"]).expanduser(), spec["kind"], spec.get("column")
     if kind == "csv":
@@ -261,12 +261,18 @@ def newest_date(spec):
     vals = [v for v in vals if v and v != "None"]
     if not vals:
         raise RuntimeError(f"no values in column {col!r}")
-    return max(vals)[:19]
+    try:
+        newest = max(vals, key=lambda value: date_order(value, zone, f"{path}:{col}"))
+        return normalize_date(newest, zone, f"{path}:{col}").isoformat()
+    except ValueError as e:
+        raise RuntimeError(str(e)) from e
 
 
-def data_check(spec, today):
-    newest = newest_date(spec)
-    age = (today - dt.date.fromisoformat(newest[:10])).days
+def data_check(spec, today, zone="UTC"):
+    newest = newest_date(spec, zone)
+    age = (today - calendar_date(newest, zone)).days
+    if age < 0:
+        raise RuntimeError(f"{spec['path']}:{spec.get('column')}: future date {newest}; allowed through {today} in {zone}")
     limit = spec.get("max_age_days", 1)
     return {"label": spec.get("label", spec["path"]), "path": spec["path"], "newest": newest,
             "age_days": age, "max_age_days": limit, "stale": age > limit}
@@ -291,7 +297,8 @@ def gathered_state(g, name, run_id, attempted_at, previous=None):
 
 def collect_snapshot(home, requested_run=None, script_only=False):
     inv = validate_inventory(json.loads((home / "inventory.json").read_text(encoding="utf-8")))
-    today = dt.date.today()
+    zone = inv.get("timezone", "UTC")
+    today = dt.datetime.now(timezone(zone)).date()
     gathered_f = home / "gathered" / f"{today}.json"
     gathered = validate_gathered(json.loads(gathered_f.read_text(encoding="utf-8")) if gathered_f.exists() else {}, inv, str(gathered_f))
     previous_files = sorted(x for x in (home / "facts").glob("*.json") if x.stem <= today.isoformat())
@@ -308,7 +315,7 @@ def collect_snapshot(home, requested_run=None, script_only=False):
     # a gathered file under another date usually means Claude's date and this computer's date differ
     others = sorted(x.name for x in (home / "gathered").glob("*.json") if x != gathered_f) if not gathered_f.exists() else []
     other = f"; newest gathered file is {others[-1]}, this computer's date is {today}" if others else ""
-    snap = {"date": today.isoformat(), "generated_at": dt.datetime.now().isoformat(timespec="seconds"),
+    snap = {"date": today.isoformat(), "generated_at": dt.datetime.now(timezone(zone)).isoformat(timespec="seconds"),
             "gathered": gathered_f.exists(), "run_id": run_id, "gathered_run_id": offered, "projects": {}}
     failed = 0
     for p in inv["projects"]:
@@ -376,7 +383,7 @@ def collect_snapshot(home, requested_run=None, script_only=False):
                 f["errors"].append(f'obsidian {o["path"]}: {e}')
         for d in p.get("data", []):
             try:
-                f["data"].append(data_check(d, today))
+                f["data"].append(data_check(d, today, zone))
             except Exception as e:
                 f["errors"].append(f'data {d.get("label", d["path"])}: {e}')
                 f["data"].append({"label": d.get("label", d["path"]), "path": d["path"], "error": str(e)})

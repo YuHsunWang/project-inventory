@@ -8,7 +8,7 @@ file, a claude.ai Artifact, on Vercel and on GitHub Pages.
 import argparse, base64, hashlib, re, datetime as dt, html as htmllib, json, struct, sys, zlib
 from pathlib import Path
 from collect import atomic_write
-from validation import validate_inventory, validate_snapshot
+from validation import validate_inventory, validate_snapshot, calendar_date
 
 HERE = Path(__file__).resolve().parent
 STATES = ("wait", "open", "done", "dead")
@@ -243,6 +243,11 @@ def build_page(home, snapshot=None, run_id=None):
         f = snap["projects"].get(p["key"])
         if f is None:
             raise ValueError(f"project {p['key']} is not in this snapshot - run collect.py HOME --refresh again")
+        zone = inv.get("timezone", "UTC")
+        for ticket in f["tickets"]:
+            for field in ("created", "completed", "canceled", "reopened"):
+                if ticket.get(field):
+                    ticket[field] = calendar_date(ticket[field], zone).isoformat()
         availability = ticket_state(p, f, snap)
         on_node = {t: n["id"] for n in p.get("nodes", []) for t in n.get("tickets", [])}  # ticket id -> step
         f["tickets"] = [{**t, "node": t.get("node", on_node.get(t.get("id")))} for t in f["tickets"]]

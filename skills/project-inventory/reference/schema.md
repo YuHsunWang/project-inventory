@@ -6,6 +6,7 @@
 {
   "title": "專案總覽",
   "lang": "zh-TW",
+  "timezone": "Asia/Taipei",          // optional IANA timezone; default UTC
   "publish": {"to": "local"},
   "projects": [
     {
@@ -76,7 +77,19 @@
 | `parquet` | column; `path` may be a folder (reads `**/*.parquet`, hive partitions) | needs `pip install duckdb` |
 | `duckdb` | column | `"table"`, needs duckdb |
 
-  The newest value must start with an ISO date (`2026-10-02…`). `max_age_days` default 1.
+  Values must be ISO calendar dates or timestamps. `timezone` is an IANA name
+  (default `UTC`, e.g. `Asia/Taipei`). Offset timestamps (`Z`, `+08:00`) are
+  converted to that timezone before comparison; naive timestamps use that zone.
+  Pure dates keep their calendar day and compare as midnight in that zone.
+  Newest means the latest normalized instant, including for database columns
+  containing mixed formats; offsets are retained in output. Null/empty rows are
+  ignored; an all-empty column or any nonempty invalid date reports an error.
+  `age_days` uses calendar days in the inventory timezone. Future dates beyond
+  today have zero tolerance and report an error (unknown freshness), never a
+  negative fresh age. Times later within today remain age 0.
+  `max_age_days` defaults to 1: stale exactly when `age_days > max_age_days`;
+  equality remains fresh. Ticket timestamps are kept intact during collection
+  and use the same timezone for chart, recent-completion and history dates.
 
 ## gathered/&lt;date&gt;.json (written by Claude each run)
 

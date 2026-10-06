@@ -3,6 +3,7 @@ import datetime as dt
 import json
 import re
 from urllib.parse import urlsplit
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 STATES = ("wait", "open", "done", "dead")
 RESERVED = {"home", "projects", "brand", "menubtn", "menulabel", "stamp", "menu", "menuitems", "foot"}
@@ -72,6 +73,7 @@ def links(value, path):
 
 def validate_inventory(inv):
     typed(inv, dict, "inventory")
+    timezone(inv.get("timezone", "UTC"))
     keys = set()
     for field in ("title", "lang"):
         if field in inv:
@@ -227,3 +229,30 @@ def validate_snapshot(snap, inv):
     parse_date(snap.get("generated_at"), "snapshot.generated_at")
     validate_project_rows(snap.get("projects"), inv, "snapshot.projects")
     return snap
+
+
+def timezone(name="UTC"):
+    string(name, "timezone")
+    try:
+        return ZoneInfo(name)
+    except (ZoneInfoNotFoundError, ValueError):
+        fail("timezone", f"unknown IANA timezone {name!r}")
+
+
+def normalize_date(value, zone="UTC", path="date"):
+    """Dates keep their calendar day; naive timestamps use the inventory timezone."""
+    parsed = parse_date(value, path)
+    tz = timezone(zone)
+    if isinstance(parsed, dt.datetime):
+        return (parsed if parsed.tzinfo else parsed.replace(tzinfo=tz)).astimezone(tz)
+    return parsed
+
+
+def calendar_date(value, zone="UTC", path="date"):
+    parsed = normalize_date(value, zone, path)
+    return parsed.date() if isinstance(parsed, dt.datetime) else parsed
+
+
+def date_order(value, zone="UTC", path="date"):
+    parsed = normalize_date(value, zone, path)
+    return parsed if isinstance(parsed, dt.datetime) else dt.datetime.combine(parsed, dt.time(), timezone(zone))

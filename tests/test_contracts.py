@@ -103,3 +103,35 @@ def run_validation_tests(tmp, run):
     test_inventory_contract_paths()
     test_gathered_contract_and_dedupe()
     test_contract_cli_failures(tmp / 'contracts', run)
+    test_timezone_normalization_and_boundary(tmp)
+
+
+def test_timezone_normalization_and_boundary(tmp):
+    assert v.calendar_date('2026-10-04T23:30:00Z', 'Asia/Taipei') == dt.date(2026, 10, 5)
+    assert v.calendar_date('2026-10-05T07:30:00+08:00', 'UTC') == dt.date(2026, 10, 4)
+    assert v.calendar_date('2026-10-04', 'Asia/Taipei') == dt.date(2026, 10, 4)
+    assert v.calendar_date('2026-10-05T00:30:00', 'Asia/Taipei') == dt.date(2026, 10, 5)
+    expect_error(lambda: v.validate_inventory({'timezone': 'Bad/Zone', 'projects': []}), 'timezone: unknown')
+    for value in ('', 'bad', '2026-02-30', '20261004', '2026-10-04junk'):
+        expect_error(lambda: v.normalize_date(value), 'date:')
+    file = tmp / 'dates.jsonl'
+    spec = {'kind': 'jsonl', 'path': str(file), 'column': 'date', 'max_age_days': 1}
+    file.write_text('\n'.join(json.dumps({'date': x}) for x in [None, '', '2026-10-05',
+        '2026-10-05T00:15:00+08:00', '2026-10-04T23:30:00Z']))
+    assert collect.newest_date(spec, 'Asia/Taipei') == '2026-10-05T07:30:00+08:00'
+    assert not collect.data_check(spec, dt.date(2026, 10, 6), 'Asia/Taipei')['stale'], 'equality is fresh'
+    assert collect.data_check(spec, dt.date(2026, 10, 7), 'Asia/Taipei')['stale'], 'limit + 1 is stale'
+    for value, message in [('2099-01-01', 'future date'), ('bad', 'invalid ISO'), ('', 'no values')]:
+        file.write_text(json.dumps({'date': value}))
+        try:
+            collect.data_check(spec, dt.date(2026, 10, 6), 'Asia/Taipei')
+        except RuntimeError as e:
+            assert message in str(e), str(e)
+        else:
+            raise AssertionError('invalid/future/empty dates must not look fresh')
+    import sqlite3
+    db = tmp / 'mixed.sqlite'
+    with sqlite3.connect(db) as con:
+        con.execute('CREATE TABLE dates (day TEXT)')
+        con.executemany('INSERT INTO dates VALUES (?)', [('2026-10-05T00:15:00+08:00',), ('2026-10-04T23:30:00Z',)])
+    assert collect.newest_date({'kind': 'sqlite', 'path': str(db), 'column': 'day', 'table': 'dates'}, 'Asia/Taipei') == '2026-10-05T07:30:00+08:00'
