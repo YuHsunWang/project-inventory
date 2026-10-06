@@ -87,13 +87,17 @@ python3 $S/publish_vercel.py ~/.project-inventory <vercel-project-name>
 Run without Claude, the scripts do not refresh Notion, or Linear unless `LINEAR_API_KEY` is set,
 and they write no week summaries: new weeks show "no summary yet" until the next Claude run
 (`build.py` lists them in `out/summaries-needed.json`).
-The page then says those sources were not read, and `collect.py` exits 1. So chain the two with
-`;`, not `&&` — with `&&` the page would never be rebuilt:
+Use `python3 collect.py HOME --refresh` for one refresh: it builds only that run's snapshot.
+Exit 0 means success, 1 means partial collection (the page shows failed sources), and 2 means
+fatal failure. `refresh.json` records the run and exact snapshot. Fatal failures retain the
+last page's data/time with a visible failure summary; fix the input or permissions and rerun.
+Do not publish after exit 2. Standalone build checks this manifest; legacy homes without one
+can still be built. For cron, add `--script-only` to avoid consuming old MCP results:
 
 ```
 # crontab: cron has almost no environment. Give it PATH (git, gh), and keep LINEAR_API_KEY in a
 # file only you can read (chmod 600) rather than in the crontab line.
-0 7 * * * PATH=/usr/local/bin:/usr/bin:/bin sh -c '. ~/.project-inventory/env; cd ~/project-inventory/skills/project-inventory/scripts; python3 collect.py ~/.project-inventory; python3 build.py ~/.project-inventory'
+0 7 * * * PATH=/usr/local/bin:/usr/bin:/bin sh -c '. ~/.project-inventory/env; cd ~/project-inventory/skills/project-inventory/scripts; python3 collect.py ~/.project-inventory --refresh --script-only'
 ```
 
 `~/.project-inventory/env` holds one line, `export LINEAR_API_KEY=lin_api_...` (leave it empty if

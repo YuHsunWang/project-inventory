@@ -30,7 +30,7 @@ home = tmp / "home"; (home / "gathered").mkdir(parents=True)
     "sources": {"notion": {"url": "x"}, "local": [{"label": "a", "path": str(a)}, {"label": "a-wt", "path": str(tmp / "a-wt")},
                                                   {"label": "b", "path": str(b)}]}}]}))
 r = run("collect.py", str(home))
-# Notion not gathered -> exit 1 (that is why the docs say `;`, not `&&`), and the hint names the other date
+# Notion not gathered -> partial exit 1; build remains allowed, with a hint naming the other date
 assert r.returncode == 1, r.stdout + r.stderr
 assert "newest gathered file is 2000-01-01.json" in r.stdout, r.stdout
 facts = json.loads(next((home / "facts").glob("*.json")).read_text())["projects"]["p"]
@@ -307,6 +307,92 @@ def test_git_fetch_failures():
     result = run("collect.py", str(root)); assert result.returncode == 1
     assert snapshot(root)["projects"]["p"]["repos"][0]["last_fetched_at"] == last
 
+def test_fatal_refresh_inputs():
+    for name, bad_inventory, added in [("invalid-inventory", True, False),
+                                      ("invalid-gathered", False, False),
+                                      ("new-project-fatal", False, True)]:
+        root = fixture(name, {})
+        result = run("collect.py", str(root), "--refresh"); assert result.returncode == 0, result.stderr
+        before = page_data(root); saved = (root / "facts" / f"{dt.date.today()}.json").read_bytes()
+        if bad_inventory:
+            (root / "inventory.json").write_text("{bad")
+        else:
+            if added:
+                inv = json.loads((root / "inventory.json").read_text())
+                inv["projects"].append({"key": "new", "name": "New", "color": "#000", "sources": {}})
+                (root / "inventory.json").write_text(json.dumps(inv))
+            (root / "gathered" / f"{dt.date.today()}.json").write_text("{bad")
+        result = run("collect.py", str(root), "--refresh")
+        assert result.returncode == 2 and "FAILED:" in result.stderr and "rerun collect.py HOME --refresh" in result.stderr
+        assert "Traceback" not in result.stderr and "built " not in result.stdout
+        assert (root / "facts" / f"{dt.date.today()}.json").read_bytes() == saved
+        manifest = json.loads((root / "refresh.json").read_text()); assert manifest["status"] == "fatal"
+        # Even the old documented collect; build sequence cannot hide this failure.
+        result = run("build.py", str(root)); assert result.returncode == 2 and "built " not in result.stdout
+        page = (root / "out/index.html").read_text()
+        assert 'role="alert"' in page and "FAILED: refresh" in page
+        assert before["generated_at"] in page, "failure must retain the last-good timestamp"
+        assert "FAILED: refresh" in (root / "out/artifact.html").read_text()
+        # Restore inputs: one command recovers and removes the failure banner.
+        (root / "inventory.json").write_text(json.dumps({"projects": [{"key": "p", "name": "P", "color": "#c00", "sources": {}}]}))
+        (root / "gathered" / f"{dt.date.today()}.json").write_text("{}")
+        result = run("collect.py", str(root), "--refresh"); assert result.returncode == 0, result.stderr
+        assert "<!--refresh-failure-->" not in (root / "out/index.html").read_text()
+
+def test_snapshot_write_failure():
+    root = fixture("write-failed", {})
+    assert run("collect.py", str(root), "--refresh").returncode == 0
+    saved = (root / "facts" / f"{dt.date.today()}.json").read_bytes()
+    original_replace = Path.replace
+    def deny_snapshot(path, target):
+        if Path(target).parent == root / "facts": raise PermissionError("fixture: facts write denied")
+        return original_replace(path, target)
+    output = io.StringIO()
+    from contextlib import redirect_stderr
+    with patch.object(Path, "replace", deny_snapshot), patch.object(sys, "argv", ["collect.py", str(root), "--refresh"]), redirect_stdout(output), redirect_stderr(output):
+        try: collect.main()
+        except SystemExit as e: assert e.code == 2
+    assert "facts write denied" in output.getvalue() and "rerun collect.py HOME --refresh" in output.getvalue()
+    assert (root / "facts" / f"{dt.date.today()}.json").read_bytes() == saved
+    assert not list((root / "facts").glob(".pending-*")), "failed atomic writes must clean up"
+    result = run("build.py", str(root)); assert result.returncode == 2
+    assert "FAILED: refresh" in (root / "out/index.html").read_text()
+
+def test_manifest_write_failure():
+    root = fixture("manifest-denied", {})
+    assert run("collect.py", str(root), "--refresh").returncode == 0
+    original_write = collect.atomic_write
+    def deny_manifest(path, text):
+        if path.name == "refresh.json": raise PermissionError("fixture: manifest denied")
+        return original_write(path, text)
+    from contextlib import redirect_stderr
+    output = io.StringIO()
+    with patch.object(collect, "atomic_write", side_effect=deny_manifest), patch.object(sys, "argv", ["collect.py", str(root), "--refresh"]), redirect_stdout(output), redirect_stderr(output):
+        try: collect.main()
+        except SystemExit as e: assert e.code == 2
+    assert "no build was attempted" in output.getvalue()
+    result = run("build.py", str(root)); assert result.returncode == 2 and "latest refresh failed" in result.stderr
+    assert "FAILED: refresh" in (root / "out/index.html").read_text()
+    assert run("collect.py", str(root), "--refresh").returncode == 0
+
+def test_refresh_manifest_and_partial():
+    root = fixture("partial-refresh", {"notion": {"url": "x"}})
+    gather(root, tickets=[OLD_TICKET])
+    result = run("collect.py", str(root), "--refresh", "--script-only")
+    assert result.returncode == 1 and "built " in result.stdout, result.stdout + result.stderr
+    manifest = json.loads((root / "refresh.json").read_text())
+    assert manifest["status"] == "partial" and manifest["run_id"] == snapshot(root)["run_id"]
+    assert page_data(root)["projects"][0]["counts"]["wait"] == 0
+    result = run("build.py", str(root), "--run-id", "wrong-run")
+    assert result.returncode == 2 and "run_id does not match" in result.stderr and "built " not in result.stdout
+    assert run("collect.py", str(root), "--refresh", "--script-only").returncode == 1
+    result = run("build.py", str(root), "--snapshot", str(root / "facts" / "other.json"))
+    assert result.returncode == 2 and "snapshot does not match" in result.stderr
+
+test_fatal_refresh_inputs()
+test_snapshot_write_failure()
+test_manifest_write_failure()
+test_refresh_manifest_and_partial()
 test_git_fetch_failures()
 test_same_day_reuse()
 test_cron_takeover()

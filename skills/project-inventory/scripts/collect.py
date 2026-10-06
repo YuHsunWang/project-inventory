@@ -10,8 +10,10 @@ Script-side sources: local git checkouts, GitHub PRs via `gh`, Obsidian task lin
 and Linear when $LINEAR_API_KEY is set (then Claude does not need to gather Linear).
 Nothing here needs a package outside the standard library except parquet/duckdb checks (duckdb).
 Exit 1 when any source failed; the failure is also written into the snapshot, so the page shows it.
+Use --refresh to collect and build one run. Exit 2 means fatal input/write failure; refresh.json
+blocks stale rebuilds and the last page retains its data/time with a failure banner.
 """
-import csv, datetime as dt, json, os, re, shutil, sqlite3, subprocess, sys, uuid, urllib.error, urllib.request
+import argparse, csv, datetime as dt, json, os, re, shutil, sqlite3, subprocess, sys, uuid, urllib.error, urllib.request
 from pathlib import Path
 
 RECENT_DAYS, WEEKS, HISTORY = 14, 12, 3000  # HISTORY: newest commits kept per checkout for the progress tab
@@ -209,8 +211,7 @@ def gathered_state(g, name, run_id, attempted_at, previous=None):
                         fetched, status, bool(fresh), error or (None if fresh else "not gathered today for this run; gather the source again"))
 
 
-def main():
-    home = Path(sys.argv[1] if len(sys.argv) > 1 else "~/.project-inventory").expanduser()
+def collect_snapshot(home, requested_run=None, script_only=False):
     inv = json.loads((home / "inventory.json").read_text(encoding="utf-8"))
     today = dt.date.today()
     gathered_f = home / "gathered" / f"{today}.json"
@@ -219,8 +220,10 @@ def main():
     previous = json.loads(previous_f.read_text(encoding="utf-8")) if previous_f.exists() else {}
     offered = gathered.get("_run", {}).get("run_id")
     run_id = offered if offered and offered != previous.get("run_id") else uuid.uuid4().hex
-    if "--run-id" in sys.argv:
-        run_id = sys.argv[sys.argv.index("--run-id") + 1]
+    if requested_run:
+        run_id = requested_run if requested_run != previous.get("run_id") else uuid.uuid4().hex
+    if script_only:
+        run_id = uuid.uuid4().hex
     attempted_at = dt.datetime.now().astimezone().isoformat(timespec="seconds")
     have_gh = shutil.which("gh") is not None
     # a gathered file under another date usually means Claude's date and this computer's date differ
@@ -298,15 +301,66 @@ def main():
         failed += len(f["errors"])
         snap["projects"][p["key"]] = f
     out = home / "facts" / f"{today}.json"
-    out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(json.dumps(snap, ensure_ascii=False, indent=1), encoding="utf-8")
+    atomic_write(out, json.dumps(snap, ensure_ascii=False, indent=1))
     for k, f in snap["projects"].items():
         print(f'{k}: {len(f["repos"])} repos, {len(f["prs"])} PRs, {len(f["tickets"])} tickets, '
               f'{sum(o["open"] for o in f["obsidian"])} open notes tasks, {len(f["data"])} data, {len(f["errors"])} errors')
         for e in f["errors"]:
             print(f"  ERROR {e}")
     print(f"wrote {out}")
-    sys.exit(1 if failed else 0)
+    return (1 if failed else 0), out, run_id
+
+
+def atomic_write(path, text):
+    import tempfile
+    path.parent.mkdir(parents=True, exist_ok=True)
+    pending = None
+    try:
+        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=path.parent,
+                                         prefix=".pending-", delete=False) as f:
+            pending = Path(f.name)
+            f.write(text)
+        pending.replace(path)
+    finally:
+        if pending is not None:
+            pending.unlink(missing_ok=True)
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("home", nargs="?", default="~/.project-inventory")
+    parser.add_argument("--run-id", help="MCP gather run to consume")
+    parser.add_argument("--refresh", action="store_true", help="collect and build only this run's snapshot")
+    parser.add_argument("--script-only", action="store_true", help="cron: refresh APIs without consuming MCP results")
+    args = parser.parse_args()
+    home = Path(args.home).expanduser()
+    manifest_f = home / "refresh.json"
+    manifest = {"run_id": args.run_id or uuid.uuid4().hex,
+                "attempted_at": dt.datetime.now().astimezone().isoformat(),
+                "status": "running", "snapshot": None, "error": None}
+    try:
+        atomic_write(manifest_f, json.dumps(manifest))
+        code, out, rid = collect_snapshot(home, args.run_id, args.script_only)
+        manifest.update(run_id=rid, status="partial" if code else "ok", snapshot=str(out.resolve()))
+        atomic_write(manifest_f, json.dumps(manifest))
+    except (OSError, ValueError, KeyError, TypeError, AttributeError) as e:
+        message = f"FAILED: collection could not complete: {e}. Fix the input or directory permissions and rerun collect.py HOME --refresh."
+        manifest.update(status="fatal", error=message)
+        try:
+            atomic_write(manifest_f, json.dumps(manifest))
+        except OSError as record_error:
+            print(f"FAILED: cannot record refresh failure: {record_error}; no build was attempted", file=sys.stderr)
+        # Preserve the last page's data and time, but mark this failed attempt visibly.
+        import build
+        build.mark_failed_page(home, manifest)
+        print(message, file=sys.stderr)
+        sys.exit(2)
+    if args.refresh:
+        result = subprocess.run([sys.executable, str(Path(__file__).with_name("build.py")), str(home),
+                                 "--snapshot", str(out), "--run-id", rid])
+        if result.returncode:
+            sys.exit(2)
+    sys.exit(code)
 
 
 if __name__ == "__main__":

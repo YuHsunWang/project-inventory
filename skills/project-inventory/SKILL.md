@@ -80,9 +80,10 @@ Talk to the user in their language and write page text (names, tags, diagram) in
      (see schema). Track MCP PRs per `github:<owner/repo>`. Never reuse a gather run.
    - List every source you read in `read`. If a source fails, write the error into `errors`
      (start the text with the source name) — never drop it silently.
-2. `python3 SCRIPTS/collect.py HOME` — git (fetches origin first), PRs via `gh`, Obsidian tasks,
-   data checks. Exit 1 = some source failed; the page shows it. Read the printed ERROR lines.
-3. `python3 SCRIPTS/build.py HOME` → `HOME/out/index.html`.
+2. `python3 SCRIPTS/collect.py HOME --refresh` — collect and build this run's exact snapshot.
+   Exit 0 = success; 1 = partial, with visible errors; 2 = fatal, retaining last-good data/time
+   with a failure summary. On exit 2 fix the input or permissions and rerun; do not publish.
+3. `python3 SCRIPTS/build.py HOME` rebuilds only the snapshot in `refresh.json` → `HOME/out/index.html`.
    It prints `SUMMARIES n weeks need a summary: HOME/out/summaries-needed.json` when a week has
    no summary yet or got new work since its summary was written (the current week, usually; on
    the first run, every past week). For each listed week write 2–3 short sentences in the page
@@ -130,6 +131,6 @@ Never send the page anywhere the user did not choose.
   dates and the commit chart from git history, so both show on the first run.
 - `build.py` prints `WARN` lines (a screenshot not found, a page over 8 MB). Report them.
 - Scheduling is not built in. If the user wants it nightly, point them to `/schedule` in Claude Code (or cron
-  for the script-only part: `collect.py HOME; build.py HOME` — `;`, not `&&`: collect.py exits 1
-  whenever Notion (or Linear without `LINEAR_API_KEY`) was not gathered, so `&&` would never build.
+  for the script-only part: `collect.py HOME --refresh --script-only`; partial failures still build,
+  fatal failures stop and retain last-good data with a warning.
   Cron has a bare environment: set `PATH` so it finds git and gh, and `LINEAR_API_KEY` if used).

@@ -5,8 +5,9 @@
 Screenshots named in a step's `media` are embedded in the page, so the one file works as a local
 file, a claude.ai Artifact, on Vercel and on GitHub Pages.
 """
-import base64, hashlib, re, datetime as dt, html as htmllib, json, struct, sys, zlib
+import argparse, base64, hashlib, re, datetime as dt, html as htmllib, json, struct, sys, zlib
 from pathlib import Path
+from collect import atomic_write
 
 HERE = Path(__file__).resolve().parent
 STATES = ("wait", "open", "done", "dead")
@@ -205,13 +206,31 @@ def embed_media(nodes, home, warn):
                          else f"step {n.get('id')}: screenshot rejected: {path}: {e}")
 
 
-def main():
-    home = Path(sys.argv[1] if len(sys.argv) > 1 else "~/.project-inventory").expanduser()
+def build_page(home, snapshot=None, run_id=None):
+    manifest_f = home / "refresh.json"
+    manifest = json.loads(manifest_f.read_text(encoding="utf-8")) if manifest_f.exists() else None
+    last_page = home / "out" / "index.html"
+    if last_page.exists():
+        marker = re.search(r'data-refresh-failure-at="([^"]+)"', last_page.read_text(encoding="utf-8"))
+        if marker and (not manifest or dt.datetime.fromisoformat(marker[1]) >=
+                       dt.datetime.fromisoformat(manifest["attempted_at"])):
+            raise ValueError("latest refresh failed; rerun collect.py HOME --refresh before rebuilding")
+    if manifest:
+        if manifest.get("status") not in ("ok", "partial"):
+            raise ValueError(manifest.get("error") or "latest refresh is incomplete; rerun collect.py HOME --refresh")
+        expected = Path(manifest["snapshot"])
+        if snapshot and snapshot.resolve() != expected.resolve():
+            raise ValueError("snapshot does not match the latest refresh; rerun collect.py HOME --refresh")
+        if run_id and run_id != manifest["run_id"]:
+            raise ValueError("run_id does not match the latest refresh; rerun collect.py HOME --refresh")
+        snapshot, run_id = expected, manifest["run_id"]
     inv = json.loads((home / "inventory.json").read_text(encoding="utf-8"))
     snaps = sorted((home / "facts").glob("*.json"))
-    if not snaps:
-        sys.exit("FAILED: no snapshot in facts/ - run collect.py first")
-    snap = json.loads(snaps[-1].read_text(encoding="utf-8"))
+    if not snaps and snapshot is None:
+        raise ValueError("no snapshot in facts/ - run collect.py HOME --refresh first")
+    snap = json.loads((snapshot or snaps[-1]).read_text(encoding="utf-8"))
+    if run_id and snap.get("run_id") != run_id:
+        raise ValueError("snapshot run_id differs from this refresh; rerun collect.py HOME --refresh")
     today = dt.date.fromisoformat(snap["date"])
     sums_f = home / "summaries.json"
     sums = json.loads(sums_f.read_text(encoding="utf-8")) if sums_f.exists() else {}
@@ -219,7 +238,7 @@ def main():
     for p in inv["projects"]:
         f = snap["projects"].get(p["key"])
         if f is None:
-            sys.exit(f"FAILED: project {p['key']} is not in the newest snapshot - run collect.py again")
+            raise ValueError(f"project {p['key']} is not in this snapshot - run collect.py HOME --refresh again")
         on_node = {t: n["id"] for n in p.get("nodes", []) for t in n.get("tickets", [])}  # ticket id -> step
         f["tickets"] = [{**t, "node": t.get("node", on_node.get(t.get("id")))} for t in f["tickets"]]
         embed_media(p.get("nodes", []), home, lambda s, k=p["key"]: warnings.append(f"{k}: {s}"))
@@ -249,13 +268,12 @@ def main():
            "img-src data:; object-src 'none'; base-uri 'none'; form-action 'none'")
     html = html.replace("__CSP__", htmllib.escape(csp, quote=True))
     out = home / "out" / "index.html"
-    out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(html, encoding="utf-8")
+    atomic_write(out, html)
     # claude.ai Artifact: the host adds doctype/html/head/body and the meta tags itself
     head = html.split("<head>", 1)[1].split("</head>", 1)[0]
     head = "\n".join(l for l in head.splitlines() if not l.lstrip().startswith("<meta"))
     body = html.split("<body>", 1)[1].rsplit("</body>", 1)[0]
-    (out.parent / "artifact.html").write_text(head.strip() + "\n" + body.strip() + "\n", encoding="utf-8")
+    atomic_write(out.parent / "artifact.html", head.strip() + "\n" + body.strip() + "\n")
     size = len(html.encode())
     if size > BIG:
         warnings.append(f"page is {size / 2**20:.1f} MB (screenshots); a claude.ai Artifact stops at 16 MB - shrink or crop them")
@@ -268,6 +286,41 @@ def main():
     for w in warnings:
         print(f"WARN {w}")
     print(f"built {out} ({size:,} bytes, {len(projects)} projects, snapshot {snap['date']})")
+
+
+def mark_failed_page(home, manifest):
+    message = manifest.get("error") or "Refresh did not complete. Rerun collect.py HOME --refresh."
+    banner = ('<!--refresh-failure--><div role="alert" data-refresh-failure-at="' +
+              htmllib.escape(manifest.get("attempted_at", ""), quote=True) + '" style="padding:16px;background:#fff0ed;color:#8c1d10">'
+              '<strong>FAILED: refresh / 更新失敗</strong><p>' + htmllib.escape(message) + '</p><p>' +
+              htmllib.escape(manifest.get("attempted_at", "")) +
+              ' · Last good data and time retained / 保留上次資料與時間</p></div><!--/refresh-failure-->')
+    for name in ("index.html", "artifact.html"):
+        path = home / "out" / name
+        try:
+            old = path.read_text(encoding="utf-8") if path.exists() else "<html><body></body></html>"
+            old = re.sub(r"<!--refresh-failure-->.*?<!--/refresh-failure-->", "", old, flags=re.S)
+            text = old.replace("<body>", "<body>" + banner, 1) if "<body>" in old else banner + old
+            atomic_write(path, text)
+        except OSError as e:
+            print(f"FAILED: cannot mark {path}: {e}; last page was not refreshed", file=sys.stderr)
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("home", nargs="?", default="~/.project-inventory")
+    parser.add_argument("--snapshot", type=Path)
+    parser.add_argument("--run-id")
+    args = parser.parse_args()
+    home = Path(args.home).expanduser()
+    try:
+        build_page(home, args.snapshot, args.run_id)
+    except (OSError, ValueError, KeyError, TypeError, AttributeError) as e:
+        message = f"FAILED: build could not complete: {e}. Fix the input or directory permissions and rerun collect.py HOME --refresh."
+        manifest = {"error": message, "attempted_at": dt.datetime.now().astimezone().isoformat()}
+        mark_failed_page(home, manifest)
+        print(message, file=sys.stderr)
+        sys.exit(2)
 
 
 if __name__ == "__main__":
