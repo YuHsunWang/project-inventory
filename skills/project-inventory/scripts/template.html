@@ -313,6 +313,7 @@ const D = /*__DATA__*/null;
 const L = {
  "zh-TW": {all:"全部專案", projects:"個專案", todo_h:"要處理的事", nothing:"目前沒有要處理的事", projects_h:"專案", back:"‹ 全部專案",
   prs:"個修改在 GitHub 等你合併", review:"件待辦做好了、等你確認", dirty:"個檔改到一半，還沒存起來", unpushed:"次改動還沒備份到 GitHub",
+  fetch_failed:"遠端更新失敗；遠端比較未知", last_fetch:"最後成功取得遠端資料：",
   no_upstream:"這條分支還沒推上 GitHub", stale:"份資料沒更新到最新", errors:"項資料這次沒抓到", join:"、",
   k_pr:"等你合併", k_review:"等你確認", k_git:"程式還沒備份", k_data:"資料沒更新", k_err:"這次沒抓到",
   road:"運作流程", progress:"進度", tickets:"待辦", facts:"基本資料", updated:"更新：",
@@ -339,6 +340,7 @@ const L = {
   foot:["待辦：Linear／Notion", "等你合併：GitHub 的 PR", "git 狀態、資料日期：這台電腦"]},
  "en": {all:"All projects", projects:"projects", todo_h:"Waiting on you", nothing:"Nothing waits on you", projects_h:"Projects", back:"‹ All projects",
   prs:"PRs wait for your merge", review:"tickets are done and wait for review", dirty:"files have uncommitted changes", unpushed:"commits are not pushed",
+  fetch_failed:"Remote refresh failed; remote comparison unknown", last_fetch:"Last successful fetch: ",
   no_upstream:"branch is not on GitHub yet", stale:"datasets are stale", errors:"sources failed this run", join:", ",
   k_pr:"PRs to merge", k_review:"To review", k_git:"Not backed up", k_data:"Stale data", k_err:"Failed",
   road:"How it works", progress:"Progress", tickets:"Tickets", facts:"Facts", updated:"Updated ",
@@ -639,6 +641,7 @@ function renderFacts(p){
     if (r.dirty) bits.push(`<span class="st warn">${T.dirtyf} ${r.dirty}</span>`);
     local.push([`${T.repo} · ${esc(r.label)}`, `<code>${esc(r.path)}</code><div>${bits.join(" ")}</div>${r.last_commit ? `<div class="small">${T.last}：${esc(r.last_commit)}</div>` : ""}`]);
     const up = [];
+    if (r.fetch_error) up.push(`<span class="st bad">${T.fetch_failed}: ${esc(r.fetch_error)}</span><div class="small">${T.last_fetch}${esc(r.last_fetched_at || "—")}</div>`);
     if (r.ahead) up.push(`<span class="st warn">${T.ahead} ${r.ahead}</span>`);
     if (r.behind) up.push(`<span class="st hist">${T.behind} ${r.behind}</span>`);
     if (r.has_origin && !r.upstream && r.branch !== "(detached)") up.push(`<span class="st warn">${T.no_up}</span>`);

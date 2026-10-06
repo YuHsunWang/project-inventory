@@ -38,7 +38,7 @@ def git_state(path, today):
     if has_origin:
         try:
             run(["git", "fetch", "-q", "origin"], cwd=path, timeout=60)
-        except Exception as e:  # offline is not fatal; ahead/behind is then against the last fetch
+        except Exception as e:  # retain local facts, but the remote comparison is unavailable
             fetch_error = str(e)
     branch = g("branch", "--show-current") or "(detached)"
     upstream = None
@@ -49,6 +49,8 @@ def git_state(path, today):
             behind, ahead = map(int, g("rev-list", "--left-right", "--count", f"{upstream}...HEAD").split())
         except Exception:
             upstream = None
+    if fetch_error:
+        ahead = behind = None
     log = g("log", "--all", "-n", str(HISTORY), "--format=%h%x09%cs%x09%s")
     commits = [dict(zip(("hash", "date", "subject"), l.split("\t", 2))) for l in log.splitlines() if l]
     recent_since = (today - dt.timedelta(days=RECENT_DAYS)).isoformat()
@@ -254,7 +256,15 @@ def main():
                 st = git_state(Path(r["path"]).expanduser(), today)
                 for c in st.pop("_commits"):
                     commits.setdefault(c["hash"], {**c, "where": r["label"]})
-                f["repos"].append({"label": r["label"], "path": r["path"], **st})
+                name = f"git:{r['path']}"
+                last_fetch = old.get(name, {}).get("fetched_at")
+                if st["has_origin"] and not st["fetch_error"]:
+                    last_fetch = dt.datetime.now().astimezone().isoformat(timespec="seconds")
+                f["sources"][name] = source_state(run_id, attempted_at, last_fetch,
+                    "partial" if st["fetch_error"] else "ok", not bool(st["fetch_error"]), st["fetch_error"])
+                if st["fetch_error"]:
+                    f["errors"].append(f"git {r['path']}: remote refresh failed: {st['fetch_error']}")
+                f["repos"].append({"label": r["label"], "path": r["path"], "last_fetched_at": last_fetch, **st})
             except Exception as e:
                 f["errors"].append(f'git {r["path"]}: {e}')
         f["weekly"] = weekly([c["date"] for c in commits.values()], today)

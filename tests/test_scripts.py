@@ -269,6 +269,45 @@ def test_mcp_prs_per_repo():
     states = snapshot(root)["projects"]["p"]["sources"]
     assert states["github:o/a"]["status"] == "ok" and states["github:o/b"]["status"] == "unavailable"
 
+def rendered(root):
+    result = subprocess.run(["node", str(Path(__file__).with_name("html_collection.js"))],
+        input=(root / "out/index.html").read_text(), text=True, capture_output=True)
+    assert result.returncode == 0, result.stderr
+    return json.loads(result.stdout)
+
+def test_git_fetch_failures():
+    repo = tmp / "fetch-repo"; repo.mkdir(); git(repo, "init", "-q")
+    git(repo, "commit", "-q", "--allow-empty", "-m", "local")
+    (repo / "dirty.txt").write_text("local work")
+    git(repo, "remote", "add", "origin", str(tmp / "nonexistent-origin"))
+    original_run = collect.run
+    for name, error in [("offline", None), ("permission", RuntimeError("Permission denied (publickey)")),
+                        ("timeout", subprocess.TimeoutExpired(["git", "fetch"], 60))]:
+        root = fixture("fetch-" + name, {"local": [{"label": "local", "path": str(repo)}]})
+        def local_run(cmd, **kwargs):
+            if cmd[1] == "fetch" and error is not None: raise error
+            return original_run(cmd, **kwargs)
+        with patch.object(collect, "run", side_effect=local_run), patch.object(sys, "argv", ["collect.py", str(root)]), redirect_stdout(io.StringIO()):
+            try: collect.main()
+            except SystemExit as e: assert e.code == 1
+        f = snapshot(root)["projects"]["p"]; r = f["repos"][0]
+        assert r["dirty"] == 1 and r["ahead"] is None and r["behind"] is None
+        assert f["sources"]["git:" + str(repo)]["status"] == "partial" and f["errors"]
+        page_data(root); fragments = rendered(root)[0]
+        assert "Remote refresh failed; remote comparison unknown" in fragments["facts"]
+        assert "Uncommitted files 1" in fragments["facts"] and "some sources failed" in fragments["now"]
+    # Last successful fetch survives the next failure.
+    root = fixture("fetch-last-good", {"local": [{"label": "local", "path": str(repo)}]})
+    def success(cmd, **kwargs):
+        return "" if cmd[1] == "fetch" else original_run(cmd, **kwargs)
+    with patch.object(collect, "run", side_effect=success), patch.object(sys, "argv", ["collect.py", str(root)]), redirect_stdout(io.StringIO()):
+        try: collect.main()
+        except SystemExit as e: assert e.code == 0
+    last = snapshot(root)["projects"]["p"]["repos"][0]["last_fetched_at"]
+    result = run("collect.py", str(root)); assert result.returncode == 1
+    assert snapshot(root)["projects"]["p"]["repos"][0]["last_fetched_at"] == last
+
+test_git_fetch_failures()
 test_same_day_reuse()
 test_cron_takeover()
 test_failed_source_keeps_tickets()
