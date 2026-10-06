@@ -26,10 +26,12 @@ Fixes on this branch, grouped by issue (not claims of live service acceptance):
 - #23: describe Vercel authorization scope accurately.
 - #24: limit Artifact claims to generated HTML; mark host acceptance pending.
 - #25: validate embedded screenshots and support PNG, WebP and JPEG.
+- #26: add one offline release gate, named pass/skip reporting, real Chromium
+  checks in four viewport/theme combinations, and a single-job push/PR workflow.
 - #28: add a sample-only demo, real browser screenshots, support/architecture docs,
   contributing instructions and this changelog.
 - #29: supply icon fallback/defaults, use remote-neutral copy and label only current weeks.
 
-Still open: owner license choice. CI (#26) belongs to wave 4. Host loading/version
+Still open: owner license choice. Host loading/version
 checks, real Notion integration and Artifact end-to-end publishing remain unverified;
 these entries do not imply a published release or deployment.
