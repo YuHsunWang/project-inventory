@@ -2,6 +2,7 @@
 
     python3 tests/test_scripts.py
 """
+from test_support import case, SkipTest
 import base64, struct, zlib, io, json, subprocess, urllib.error, sys, tempfile, types, urllib.request
 from pathlib import Path
 
@@ -9,7 +10,9 @@ S = Path(__file__).resolve().parent.parent / "skills/project-inventory/scripts"
 sys.path.insert(0, str(S))
 import collect, publish_vercel as pv
 
+import atexit, shutil
 tmp = Path(tempfile.mkdtemp())
+atexit.register(shutil.rmtree, tmp, ignore_errors=True)
 git = lambda cwd, *a: subprocess.run(["git", "-c", "user.email=a@b", "-c", "user.name=a", *a], cwd=cwd, check=True, capture_output=True)
 
 
@@ -61,6 +64,7 @@ assert '"missing":' in page, "a missing screenshot is shown as missing, not drop
 assert "cdnjs.cloudflare.com/ajax/libs/mathjax" in page
 
 # --- security #4: exercise the actual JavaScript sinks from built HTML --------------------------
+@case
 def test_html_trust_boundary():
     from html.parser import HTMLParser
     class SafeHTML(HTMLParser):
@@ -104,6 +108,7 @@ WEBP = b"RIFF" + (12).to_bytes(4, "little") + b"WEBPVP8L\0\0\0\0"
 JPEG = b"\xff\xd8\xff\xe0" + b"\0" * 4 + b"\xff\xd9"
 
 
+@case
 def test_shot_validation():
     for name, raw in [("private.txt", b"AUDIT_FAKE_PRIVATE_MARKER"), ("empty.png", b""),
                       ("broken.png", b"\x89PNG\r\n\x1a\nBAD"), ("vector.svg", b"<svg onload='x'/>") ,
@@ -183,6 +188,7 @@ assert collect.GIT_ENV["GIT_TERMINAL_PROMPT"] == "0"
 from unittest.mock import patch
 
 
+@case
 def test_linear_project_identity():
     issue = {"identifier": "L-1", "title": "one project", "url": "https://linear.app/i",
              "createdAt": "2026-10-01", "completedAt": None, "canceledAt": None,
@@ -216,6 +222,7 @@ def test_linear_project_identity():
             assert requests[-1]["variables"]["after"] == "cursor"
 
 
+@case
 def test_linear_legacy_migration_and_permissions():
     cases = [({"projects": {"nodes": [{"id": "a"}, {"id": "b"}]}}, {"project": "Same"}, "ambiguous"),
              ({"projects": {"nodes": []}}, {"project": "Old"}, "renamed or inaccessible"),
@@ -274,6 +281,7 @@ def page_data(root):
 
 OLD_TICKET = {"id": "N-1", "url": "https://notion.so/full-page-id", "title": "old", "source": "notion", "state": "wait", "created": "2026-09-01"}
 
+@case
 def test_commit_count_uncapped_worktrees_branches_and_repos():
     repo = tmp / "busy"; repo.mkdir(); git(repo, "init", "-q")
     old = (dt.date.today() - dt.timedelta(days=30)).isoformat() + "T12:00:00+00:00"
@@ -308,6 +316,7 @@ def test_commit_count_uncapped_worktrees_branches_and_repos():
     assert page_data(root)["projects"][0]["now"]["c14"] == 47
 
 
+@case
 def test_commit_count_legacy_snapshot():
     since = dt.date.today()
     recent = [{"hash": f"{n:040x}", "date": since.isoformat(), "subject": str(n)} for n in range(45)]
@@ -323,6 +332,7 @@ test_commit_count_uncapped_worktrees_branches_and_repos()
 test_commit_count_legacy_snapshot()
 
 
+@case
 def test_sqlite_identifier_validation():
     import sqlite3
     path = tmp / "quoted.sqlite"
@@ -349,6 +359,7 @@ def test_sqlite_identifier_validation():
         assert con.execute('SELECT COUNT(*) FROM empty').fetchone()[0] == 0
 
 
+@case
 def test_duckdb_identifier_validation():
     # Exercise the optional adapter with a stdlib SQL backend; never require/install duckdb.
     import sqlite3
@@ -370,13 +381,14 @@ def test_duckdb_identifier_validation():
     assert len(calls) == 4 and all(read_only for _, read_only in calls)
 
 
+@case
 def test_real_duckdb():
     # The sqlite stand-in above iterates cursors; real DuckDB's execute() returns a non-iterable
     # connection. This broke all 12 real DuckDB sources once, so run the real engine when present.
     try:
         import duckdb
     except ImportError:
-        print("SKIPPED test_real_duckdb: duckdb not installed"); return
+        raise SkipTest("duckdb not installed")
     path = tmp / "real.duckdb"
     con = duckdb.connect(str(path))
     con.execute("CREATE TABLE native (d DATE); INSERT INTO native VALUES ('2026-10-01'), ('2026-10-05')")
@@ -395,6 +407,7 @@ test_duckdb_identifier_validation()
 test_real_duckdb()
 
 
+@case
 def test_github_pr_pagination():
     for count in (0, 50, 51, 101):
         calls = []
@@ -411,6 +424,7 @@ def test_github_pr_pagination():
         assert len(calls) == max(1, (count + 49) // 50)
 
 
+@case
 def test_github_denied_second_page():
     first = json.dumps({"data": {"repository": {"pullRequests": {"nodes": [{"number": n} for n in range(50)],
         "pageInfo": {"hasNextPage": True, "endCursor": "next"}}}}})
@@ -425,6 +439,7 @@ def test_github_denied_second_page():
     assert "permission denied" in (root / "out/index.html").read_text()
 
 
+@case
 def test_github_mcp_with_unauthed_cli():
     root = fixture("github-mcp-cli", {"github": ["o/r"]})
     gather(root, source="github:o/r")
@@ -442,6 +457,7 @@ test_github_denied_second_page()
 test_github_mcp_with_unauthed_cli()
 
 
+@case
 def test_same_day_reuse():
     root = fixture("same-day", {"notion": {"url": "https://notion.so/fixture"}})
     rid = gather(root, tickets=[OLD_TICKET])
@@ -456,6 +472,7 @@ def test_same_day_reuse():
     assert p["counts"]["wait"] == 0 and p["trend_tickets"] is None
     assert 'stale' in (root / "out/index.html").read_text()
 
+@case
 def test_cron_takeover():
     root = fixture("cron", {"linear": {"project": "P"}})
     gather(root, source="linear", tickets=[{**OLD_TICKET, "source": "linear"}])
@@ -468,6 +485,7 @@ def test_cron_takeover():
     f = snapshot(root)["projects"]["p"]
     assert f["sources"]["linear"]["status"] == "ok" and f["tickets"] == []
 
+@case
 def test_failed_source_keeps_tickets():
     root = fixture("failed-old", {"notion": {"url": "https://notion.so/fixture"}})
     gather(root, status="failed", tickets=[OLD_TICKET])
@@ -477,6 +495,7 @@ def test_failed_source_keeps_tickets():
     p = page_data(root)["projects"][0]
     assert p["counts"]["wait"] == 0 and p["now"]["wait"] == 0 and p["trend_tickets"] is None
 
+@case
 def test_mcp_prs_per_repo():
     root = fixture("mcp-prs", {"github": ["o/a", "o/b"]})
     gather(root, source="github:o/a")
@@ -492,6 +511,7 @@ def rendered(root):
     assert result.returncode == 0, result.stderr
     return json.loads(result.stdout)
 
+@case
 def test_git_fetch_failures():
     repo = tmp / "fetch-repo"; repo.mkdir(); git(repo, "init", "-q")
     git(repo, "commit", "-q", "--allow-empty", "-m", "local")
@@ -524,6 +544,7 @@ def test_git_fetch_failures():
     result = run("collect.py", str(root)); assert result.returncode == 1
     assert snapshot(root)["projects"]["p"]["repos"][0]["last_fetched_at"] == last
 
+@case
 def test_fatal_refresh_inputs():
     for name, bad_inventory, added in [("invalid-inventory", True, False),
                                       ("invalid-gathered", False, False),
@@ -556,6 +577,7 @@ def test_fatal_refresh_inputs():
         result = run("collect.py", str(root), "--refresh"); assert result.returncode == 0, result.stderr
         assert "<!--refresh-failure-->" not in (root / "out/index.html").read_text()
 
+@case
 def test_snapshot_write_failure():
     root = fixture("write-failed", {})
     assert run("collect.py", str(root), "--refresh").returncode == 0
@@ -575,6 +597,7 @@ def test_snapshot_write_failure():
     result = run("build.py", str(root)); assert result.returncode == 2
     assert "FAILED: refresh" in (root / "out/index.html").read_text()
 
+@case
 def test_manifest_write_failure():
     root = fixture("manifest-denied", {})
     assert run("collect.py", str(root), "--refresh").returncode == 0
@@ -592,6 +615,7 @@ def test_manifest_write_failure():
     assert "FAILED: refresh" in (root / "out/index.html").read_text()
     assert run("collect.py", str(root), "--refresh").returncode == 0
 
+@case
 def test_refresh_manifest_and_partial():
     root = fixture("partial-refresh", {"notion": {"url": "https://notion.so/fixture"}})
     gather(root, tickets=[OLD_TICKET])
@@ -606,6 +630,7 @@ def test_refresh_manifest_and_partial():
     result = run("build.py", str(root), "--snapshot", str(root / "facts" / "other.json"))
     assert result.returncode == 2 and "snapshot does not match" in result.stderr
 
+@case
 def test_five_ticket_states():
     labels = {"empty": "Read successfully, 0 tickets.", "not_connected": "No Linear or Notion source.",
               "failed": "Ticket read failed", "partial": "Ticket read partly failed", "stale": "Ticket data is stale"}
@@ -651,6 +676,7 @@ def test_five_ticket_states():
         assert zh[status] in rendered(root)[0]["tickets"]
 
 
+@case
 def test_partial_ticket_read():
     root = fixture("partial-source", {"notion": {"url": "https://notion.so/fixture"}})
     gather(root, status="partial", tickets=[OLD_TICKET])
@@ -660,6 +686,7 @@ def test_partial_ticket_read():
     assert p["counts"]["wait"] == 0 and "Previous data" in rendered(root)[0]["tickets"]
 
 
+@case
 def test_old_and_legacy_ticket_states():
     root = fixture("aged-state", {"notion": {"url": "https://notion.so/fixture"}})
     gather(root, tickets=[OLD_TICKET]); assert run("collect.py", str(root)).returncode == 0
@@ -679,6 +706,7 @@ def test_old_and_legacy_ticket_states():
     assert page_data(root)["projects"][0]["ticket_state"]["status"] == "failed"
 
 
+@case
 def test_last_success_across_days():
     root = fixture("last-read-yesterday", {"notion": {"url": "https://notion.so/fixture"}})
     gather(root); assert run("collect.py", str(root)).returncode == 0
@@ -708,6 +736,7 @@ os.environ.pop("LINEAR_API_KEY", None)
 from test_contracts import run_validation_tests
 run_validation_tests(tmp, run)
 
+@case
 def test_notes_tasks_counts_fences_nested():
     from validation import validate_notes
     for count in (0, 1, 51):
@@ -755,6 +784,7 @@ def test_notes_tasks_counts_fences_nested():
 
 
 test_notes_tasks_counts_fences_nested()
+@case
 def test_todo_pr_draft_order_aggregate():
     import copy
     root = fixture("todo-semantics", {"local": [{"label": "checkout", "path": str(a)}]})
@@ -873,6 +903,7 @@ assert REAL_ANON("https://x/") == "Vercel login redirect"
 pv.urllib.request.build_opener = redirect_to("https://example.com/")
 assert REAL_ANON("https://x/") == "302 to https://example.com/"
 
+@case
 def test_vercel_fail_closed():
     def verify(api, codes="Vercel login redirect"):
         output = io.StringIO()
@@ -920,6 +951,7 @@ def test_vercel_fail_closed():
             return (200, domains) if "/domains?" in path else fake_call(method, path, body, team)
         verify(malformed)
 
+@case
 def test_vercel_login_redirect():
     for loc in ("https://vercel.com/", "https://vercel.com/docs", "https://vercel.com/login",
                 "https://vercel.com.evil/sso-api?url=https%3A%2F%2Fx%2F", "https://vercel.com/sso-api?url=wrong"):
@@ -943,6 +975,7 @@ urllib.request.urlopen = lambda req, timeout: urls.append(req.full_url) or R(b"{
 real_call("GET", "/v9/projects/x", team="team_abc"); real_call("GET", "/v9/projects/x", team="my-team")
 assert urls == ["https://api.vercel.com/v9/projects/x?teamId=team_abc", "https://api.vercel.com/v9/projects/x?slug=my-team"], urls
 
+@case
 def test_vercel_access_scope():
     from contextlib import redirect_stdout
     output = io.StringIO()
@@ -961,4 +994,5 @@ def test_vercel_access_scope():
 test_vercel_access_scope()
 from test_notion_contract import test_notion_adapter_contract
 test_notion_adapter_contract()
-print("OK")
+from test_support import summary
+print("OK: " + summary())

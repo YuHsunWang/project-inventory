@@ -1,4 +1,5 @@
 """Offline reference adapter contract; no real Notion workspace is exercised."""
+from test_support import case, SkipTest
 import uuid
 from validation import STATES, choice, typed, validate_gathered
 
@@ -66,6 +67,7 @@ def mock_adapter(fetch, identity, status_map):
     return validate_gathered(output, inv)
 
 
+@case
 def test_notion_adapter_contract():
     uid = lambda n: str(uuid.UUID(int=n))
     calls = []

@@ -1,4 +1,5 @@
 """Config/data contract regressions, imported by test_scripts.py; stdlib only."""
+from test_support import case, SkipTest
 import copy
 import datetime as dt
 import json
@@ -18,6 +19,7 @@ def expect_error(fn, text):
         raise AssertionError('invalid input was accepted: ' + text)
 
 
+@case
 def test_inventory_contract_paths():
     inv = {'projects': [{'key': 'cvs', 'name': 'CVS', 'nodes': [{'id': 1}, {'id': 2, 'on': 1}]}]}
     cases = [({'key': 'home'}, 'projects[0].key: reserved'),
@@ -48,6 +50,7 @@ def ticket(**fields):
             'state': 'open', 'created': '2026-10-01', 'url': 'https://notion.so/full-page-1', **fields}
 
 
+@case
 def test_gathered_contract_and_dedupe():
     inv = {'projects': [{'key': 'p', 'name': 'P', 'nodes': [{'id': 1}]}]}
     for field, value, message in [('state', 'broken', '.state:'), ('created', '2026-02-30', '.created:'),
@@ -69,6 +72,7 @@ def test_gathered_contract_and_dedupe():
     assert len(v.validate_rows(legacy, 'tickets')) == 1, 'full page URL is a stable legacy identity'
 
 
+@case
 def test_contract_cli_failures(root, run):
     root.mkdir()
     inv = {'projects': [{'key': 'p', 'name': 'P'}]}
@@ -108,6 +112,7 @@ def run_validation_tests(tmp, run):
     test_unknown_curve_rendering(tmp, run)
 
 
+@case
 def test_timezone_normalization_and_boundary(tmp):
     assert v.calendar_date('2026-10-04T23:30:00Z', 'Asia/Taipei') == dt.date(2026, 10, 5)
     assert v.calendar_date('2026-10-05T07:30:00+08:00', 'UTC') == dt.date(2026, 10, 4)
@@ -139,6 +144,7 @@ def test_timezone_normalization_and_boundary(tmp):
     assert collect.newest_date({'kind': 'sqlite', 'path': str(db), 'column': 'day', 'table': 'dates'}, 'Asia/Taipei') == '2026-10-05T07:30:00+08:00'
 
 
+@case
 def test_ticket_unknown_coverage():
     import build
     today = dt.date(2026, 10, 6)
@@ -162,6 +168,7 @@ def test_ticket_unknown_coverage():
     assert normalized['open'][normalized['days'].index('2026-10-05')] == 1
 
 
+@case
 def test_unknown_curve_rendering(tmp, run):
     import uuid, subprocess, re
     root = tmp / 'unknown-curve'; (root / 'gathered').mkdir(parents=True)

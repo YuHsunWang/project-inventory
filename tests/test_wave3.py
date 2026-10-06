@@ -1,4 +1,5 @@
 """Wave 3 regressions; stdlib fixtures, no services or installed host required."""
+from test_support import case, SkipTest
 import json
 import os
 from pathlib import Path
@@ -10,6 +11,7 @@ ROOT = Path(__file__).resolve().parent.parent
 S = ROOT / "skills/project-inventory/scripts"
 
 
+@case
 def test_install_paths():
     """The documented commands install the same layout and update without nesting."""
     source = ROOT / "skills/project-inventory"
@@ -41,6 +43,7 @@ def test_install_paths():
         assert f'/{plugin["name"]}:{skill}' in (ROOT / doc).read_text()
 
 
+@case
 def test_artifact_fragment():
     """Reproducible output is a local fragment, with the same page data, not a publication."""
     with tempfile.TemporaryDirectory() as td:
@@ -59,6 +62,7 @@ def test_artifact_fragment():
         assert re.search(payload, page).group(1) == re.search(payload, fragment).group(1)
 
 
+@case
 def test_text_token_contrast():
     """Measure actual CSS tokens, including automatic/manual dark and mixed backgrounds."""
     import re
@@ -118,6 +122,7 @@ def test_text_token_contrast():
     return minimum
 
 
+@case
 def test_ui_copy_defaults():
     result = subprocess.run(["node", str(ROOT / "tests/test_ui_copy.js")],
                             input=(S / "template.html").read_text(), capture_output=True, text=True)
@@ -126,6 +131,7 @@ def test_ui_copy_defaults():
     assert [n["icon"] for n in example["projects"][0]["nodes"]] == ["globe", "chart"]
 
 
+@case
 def test_zero_service_demo():
     with tempfile.TemporaryDirectory() as td:
         home = Path(td) / "demo"
