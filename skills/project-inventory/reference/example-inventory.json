@@ -16,8 +16,8 @@
         {"label": "orders", "path": "~/code/myapp/data/orders.csv", "kind": "csv", "column": "created_at", "max_age_days": 2}
       ],
       "nodes": [
-        {"id": 1, "title": "Fetch", "sub": "API → orders.csv", "paths": ["fetch.py"]},
-        {"id": 2, "title": "Report", "sub": "orders.csv → report.html", "paths": ["report.py"]}
+        {"id": 1, "title": "Fetch", "icon": "globe", "sub": "API → orders.csv", "paths": ["fetch.py"]},
+        {"id": 2, "title": "Report", "icon": "chart", "sub": "orders.csv → report.html", "paths": ["report.py"]}
       ]
     }
   ]

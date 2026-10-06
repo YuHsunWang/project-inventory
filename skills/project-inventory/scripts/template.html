@@ -2,6 +2,7 @@
 <html lang="__LANG__">
 <head>
 <meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="__CSP__">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>__TITLE__</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -10,10 +11,10 @@
 <!--__MATHJAX__-->
 <style>
 :root{
-  --ground:#EDF0EA; --paper:#FAFBF7; --ink:#17201B; --muted:#56625A; --faint:#8B968F; --line:#C9D1C9; --grid:#DDE3DB;
+  --ground:#EDF0EA; --paper:#FAFBF7; --ink:#17201B; --muted:#56625A; --faint:#59675E; --line:#C9D1C9; --grid:#DDE3DB;
   --accent:#0E5B60; --accent-soft:#D5E8E6;
-  --done:#2E7A4C; --done-soft:#DCEFE2; --wait:#2A5FC4; --wait-soft:#DCE6F8;
-  --open:#A86A12; --open-soft:#F6E9CF; --dead:#8A938D; --dead-soft:#E6E9E5; --bad:#B23A22; --bad-soft:#F7DCD5;
+  --done:#286C43; --done-soft:#DCEFE2; --wait:#2A5FC4; --wait-soft:#DCE6F8;
+  --open:#80500C; --open-soft:#F6E9CF; --dead:#59675E; --dead-soft:#E6E9E5; --bad:#B23A22; --bad-soft:#F7DCD5;
   --viz-done:#1F6B40; --viz-open:#B8761A;
   --sans:"Noto Sans TC","PingFang TC","Microsoft JhengHei",system-ui,sans-serif;
   --display:var(--sans);
@@ -25,20 +26,20 @@
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
     color-scheme:dark;
-    --ground:#111513; --paper:#181D1A; --ink:#E4EAE5; --muted:#A1ACA5; --faint:#6F7A73; --line:#2F3833; --grid:#222A25;
+    --ground:#111513; --paper:#181D1A; --ink:#E4EAE5; --muted:#A1ACA5; --faint:#A1ACA5; --line:#2F3833; --grid:#222A25;
     --accent:#6CC4C6; --accent-soft:#1B3334;
     --done:#6FC08F; --done-soft:#19301F; --wait:#7FA6F0; --wait-soft:#1B2640;
-    --open:#E0A94E; --open-soft:#33280F; --dead:#7D8680; --dead-soft:#232826; --bad:#F08A70; --bad-soft:#3A1E18;
+    --open:#E0A94E; --open-soft:#33280F; --dead:#A1ACA5; --dead-soft:#232826; --bad:#F08A70; --bad-soft:#3A1E18;
     --viz-done:#56A876; --viz-open:#B8801F; --shadow:0 1px 2px rgba(0,0,0,.4),0 6px 18px rgba(0,0,0,.28);
   }
   :root:not([data-theme="light"]) .pc{--pc:color-mix(in srgb,var(--pc0) 62%,#fff)}
 }
 :root[data-theme="dark"]{
   color-scheme:dark;
-  --ground:#111513; --paper:#181D1A; --ink:#E4EAE5; --muted:#A1ACA5; --faint:#6F7A73; --line:#2F3833; --grid:#222A25;
+  --ground:#111513; --paper:#181D1A; --ink:#E4EAE5; --muted:#A1ACA5; --faint:#A1ACA5; --line:#2F3833; --grid:#222A25;
   --accent:#6CC4C6; --accent-soft:#1B3334;
   --done:#6FC08F; --done-soft:#19301F; --wait:#7FA6F0; --wait-soft:#1B2640;
-  --open:#E0A94E; --open-soft:#33280F; --dead:#7D8680; --dead-soft:#232826; --bad:#F08A70; --bad-soft:#3A1E18;
+  --open:#E0A94E; --open-soft:#33280F; --dead:#A1ACA5; --dead-soft:#232826; --bad:#F08A70; --bad-soft:#3A1E18;
   --viz-done:#56A876; --viz-open:#B8801F; --shadow:0 1px 2px rgba(0,0,0,.4),0 6px 18px rgba(0,0,0,.28);
 }
 :root[data-theme="dark"] .pc{--pc:color-mix(in srgb,var(--pc0) 62%,#fff)}
@@ -151,7 +152,7 @@ h3{font-family:var(--display);font-size:22px;margin:30px 0 4px;font-weight:700;l
 .node .ic{grid-row:span 2;width:40px;height:40px;border-radius:50%;background:var(--paper);display:grid;place-items:center;border:1.5px solid var(--pc)}
 .node .ic svg{width:28px;height:28px}
 .node .t{font-family:var(--display);font-size:20px;font-weight:700;line-height:1.2}
-.node .s{font-size:13px;color:var(--muted);line-height:1.45}
+.node .s{font-size:13px;color:var(--ink);line-height:1.45}
 .node .n{position:absolute;top:-10px;left:-10px;width:24px;height:24px;border-radius:50%;background:var(--ink);color:var(--paper);font:600 11px var(--mono);display:grid;place-items:center}
 .node .more{grid-column:1/-1;display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
 .node .more span{font-size:11.5px;font-weight:700;padding:1px 8px;border-radius:999px;background:var(--paper);border:1px solid var(--line);color:var(--muted)}
@@ -311,57 +312,63 @@ footer p{margin:4px 0;max-width:80ch}
 const D = /*__DATA__*/null;
 const L = {
  "zh-TW": {all:"全部專案", projects:"個專案", todo_h:"要處理的事", nothing:"目前沒有要處理的事", projects_h:"專案", back:"‹ 全部專案",
-  prs:"個修改在 GitHub 等你合併", review:"件待辦做好了、等你確認", dirty:"個檔改到一半，還沒存起來", unpushed:"次改動還沒備份到 GitHub",
-  no_upstream:"這條分支還沒推上 GitHub", stale:"份資料沒更新到最新", errors:"項資料這次沒抓到", join:"、",
-  k_pr:"等你合併", k_review:"等你確認", k_git:"程式還沒備份", k_data:"資料沒更新", k_err:"這次沒抓到",
+  prs:"個開啟中的 PR", review:"件待辦做好了、等你確認", dirty:"個檔案尚未提交", unpushed:"次提交尚未推送到遠端",
+  fetch_failed:"遠端更新失敗；遠端比較未知", last_fetch:"最後成功取得遠端資料：",
+  no_upstream:"這條分支尚未設定追蹤分支", stale:"份資料沒更新到最新", errors:"項資料這次沒抓到", join:"、",
+  k_pr:"開啟中的 PR", k_review:"等你確認", k_git:"本機未同步事項（依工作目錄彙總）", k_data:"資料沒更新", k_err:"這次沒抓到",
   road:"運作流程", progress:"進度", tickets:"待辦", facts:"基本資料", updated:"更新：",
   now_last:"最近一次改動：<b>X</b>", now_done7:"這 7 天做完 <b>X</b> 張", now_wait:"<b>X</b> 張等你確認", now_c14:"這 14 天改了 <b>X</b> 次", now_none:"沒有改動紀錄", now_err:"有資料沒抓到", dot:"。",
-  d_weeks:"12 週改了 X 次", d_open:"還沒做 X 張", d_wait:"等你確認 X 張", d_todo:"X 件等你",
+  d_weeks:"12 週改了 X 次", d_open:"還沒做 X 張", d_wait:"等你確認 X 張", d_todo:"X 類待處理事項",
   road_hint:"中間由上往下是主要流程，兩邊是接在旁邊的支線。點方塊看說明。", road_hint_tk:"方塊上的數字是待辦：✓ 是做完的，藍色等你確認，橘色還沒做；點開方塊就有清單。",
   noroad:"還沒畫流程圖。", open_x:"點開 ▾", close_x:"收起 ▴", c_wait:"等你確認", c_open:"沒做",
   m_shot:"截圖", m_math:"公式", m_mock:"示意", m_real:"真實", m_link:"連結", m_missing:"找不到圖檔", math_cap:"從程式碼和文件抄下來的，不是自己編的。",
   t_wait:"等你確認", t_open:"還沒做", t_done:"做完的事", where:"程式在哪：",
   trends:"趨勢", trends_hint:"把游標移到圖上（手機用手指按住）看每一天的數字。",
-  tk_chart:"待辦數量變化", tk_chart_sub:"近 90 天。用待辦的建立、完成、取消日期倒推。", s_done:"累計做完", s_done_s:"做完", s_open:"還沒做完（含等你確認）", s_open_s:"沒做完",
+  tk_chart:"待辦數量變化", tk_chart_sub:"近 90 天，依現有日期估算；未知線為目前無法還原歷史的待辦數。", s_canceled:"累計取消", s_canceled_s:"取消", s_unknown:"歷史未知", s_unknown_s:"未知", tk_coverage:"歷史日期涵蓋 A／B 張；C 張未納入歷史估算。", tk_reasons:{missing_created:"缺建立日期", missing_completed:"缺完成日期", missing_canceled:"缺取消日期", reopened:"重新開啟，缺狀態歷程", future_date:"未來日期", inconsistent_dates:"日期順序矛盾"}, s_done:"累計做完", s_done_s:"做完", s_open:"還沒做完（含等你確認）", s_open_s:"沒做完",
   wk_chart:"每週改動次數", wk_sub:"近 12 週，共改了 X 次。", wk_none:"這段時間沒有改動。", wk_tip:"改了 X 次", wk_this:"這週",
   table:"看數字表", th_date:"日期", th_week:"那週一", th_n:"改動次數",
-  activity:"每週進度", act_hint:"每週一段白話說明，點開看那週每一筆改動。新的在最上面。", noact:"還沒有任何紀錄。", nosum:"這週還沒寫說明。", more_wk:"再看更早 4 週",
+  activity:"每週進度", act_hint:"每週一段白話說明，點開看那週每一筆改動。新的在最上面。", noact:"還沒有任何紀錄。", nosum:"尚無說明。", more_wk:"再看更早 4 週",
   wk_cnt:{commit:"X 筆改動", done:"做完 X 張待辦", pr:"X 個 PR"},
   k_commit:"改動", k_done:"做完", k_pr2:"PR",
   lg_done:"做完了", lg_wait:"改好了，等你確認", lg_open:"還沒做", lg_dead:"取消",
   tk_h:"待辦：做了什麼、還差什麼", tk_counts:"做完 A 張 · 等你確認 B 張 · 還沒做 C 張 · 取消 D 張",
   col_done:"帶來了什麼", col_wait:"改好了，等你按合併", col_open:"做完會帶來什麼", gain:"做完會得到 → ", dead_sum:"取消的待辦（X 張）— 點開看",
+  tk_empty:"已讀取，0 張待辦。", tk_failed:"待辦讀取失敗", tk_partial:"待辦部分讀取失敗；只列出已取得的資料", tk_stale:"待辦資料已過期；未納入最新統計",
+  tk_recover:"檢查來源權限並重新盤點。", tk_last:"最後成功讀取：", tk_never:"未記錄成功讀取時間", tk_old:"上次資料（未納入最新統計）",
   notickets:"這個專案沒有接 Linear 或 Notion。",
-  facts_hint:"本機是這台電腦上的資料夾和資料；雲端是 GitHub、Linear、Notion 上的狀態。", f_local:"本機", f_cloud:"雲端", gh:"GitHub", remote_none:"沒有設定 GitHub", no_up:"這條分支還沒推上去", repo:"程式碼", branch:"分支", ahead:"還沒推", behind:"落後 GitHub", dirtyf:"改到一半的檔", last:"最後一次改動",
-  local_only:"只在本機，沒有 GitHub", data:"資料", newest:"最新到", days:"天前", limit:"超過 X 天算過期", stale1:"過期", ok1:"新鮮",
-  notes:"筆記待辦", notes_open:"個還沒勾", notes_done:"個已勾", pr_open:"開著的 PR", errs:"沒抓到的東西",
-  foot:["待辦：Linear／Notion", "等你合併：GitHub 的 PR", "git 狀態、資料日期：這台電腦"]},
- "en": {all:"All projects", projects:"projects", todo_h:"Waiting on you", nothing:"Nothing waits on you", projects_h:"Projects", back:"‹ All projects",
-  prs:"PRs wait for your merge", review:"tickets are done and wait for review", dirty:"files have uncommitted changes", unpushed:"commits are not pushed",
-  no_upstream:"branch is not on GitHub yet", stale:"datasets are stale", errors:"sources failed this run", join:", ",
-  k_pr:"PRs to merge", k_review:"To review", k_git:"Not backed up", k_data:"Stale data", k_err:"Failed",
+  facts_hint:"本機是這台電腦上的資料夾和資料；雲端是 git 遠端、GitHub PR、Linear、Notion 上的狀態。", f_local:"本機", f_cloud:"雲端", gh:"遠端", remote_none:"沒有設定遠端", no_up:"這條分支還沒推上去", repo:"程式碼", branch:"分支", ahead:"還沒推", behind:"落後遠端", dirtyf:"尚未提交的檔案", last:"最後一次改動",
+  local_only:"只在本機，沒有遠端", data:"資料", newest:"最新到", days:"天前", limit:"超過 X 天算過期", stale1:"過期", ok1:"新鮮",
+  notes:"筆記待辦", notes_todo:"個筆記待辦還沒勾", k_notes:"筆記待辦", notes_truncated:"僅顯示前 A 個，共 B 個", notes_open:"個還沒勾", notes_done:"個已勾", pr_open:"開啟中的 PR", errs:"沒抓到的東西",
+  foot:["待辦：Linear／Notion", "開啟中的 PR：GitHub", "git 狀態、資料日期：這台電腦"]},
+ "en": {all:"All projects", projects:"projects", todo_h:"Items to inspect", nothing:"No items to inspect", projects_h:"Projects", back:"‹ All projects",
+  prs:"open PRs", review:"tickets are done and wait for review", dirty:"files have uncommitted changes", unpushed:"commits are not pushed",
+  fetch_failed:"Remote refresh failed; remote comparison unknown", last_fetch:"Last successful fetch: ",
+  no_upstream:"branch has no upstream configured", stale:"datasets are stale", errors:"sources failed this run", join:", ",
+  k_pr:"Open PRs", k_review:"To review", k_git:"Local unsynced items (by checkout)", k_data:"Stale data", k_err:"Failed",
   road:"How it works", progress:"Progress", tickets:"Tickets", facts:"Facts", updated:"Updated ",
   now_last:"Last change: <b>X</b>", now_done7:"<b>X</b> done in the last 7 days", now_wait:"<b>X</b> in review", now_c14:"<b>X</b> commits in 14 days", now_none:"No commits yet", now_err:"some sources failed", dot:". ",
-  d_weeks:"X commits in 12 weeks", d_open:"X open", d_wait:"X in review", d_todo:"X waiting on you",
+  d_weeks:"X commits in 12 weeks", d_open:"X open", d_wait:"X in review", d_todo:"X categories of items to inspect",
   road_hint:"The main flow runs top to bottom; side branches hang left and right. Click a box for details.", road_hint_tk:"Numbers on a box are tickets: ✓ done, blue in review, orange open; open the box for the list.",
   noroad:"No diagram yet.", open_x:"Open ▾", close_x:"Close ▴", c_wait:"in review", c_open:"open",
   m_shot:"Screenshot", m_math:"Formula", m_mock:"Sketch", m_real:"Real", m_link:"Link", m_missing:"image not found", math_cap:"Copied from the code and docs, not made up.",
   t_wait:"In review", t_open:"Open", t_done:"Done", where:"Code: ",
   trends:"Trends", trends_hint:"Hover a chart (or press and hold on a phone) to see each day.",
-  tk_chart:"Tickets over time", tk_chart_sub:"Last 90 days, rebuilt from each ticket's created, done and canceled dates.", s_done:"Done so far", s_done_s:"done", s_open:"Not done (incl. in review)", s_open_s:"open",
-  wk_chart:"Commits per week", wk_sub:"Last 12 weeks, X commits.", wk_none:"No commits in this period.", wk_tip:"X commits", wk_this:"",
+  tk_chart:"Tickets over time", tk_chart_sub:"Last 90 days, estimated from available dates; unknown is the current pool without reconstructable history.", s_canceled:"Canceled so far", s_canceled_s:"canceled", s_unknown:"History unknown", s_unknown_s:"unknown", tk_coverage:"History date coverage A/B tickets; C excluded from history estimates.", tk_reasons:{missing_created:"missing created date", missing_completed:"missing completed date", missing_canceled:"missing canceled date", reopened:"reopened without state history", future_date:"future date", inconsistent_dates:"inconsistent dates"}, s_done:"Done so far", s_done_s:"done", s_open:"Not done (incl. in review)", s_open_s:"open",
+  wk_chart:"Commits per week", wk_sub:"Last 12 weeks, X commits.", wk_none:"No commits in this period.", wk_tip:"X commits", wk_this:"this week",
   table:"Show the numbers", th_date:"Date", th_week:"Week of", th_n:"Commits",
-  activity:"Week by week", act_hint:"A plain-words summary per week; open it for every change. Newest first.", noact:"Nothing yet.", nosum:"No summary for this week yet.", more_wk:"4 earlier weeks",
+  activity:"Week by week", act_hint:"A plain-words summary per week; open it for every change. Newest first.", noact:"Nothing yet.", nosum:"No summary yet.", more_wk:"4 earlier weeks",
   wk_cnt:{commit:"X commits", done:"X tickets done", pr:"X PRs"},
   k_commit:"commit", k_done:"done", k_pr2:"PR",
   lg_done:"Done", lg_wait:"Done, waiting for your review", lg_open:"Open", lg_dead:"Canceled",
   tk_h:"Tickets: what got done, what is left", tk_counts:"A done · B in review · C open · D canceled",
   col_done:"what it brought", col_wait:"waiting for your merge", col_open:"what finishing it brings", gain:"Brings → ", dead_sum:"Canceled tickets (X) — click to show",
+  tk_empty:"Read successfully, 0 tickets.", tk_failed:"Ticket read failed", tk_partial:"Ticket read partly failed; showing available data only", tk_stale:"Ticket data is stale; excluded from current metrics",
+  tk_recover:"Check source permissions and gather again.", tk_last:"Last successful read: ", tk_never:"No successful read time recorded", tk_old:"Previous data (excluded from current metrics)",
   notickets:"No Linear or Notion source.",
-  facts_hint:"Local: folders and data on this computer. Cloud: state on GitHub, Linear, Notion.", f_local:"Local", f_cloud:"Cloud", gh:"GitHub", remote_none:"No GitHub remote", no_up:"branch not pushed yet", repo:"Code", branch:"Branch", ahead:"Unpushed", behind:"Behind GitHub", dirtyf:"Uncommitted files", last:"Last commit",
-  local_only:"Local only, no GitHub", data:"Data", newest:"Newest", days:"days ago", limit:"Stale after X days", stale1:"stale", ok1:"fresh",
-  notes:"Note tasks", notes_open:"open", notes_done:"done", pr_open:"Open PRs", errs:"What failed",
-  foot:["Tickets: Linear / Notion", "Waiting for merge: GitHub PRs", "Git state, data dates: this computer"]}
+  facts_hint:"Local: folders and data on this computer. Cloud: git remotes, GitHub PRs, Linear, Notion.", f_local:"Local", f_cloud:"Cloud", gh:"Remote", remote_none:"No remote", no_up:"branch not pushed yet", repo:"Code", branch:"Branch", ahead:"Unpushed", behind:"Behind remote", dirtyf:"Uncommitted files", last:"Last commit",
+  local_only:"Local only, no remote", data:"Data", newest:"Newest", days:"days ago", limit:"Stale after X days", stale1:"stale", ok1:"fresh",
+  notes:"Note tasks", notes_todo:"open note tasks", k_notes:"Note tasks", notes_truncated:"Showing first A of B tasks", notes_open:"open", notes_done:"done", pr_open:"Open PRs", errs:"What failed",
+  foot:["Tickets: Linear / Notion", "Open PRs: GitHub", "Git state, data dates: this computer"]}
 };
 const T = L[D.lang] || L[D.lang.split("-")[0]] || L.en;
 const X = (s, ...v) => v.reduce((a, x, i) => a.replace(["X","Y","Z"][i], x), s);
@@ -370,8 +377,17 @@ const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt
 const mdOf = iso => iso ? `${+iso.slice(5,7)}/${+iso.slice(8,10)}` : "";
 const P = D.projects;
 const tkOf = p => p.facts.tickets;
+const ticketComplete = p => !p.ticket_state || ["ready", "empty"].includes(p.ticket_state.status);
+const ticketLabel = p => ({empty:T.tk_empty, not_connected:T.notickets, failed:T.tk_failed, partial:T.tk_partial, stale:T.tk_stale})[p.ticket_state?.status] || "";
 const hasTk = p => tkOf(p).length > 0 || !!((p.sources || {}).linear || (p.sources || {}).notion);
-const ext = (u, text, cls = "") => u ? `<a${cls ? ` class="${cls}"` : ""} href="${esc(u)}" target="_blank" rel="noopener">${text}</a>` : text;
+const imageSrc = s => typeof s === "string" && /^data:image\/(?:png|jpeg|gif|webp);base64,[A-Za-z0-9+/]+={0,2}$/.test(s);
+const httpURL = u => { try { const v = new URL(u); return ["http:", "https:"].includes(v.protocol); } catch { return false; } };
+const mockText = m => Array.isArray(m) ? m.map(s => String(s.text ?? "")).join("") : String(m);
+const mockHTML = m => Array.isArray(m) ? m.map(s => {
+  const text = esc(s.text), emphasis = ["bold", "dim", "bad"].includes(s.emphasis) ? s.emphasis : "";
+  return emphasis === "bold" ? `<b>${text}</b>` : emphasis ? `<span class="${emphasis}">${text}</span>` : text;
+}).join("") : esc(m);
+const ext = (u, text, cls = "") => httpURL(u) ? `<a${cls ? ` class="${esc(cls)}"` : ""} href="${esc(u)}" target="_blank" rel="noopener">${text}</a>` : text;
 function shortLabel(t){ const s = String(t).split(/[，。：；:]/)[0]; return s.length > 18 ? s.slice(0,17) + "…" : s; }
 
 const ICON = {
@@ -402,7 +418,7 @@ const ICON = {
   plug:'<path d="M-5-12v6M5-12v6M-9-6h18v5a9 9 0 0 1-18 0zM0 8v5"/>'
 };
 function icon(name){
-  return `<svg viewBox="-16 -16 32 32" aria-hidden="true"><g fill="none" stroke="var(--pc)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${(ICON[name]||"").replace(/class="dotf"/g,'fill="var(--pc)" stroke="none"')}</g></svg>`;
+  return `<svg viewBox="-16 -16 32 32" aria-hidden="true"><g fill="none" stroke="var(--pc)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${(Object.hasOwn(ICON, name) ? ICON[name] : ICON.gear).replace(/class="dotf"/g,'fill="var(--pc)" stroke="none"')}</g></svg>`;
 }
 
 function mediaKinds(list){
@@ -410,12 +426,12 @@ function mediaKinds(list){
   (list||[]).forEach(m => { if (m.src || m.missing) k.add(T.m_shot); if (m.math) k.add(T.m_math); if (m.mock) k.add(T.m_mock); if (m.link) k.add(T.m_link); });
   return [...k];
 }
-function renderMedia(list){  // mock is HTML from inventory.json (<b>, <span class="dim|bad">); everything else is escaped
+function renderMedia(list){  // All content is text; emphasis has a fixed tag/class allowlist.
   return (list||[]).map(m => {
     if (m.missing) return `<figure><figcaption><span class="tagx bad">${T.m_missing}</span><code>${esc(m.missing)}</code> ${esc(m.caption||"")}</figcaption></figure>`;
-    if (m.src) return `<figure><img src="${m.src}" alt="${esc(m.caption||"")}" loading="lazy" class="${m.phone?"phone":""}"><figcaption><span class="tagx shot">${T.m_shot}</span>${esc(m.caption||"")}</figcaption></figure>`;
+    if (m.src && imageSrc(m.src)) return `<figure><img src="${esc(m.src)}" alt="${esc(m.caption||"")}" loading="lazy" class="${m.phone?"phone":""}"><figcaption><span class="tagx shot">${T.m_shot}</span>${esc(m.caption||"")}</figcaption></figure>`;
     if (m.math) return `<figure><div class="mathbox">${m.math.map(t=>`<div class="eq">\\[${esc(t)}\\]</div>`).join("")}${m.p?`<p>${esc(m.p)}</p>`:""}</div><figcaption><span class="tagx math">${T.m_math}</span>${T.math_cap}</figcaption></figure>`;
-    if (m.mock) return `<figure><pre class="mock${m.mock.replace(/<[^>]+>/g,"").split("\n").filter(x => /\S {2,}\S/.test(x)).length >= 2 ? " cols" : ""}">${m.mock}</pre><figcaption><span class="tagx ${m.real?"real":"mock"}">${m.real?T.m_real:T.m_mock}</span>${esc(m.cap||"")}</figcaption></figure>`;
+    if (m.mock) return `<figure><pre class="mock${mockText(m.mock).split("\n").filter(x => /\S {2,}\S/.test(x)).length >= 2 ? " cols" : ""}">${mockHTML(m.mock)}</pre><figcaption><span class="tagx ${m.real?"real":"mock"}">${m.real?T.m_real:T.m_mock}</span>${esc(m.cap||"")}</figcaption></figure>`;
     if (m.link) return `<figure>${ext(m.link[1], esc(m.link[0]), "golink")}</figure>`;
     return "";
   }).join("");
@@ -431,18 +447,18 @@ function renderRoad(p){
   const idsOf = n => [...new Set([...(n.tickets || []), ...tks.filter(t => t.node === n.id).map(t => t.id)])].filter(id => sm[id]);
   const tksOfN = n => { const ids = idsOf(n); return [ids.filter(t => sm[t] === "done"), ids.filter(t => sm[t] === "wait"), ids.filter(t => sm[t] === "open")]; };
   const did = n => `d-${p.key}-${n.id}`;
-  const leaf = t => `<button type="button" class="leaf" data-go="t-${esc(p.key)}-${esc(t)}" title="${esc(txt[t]||"")}"><span class="id ${sm[t]}">${esc(t)}</span>${esc(shortLabel(txt[t]||""))}</button>`;
+  const leaf = t => `<button type="button" class="leaf" data-go="t-${esc(p.key)}-${esc(t)}" title="${esc(txt[t]||"")}"><span class="id ${esc(sm[t])}">${esc(t)}</span>${esc(shortLabel(txt[t]||""))}</button>`;
   const nodeBtn = (n, br) => {
     const [d, w, o] = tksOfN(n), kinds = mediaKinds(n.media);
     const cnt = (d.length ? `<span class="c done">✓ ${d.length}</span>` : "") + (w.length ? `<span class="c wait">${w.length} ${T.c_wait}</span>` : "") + (o.length ? `<span class="c open">${o.length} ${T.c_open}</span>` : "");
-    return `<button type="button" class="node${br ? " br" : ""}" data-id="${esc(n.id)}" aria-expanded="false" aria-controls="${did(n)}">
+    return `<button type="button" class="node${br ? " br" : ""}" data-id="${esc(n.id)}" aria-expanded="false" aria-controls="${esc(did(n))}">
       <span class="n">${esc(n.id)}</span><span class="ic">${icon(n.icon)}</span>
       <span class="t">${esc(n.title)}</span><span class="s">${esc((n.sub || "").replace(/\n/g, ""))}</span>
       <span class="more">${kinds.map(k => `<span>${k}</span>`).join("")}${cnt}<span class="x">${T.open_x}</span></span></button>`;
   };
   const detail = (n, pos) => {
     const [d, w, o] = tksOfN(n), tl = (lab, ids) => ids.length ? `<div class="tks"><b>${lab}</b>${ids.map(leaf).join("")}</div>` : "";
-    return `<div class="detail${pos}" id="${did(n)}" hidden>
+    return `<div class="detail${pos}" id="${esc(did(n))}" hidden>
       <h5><span class="dn">${esc(n.id)}</span>${esc(n.title)}</h5>
       ${n.detail ? `<p class="dtext">${esc(n.detail)}</p>` : ""}
       <div class="media">${renderMedia(n.media)}</div>
@@ -504,6 +520,10 @@ function drawChart(el){
   el.querySelector("svg")?.remove(); el.insertAdjacentHTML("afterbegin", svg);
   c.n = n; c.W = W;
 }
+function currentWeek(){
+  const d = new Date(D.date + "T00:00"); d.setDate(d.getDate() - (d.getDay() + 6) % 7);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+}
 function hoverChart(el, e){
   const c = CHARTS[el.dataset.chart], svg = el.querySelector("svg"), tip = el.querySelector(".tip"), xh = svg.querySelector(".xh");
   const box = svg.getBoundingClientRect(), px = (e.clientX - box.left) * c.W / box.width;
@@ -511,7 +531,7 @@ function hoverChart(el, e){
   xh.setAttribute("x1", cx); xh.setAttribute("x2", cx); xh.setAttribute("visibility", "visible");
   if (c.kind === "line") tip.innerHTML = `<b>${mdOf(c.days[i])}</b><br>` + c.series.map(s => `${esc(s.name)}: ${s.vals[i]}`).join("<br>");
   else { const b = c.bars[i], end = new Date(b.week); end.setDate(end.getDate() + 6);
-         tip.innerHTML = `<b>${mdOf(b.week)}–${end.getMonth()+1}/${end.getDate()} ${T.wk_this}</b><br>${X(T.wk_tip, b.n)}`; }
+         tip.innerHTML = `<b>${mdOf(b.week)}–${end.getMonth()+1}/${end.getDate()}${b.week === currentWeek() ? ` ${T.wk_this}` : ""}</b><br>${X(T.wk_tip, b.n)}`; }
   tip.hidden = false;
   const tw = tip.offsetWidth, left = Math.max(tw/2, Math.min(el.clientWidth - tw/2, cx * box.width / c.W));
   tip.style.left = left + "px";
@@ -575,16 +595,28 @@ function placeDetail(det, fresh){
 function drawAllCharts(){ document.querySelectorAll(".detail:not([hidden])").forEach(d => placeDetail(d)); document.querySelectorAll(".viz").forEach(el => { if (el.offsetParent) drawChart(el); }); document.querySelectorAll(".road").forEach(el => { if (el.offsetParent) drawRoad(el); }); }
 function tableOf(head, rows){ return `<details class="tbl"><summary>${T.table}</summary><table><tr>${head.map(h=>`<th>${esc(h)}</th>`).join("")}</tr>${rows.map(r=>`<tr>${r.map(v=>`<td>${esc(v)}</td>`).join("")}</tr>`).join("")}</table></details>`; }
 
+function ticketNotice(p){
+  if (!p.ticket_state || p.ticket_state.status === "ready") return "";
+  const status = p.ticket_state.status, bad = ["failed", "partial", "stale"].includes(status);
+  const sources = bad ? Object.entries(p.ticket_state.sources).map(([name, s]) =>
+    `<div>${esc(name)}: ${esc(s.error || s.status)}<div class="small">${T.tk_last}${esc(s.fetched_at || T.tk_never)}</div></div>`).join("") : "";
+  return `<div class="card" data-ticket-state="${esc(status)}"${bad ? ' role="status"' : ""}><p class="${bad ? "st bad" : "empty"}">${esc(ticketLabel(p))}</p>${sources}${bad ? `<p>${T.tk_recover}</p>` : ""}</div>`;
+}
+
 function renderTrends(p){
   let h = `<h3>${T.trends}</h3><p class="hint">${T.trends_hint}</p><div class="trends">`;
   const t = p.trend_tickets;
+  if (!ticketComplete(p)) h += ticketNotice(p);
   if (t){
-    const s = [{name:T.s_done, short:T.s_done_s, cls:"--viz-done", vals:t.done}, {name:T.s_open, short:T.s_open_s, cls:"--viz-open", vals:t.open, dashed:true}];
+    const s = [{name:T.s_done, short:T.s_done_s, cls:"--viz-done", vals:t.done}, {name:T.s_open, short:T.s_open_s, cls:"--viz-open", vals:t.open, dashed:true},
+      {name:T.s_canceled, short:T.s_canceled_s, cls:"--muted", vals:t.canceled}, {name:T.s_unknown, short:T.s_unknown_s, cls:"--viz-open", vals:t.unknown, dashed:true}];
+    const coverage = T.tk_coverage.replace("A", t.coverage.known).replace("B", t.coverage.total).replace("C", t.unknown.at(-1));
+    const reasons = Object.entries(t.coverage.reasons).map(([reason,n]) => `${n} ${T.tk_reasons[reason]}`).join("; ");
     const wk = t.days.map((d,i)=>[d,i]).filter(([,i]) => (t.days.length-1-i) % 7 === 0);
-    h += `<div class="card"><h4>${T.tk_chart}</h4><p class="sub">${T.tk_chart_sub}</p>
+    h += `<div class="card"><h4>${T.tk_chart}</h4><p class="sub">${T.tk_chart_sub}</p><p class="small" data-history-coverage>${esc(coverage)}${reasons ? ` ${esc(reasons)}.` : ""}</p>
       <div class="lg">${s.map(x=>`<span>${lineSwatch(x.cls, x.dashed)}${esc(x.name)}</span>`).join("")}</div>
       ${chartSlot({kind:"line", days:t.days, series:s, label:`${p.name} ${T.tk_chart}`})}
-      ${tableOf([T.th_date, T.s_done, T.s_open], wk.map(([d,i])=>[mdOf(d), t.done[i], t.open[i]]))}</div>`;
+      ${tableOf([T.th_date, T.s_done, T.s_open, T.s_canceled, T.s_unknown], wk.map(([d,i])=>[mdOf(d), t.done[i], t.open[i], t.canceled[i], t.unknown[i]]))}</div>`;
   }
   if (p.weekly){
     const tot = p.weekly.reduce((a,b)=>a+b.n,0);
@@ -598,8 +630,7 @@ function renderActivity(p){
   let h = `<h3>${T.activity}</h3><p class="hint">${T.act_hint}</p><div class="card">`;
   if (!H.length) return h + `<p class="empty">${T.noact}</p></div>`;
   const li = x => `<li><span class="d">${mdOf(x.date)}</span><span class="k ${x.kind}">${K[x.kind]}</span><span class="t">${esc(x.text)}${x.url ? ext(x.url, esc(x.ref || ""), "r") : `<span class="r">${esc(x.where || x.ref || "")}</span>`}${x.note ? `<span class="note2">${esc(x.note)}</span>` : ""}</span></li>`;
-  const d0 = new Date(D.date + "T00:00"); d0.setDate(d0.getDate() - (d0.getDay() + 6) % 7);
-  const H0 = `${d0.getFullYear()}-${String(d0.getMonth()+1).padStart(2,"0")}-${String(d0.getDate()).padStart(2,"0")}`;
+  const H0 = currentWeek();
   const wk = (w, i) => {
     const end = new Date(w.week + "T00:00"); end.setDate(end.getDate() + 6);
     const cnt = ["commit", "done", "pr"].map(k => [k, w.items.filter(x => x.kind === k).length]).filter(([, n]) => n).map(([k, n]) => X(T.wk_cnt[k], n)).join(" · ");
@@ -613,7 +644,10 @@ function renderActivity(p){
 }
 function renderTickets(p){
   const tk = tkOf(p);
-  if (!tk.length) return `<p class="empty">${hasTk(p) ? "0" : T.notickets}</p>`;
+  const notice = ticketNotice(p);
+  const old = p.facts.stale_tickets || [];
+  const previous = old.length ? `<details><summary>${T.tk_old}</summary><ul>${old.map(t => `<li>${esc(t.id)} ${esc(t.title)}</li>`).join("")}</ul></details>` : "";
+  if (!tk.length) return notice + previous || `<p class="empty">${T.notickets}</p>`;
   const g = s => tk.filter(t => t.state === s), c = p.counts;
   const li = (t, inner) => `<li id="t-${esc(p.key)}-${esc(t.id || "")}">${ext(t.url, esc(t.id || "•"), `id ${t.state}`)}<div>${inner}</div></li>`;
   let h = `<div class="legend">${[["done","lg_done"],["wait","lg_wait"],["open","lg_open"],["dead","lg_dead"]].map(([s,k]) => `<span><i class="sw" style="background:var(--${s})"></i>${T[k]}</span>`).join("")}</div>
@@ -622,7 +656,7 @@ function renderTickets(p){
   if (g("wait").length) h += `<h4><span class="pill wait">${T.t_wait}</span>${T.col_wait}</h4><ul class="tk">${g("wait").map(t => li(t, `<span class="why">${esc(t.title)}</span>${t.benefit ? `<span class="note2">${esc(t.benefit)}</span>` : ""}`)).join("")}</ul><div style="height:18px"></div>`;
   h += `<h4><span class="pill open">${T.t_open}</span>${T.col_open}</h4><ul class="tk">${g("open").map(t => li(t, `<span class="why"><b>${esc(t.title)}</b></span>${t.benefit ? `<span class="gain"><b>${T.gain}</b>${esc(t.benefit)}</span>` : ""}`)).join("")}</ul></div></div>`;
   if (g("dead").length) h += `<details class="dead"><summary>${X(T.dead_sum, g("dead").length)}</summary><ul class="tk">${g("dead").map(t => li(t, esc(t.title))).join("")}</ul></details>`;
-  return h;
+  return notice + h + previous;
 }
 function renderFacts(p){
   const f = p.facts, src = p.sources || {}, local = [], cloud = [];
@@ -631,6 +665,7 @@ function renderFacts(p){
     if (r.dirty) bits.push(`<span class="st warn">${T.dirtyf} ${r.dirty}</span>`);
     local.push([`${T.repo} · ${esc(r.label)}`, `<code>${esc(r.path)}</code><div>${bits.join(" ")}</div>${r.last_commit ? `<div class="small">${T.last}：${esc(r.last_commit)}</div>` : ""}`]);
     const up = [];
+    if (r.fetch_error) up.push(`<span class="st bad">${T.fetch_failed}: ${esc(r.fetch_error)}</span><div class="small">${T.last_fetch}${esc(r.last_fetched_at || "—")}</div>`);
     if (r.ahead) up.push(`<span class="st warn">${T.ahead} ${r.ahead}</span>`);
     if (r.behind) up.push(`<span class="st hist">${T.behind} ${r.behind}</span>`);
     if (r.has_origin && !r.upstream && r.branch !== "(detached)") up.push(`<span class="st warn">${T.no_up}</span>`);
@@ -638,32 +673,39 @@ function renderFacts(p){
   }
   for (const d of f.data) local.push([`${T.data} · ${esc(d.label)}`, d.error ? `<span class="st bad" style="margin-left:0">${esc(d.error)}</span><div class="small"><code>${esc(d.path)}</code></div>`
     : `${T.newest} <b>${esc(d.newest.slice(0, 10))}</b>（${d.age_days} ${T.days}）<span class="st ${d.stale ? "bad" : "ok"}">${d.stale ? T.stale1 : T.ok1}</span><div class="small"><code>${esc(d.path)}</code> · ${X(T.limit, d.max_age_days)}</div>`]);
-  for (const o of f.obsidian) local.push([T.notes, `${o.open} ${T.notes_open} · ${o.done} ${T.notes_done} <div class="small"><code>${esc(o.path)}</code></div>${o.items.length ? `<details><summary>${o.open} ${T.notes_open}</summary>${o.items.map(i => `<div class="small">☐ ${esc(i.text)} · ${esc(i.file)}</div>`).join("")}</details>` : ""}`]);
+  for (const [index, o] of f.obsidian.entries()){
+    const total = o.total ?? o.open, shown = o.shown ?? o.items.length;
+    const hint = shown < total ? `<div class="hint">${T.notes_truncated.replace("A", shown).replace("B", total)}</div>` : "";
+    local.push([`<span${index === 0 ? ` id="d-${esc(p.key)}-notes"` : ""}>${T.notes}</span>`, `${o.open} ${T.notes_open} · ${o.done} ${T.notes_done} <div class="small"><code>${esc(o.path)}</code></div>${hint}${o.items.length ? `<details><summary>${shown} / ${total} ${T.notes_open}</summary>${o.items.map(i => `<div class="small">☐ ${esc(i.text)} · ${esc(i.file)}${i.line ? `:${esc(i.line)}` : ""}</div>`).join("")}</details>` : ""}`]);
+  }
   for (const r of p.notes || []) local.push([esc(r[0]), esc(r[1])]);
-  if (f.prs.length) cloud.push([T.pr_open, f.prs.map(x => `<div>${ext(x.url, `#${esc(x.number)}`)} ${esc(x.title)} <span class="small">${esc(x.repo || "")} · ${mdOf(x.createdAt)}</span></div>`).join("")]);
+  if (f.prs.length) cloud.push([T.pr_open, f.prs.map(x => `<div>${ext(x.url, `#${esc(x.number)}`)} ${esc(x.title)}${x.isDraft ? ` <span class="st hist">Draft</span>` : ""} <span class="small">${esc(x.repo || "")} · ${mdOf(x.createdAt)}</span></div>`).join("")]);
   if (src.linear) cloud.push(["Linear", esc(src.linear.project)]);
   if (src.notion) cloud.push(["Notion", ext(src.notion.url, esc(src.notion.url))]);
   const tbl = (head, rows) => rows.length ? `<h3>${head}</h3><div class="facts"><table>${rows.map(([a, b]) => `<tr><th>${a}</th><td>${b}</td></tr>`).join("")}</table></div>` : "";
+  for (const [name, state] of Object.entries(f.sources || {})) cloud.push([esc(name),
+    `<span class="st ${state.status === "ok" ? "ok" : "bad"}">${esc(state.status)}</span> ${esc(state.error || "")}<div class="small">${esc(state.fetched_at || "—")}</div>`]);
   const errs = f.errors.length ? [[T.errs, f.errors.map(e => `<div><span class="st bad" style="margin-left:0">!</span> ${esc(e)}</div>`).join("")]] : [];
   return `<p class="hint">${T.facts_hint}</p>${tbl(T.f_local, local)}${tbl(T.f_cloud, cloud)}${tbl(T.errs, errs)}`;
 }
 function nowLine(p){
   const n = p.now, bits = [];
   if (n.last) bits.push(X(T.now_last, mdOf(n.last)));
-  if (hasTk(p)){ bits.push(X(T.now_done7, n.done7)); if (n.wait) bits.push(X(T.now_wait, n.wait)); }
+  if (hasTk(p) && !ticketComplete(p)) bits.push(esc(ticketLabel(p)));
+  else if (hasTk(p)){ bits.push(X(T.now_done7, n.done7)); if (n.wait) bits.push(X(T.now_wait, n.wait)); }
   else if (n.last) bits.push(X(T.now_c14, n.c14));
   if (!bits.length) bits.push(T.now_none);
   return bits.join(T.dot) + T.dot.trim() + (n.err ? ` <span class="st bad">${T.now_err}</span>` : "");
 }
 function todoText(t){
   if (t.kind === "git") return `${esc(t.where)}：${t.parts.map(([n, k]) => (n != null ? `${n} ` : "") + T[k]).join(T.join)}`;
-  return T[t.t];
+  return T[t.t] + (t.kind === "pr" && t.drafts ? ` (Draft ${t.drafts})` : "");
 }
 function todoRows(list){
-  return list.map(t => `<a class="todo pc" style="--pc0:${esc(t.color)}" href="${t.go}"><span class="tn">${t.n ?? ""}</span><span class="tt">${todoText(t)}</span><span class="tp">${esc(t.pname || "")}</span><span class="ta" aria-hidden="true">›</span></a>`).join("");
+  return list.map(t => `<a class="todo pc" style="--pc0:${esc(t.color)}" href="${esc(String(t.go).startsWith("#") ? t.go : "#")}"><span class="tn">${t.n ?? ""}</span><span class="tt">${todoText(t)}</span><span class="tp">${esc(t.pname || "")}</span><span class="ta" aria-hidden="true">›</span></a>`).join("");
 }
 const PANELS = [["road", "road"], ["progress", "progress"], ["tickets", "tickets"], ["facts", "facts"]];
-const panelsOf = p => PANELS.filter(([k]) => k !== "tickets" || hasTk(p));
+const panelsOf = p => PANELS;
 function renderProject(p){
   const c = p.counts;
   let h = `<section class="proj pc" id="${esc(p.key)}" style="--pc0:${esc(p.color)}" hidden>
@@ -676,7 +718,7 @@ function renderProject(p){
     <nav class="subnav">${panelsOf(p).map(([k]) => `<a href="#${esc(p.key)}/${k}" data-panel="${k}">${T[k]}${k === "tickets" && c.open + c.wait ? `<small>${c.open + c.wait}</small>` : ""}</a>`).join("")}</nav>`;
   h += `<div class="panel" data-panel="road"><p class="hint">${T.road_hint}${hasTk(p) ? T.road_hint_tk : ""}</p>${renderRoad(p)}</div>`;
   h += `<div class="panel" data-panel="progress">${renderTrends(p)}${renderActivity(p)}</div>`;
-  if (hasTk(p)) h += `<div class="panel" data-panel="tickets">${renderTickets(p)}</div>`;
+  h += `<div class="panel" data-panel="tickets">${renderTickets(p)}</div>`;
   h += `<div class="panel" data-panel="facts">${renderFacts(p)}</div>`;
   return h + `</section>`;
 }
@@ -685,8 +727,9 @@ function spark(weekly){
   return `<svg class="spark" viewBox="0 0 ${W} ${H}" aria-hidden="true">${weekly.map((w,i)=>w.n?`<rect x="${(i*bw+1).toFixed(1)}" y="${(H - H*w.n/max).toFixed(1)}" width="${(bw-2).toFixed(1)}" height="${(H*w.n/max).toFixed(1)}" rx="1"/>`:"").join("")}</svg>`;
 }
 function renderHome(){
-  const all = P.flatMap(p => p.todo.map(t => ({...t, pname:p.name, color:p.color})));
-  const KIND = [["pr","k_pr","--wait"],["review","k_review","--accent"],["git","k_git","--open"],["data","k_data","--bad"],["err","k_err","--bad"]];
+  const priority = {err:0, data:1, review:2, pr:3, notes:4, git:5};
+  const all = P.flatMap(p => p.todo.map(t => ({...t, pname:p.name, color:p.color}))).sort((a,b) => priority[a.kind] - priority[b.kind]);
+  const KIND = [["notes","k_notes","--open"],["pr","k_pr","--wait"],["review","k_review","--accent"],["git","k_git","--open"],["data","k_data","--bad"],["err","k_err","--bad"]];
   const tiles = KIND.map(([k, lab, col]) => {
     const rows = all.filter(t => t.kind === k); if (!rows.length) return "";
     const v = rows.every(t => t.n != null) ? rows.reduce((a,t) => a + t.n, 0) : rows.length;
@@ -699,7 +742,7 @@ function renderHome(){
     return `<a class="drawer pc" href="#${esc(p.key)}" style="--pc0:${esc(p.color)}">
       <span class="dn">${esc(p.name)}</span>${p.tag ? `<span class="dt2">${esc(p.tag)}</span>` : ""}
       <span class="dnow">${nowLine(p)}</span>
-      <span class="dfoot">${p.weekly ? `${spark(p.weekly)}<span>${X(T.d_weeks, commits)}</span>` : ""}${hasTk(p) ? `<span>${X(T.d_open, c.open)}${c.wait ? T.join + X(T.d_wait, c.wait) : ""}</span>` : ""}${p.todo.length ? `<span class="dtodo">${X(T.d_todo, p.todo.length)}</span>` : ""}</span></a>`;
+      <span class="dfoot">${p.weekly ? `${spark(p.weekly)}<span>${X(T.d_weeks, commits)}</span>` : ""}${hasTk(p) && ticketComplete(p) ? `<span>${X(T.d_open, c.open)}${c.wait ? T.join + X(T.d_wait, c.wait) : ""}</span>` : ""}${p.todo.length ? `<span class="dtodo">${X(T.d_todo, p.todo.length)}</span>` : ""}</span></a>`;
   }).join("")}</div>`;
   $("#home").innerHTML = h;
 }
@@ -708,7 +751,7 @@ function renderHome(){
 function typeset(el){ if (!window.MathJax) return; if (MathJax.typesetPromise) MathJax.typesetPromise([el]).catch(()=>{}); else setTimeout(()=>typeset(el), 400); }
 let pendingGo = null;
 function route(){
-  const [key, panel] = decodeURIComponent(location.hash.slice(1)).split("/"), p = P.find(x => x.key === key);
+  const [key, panel, anchor] = decodeURIComponent(location.hash.slice(1)).split("/"), p = P.find(x => x.key === key);
   $("#home").hidden = !!p;
   document.querySelectorAll("section.proj").forEach(s => s.hidden = !p || s.id !== key);
   if (p){
@@ -720,6 +763,7 @@ function route(){
   document.querySelectorAll("#menuitems a").forEach(a => a.setAttribute("aria-current", a.dataset.k === (p ? key : "home") ? "page" : "false"));
   $("#menulabel").textContent = p ? p.name : T.all;
   toggleMenu(false);
+  if (p && panel === "facts" && anchor === "notes") pendingGo = `d-${key}-notes`;
   if (!pendingGo) window.scrollTo(0, 0);
   drawAllCharts();
   if (pendingGo){ const id = pendingGo; pendingGo = null; requestAnimationFrame(() => go(id)); }

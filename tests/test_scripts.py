@@ -2,14 +2,17 @@
 
     python3 tests/test_scripts.py
 """
-import io, json, subprocess, urllib.error, sys, tempfile, types, urllib.request
+from test_support import case, SkipTest
+import base64, struct, zlib, io, json, subprocess, urllib.error, sys, tempfile, types, urllib.request
 from pathlib import Path
 
 S = Path(__file__).resolve().parent.parent / "skills/project-inventory/scripts"
 sys.path.insert(0, str(S))
 import collect, publish_vercel as pv
 
+import atexit, shutil
 tmp = Path(tempfile.mkdtemp())
+atexit.register(shutil.rmtree, tmp, ignore_errors=True)
 git = lambda cwd, *a: subprocess.run(["git", "-c", "user.email=a@b", "-c", "user.name=a", *a], cwd=cwd, check=True, capture_output=True)
 
 
@@ -27,10 +30,10 @@ home = tmp / "home"; (home / "gathered").mkdir(parents=True)
 (home / "gathered" / "2000-01-01.json").write_text("{}")
 (home / "inventory.json").write_text(json.dumps({"title": "A&B <i>x</i>", "projects": [{
     "key": "p", "name": "P", "color": "#c00",
-    "sources": {"notion": {"url": "x"}, "local": [{"label": "a", "path": str(a)}, {"label": "a-wt", "path": str(tmp / "a-wt")},
+    "sources": {"notion": {"url": "https://notion.so/fixture"}, "local": [{"label": "a", "path": str(a)}, {"label": "a-wt", "path": str(tmp / "a-wt")},
                                                   {"label": "b", "path": str(b)}]}}]}))
 r = run("collect.py", str(home))
-# Notion not gathered -> exit 1 (that is why the docs say `;`, not `&&`), and the hint names the other date
+# Notion not gathered -> partial exit 1; build remains allowed, with a hint naming the other date
 assert r.returncode == 1, r.stdout + r.stderr
 assert "newest gathered file is 2000-01-01.json" in r.stdout, r.stdout
 facts = json.loads(next((home / "facts").glob("*.json")).read_text())["projects"]["p"]
@@ -43,7 +46,12 @@ assert "<title>A&amp;B &lt;i&gt;x&lt;/i&gt;</title>" in page, "title must be HTM
 assert "libs/mathjax" not in page, "no formula on the page -> MathJax is not loaded"
 
 # --- build: a step's screenshot is embedded, a missing one is shown and warned, a formula loads MathJax
-shot = tmp / "s.png"; shot.write_bytes(b"\x89PNG fake")
+def png_chunk(kind, data):
+    return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data))
+
+PNG = (b"\x89PNG\r\n\x1a\n" + png_chunk(b"IHDR", struct.pack(">IIBBBBB", 1, 1, 8, 6, 0, 0, 0))
+       + png_chunk(b"IDAT", zlib.compress(b"\x00\xff\x00\x00\xff")) + png_chunk(b"IEND", b""))
+shot = tmp / "s.png"; shot.write_bytes(PNG)
 inv = json.loads((home / "inventory.json").read_text())
 inv["projects"][0]["nodes"] = [{"id": 1, "title": "x", "icon": "gear", "media": [
     {"shot": str(shot), "caption": "ok"}, {"shot": "nope.png", "caption": "gone"}, {"math": ["a+b"]}]}]
@@ -55,8 +63,85 @@ assert "data:image/png;base64," in page and str(shot) not in page, "screenshot m
 assert '"missing":' in page, "a missing screenshot is shown as missing, not dropped"
 assert "cdnjs.cloudflare.com/ajax/libs/mathjax" in page
 
+# --- security #4: exercise the actual JavaScript sinks from built HTML --------------------------
+@case
+def test_html_trust_boundary():
+    from html.parser import HTMLParser
+    class SafeHTML(HTMLParser):
+        def handle_starttag(self, tag, attrs):
+            assert tag not in ("script", "iframe", "object"), (tag, attrs)
+            for name, value in attrs:
+                assert not name.lower().startswith("on"), (tag, attrs)
+                if name == "href":
+                    assert value.startswith(("#", "http://", "https://")), value
+                if name == "src":
+                    assert value.startswith("data:image/png;base64,"), value
+    inv = json.loads((home / "inventory.json").read_text())
+    inv["projects"][0]["nodes"][0]["media"].extend([
+        {"mock": "</script><script>window.__audit_xss=1</script>"},
+        {"src": '\" onerror=\"window.__audit_xss=1'},
+        {"link": ["safe", "https://example.com"]}])
+    (home / "inventory.json").write_text(json.dumps(inv))
+    result = run("build.py", str(home))
+    assert result.returncode == 0, result.stderr
+    built = (home / "out/index.html").read_text()
+    assert "Content-Security-Policy" in built and "sha256-" in built
+    assert "WARN p: step 1: rejected unsafe image source" in result.stdout
+    result = subprocess.run(["node", str(Path(__file__).with_name("html_security.js"))],
+                            input=built, capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+    fragments = json.loads(result.stdout)
+    for fragment in fragments:
+        SafeHTML().feed(fragment)
+    assert "<b>&lt;img onerror=x&gt;</b>" in "".join(fragments)
+    assert '<a href="https://example.com"' in fragments[-1]
+    # Restore the fixture for the remaining build tests.
+    inv["projects"][0]["nodes"][0]["media"] = inv["projects"][0]["nodes"][0]["media"][:-3]
+    (home / "inventory.json").write_text(json.dumps(inv))
+
+test_html_trust_boundary()
+
 # --- build logic --------------------------------------------------------------------------------
 import build, datetime as dt
+
+WEBP = b"RIFF" + (12).to_bytes(4, "little") + b"WEBPVP8L\0\0\0\0"
+JPEG = b"\xff\xd8\xff\xe0" + b"\0" * 4 + b"\xff\xd9"
+
+
+@case
+def test_shot_validation():
+    for name, raw in [("private.txt", b"AUDIT_FAKE_PRIVATE_MARKER"), ("empty.png", b""),
+                      ("broken.png", b"\x89PNG\r\n\x1a\nBAD"), ("vector.svg", b"<svg onload='x'/>") ,
+                      ("oversized.png", PNG + b"x" * build.MAX_SHOT),
+                      ("truncated.png", PNG[:-8]), ("checksum.png", PNG[:-1] + b"x"),
+                      ("trailing.png", PNG + b"PRIVATE"),
+                      ("truncated.webp", WEBP[:-2]), ("truncated.jpg", JPEG[:-2])]:
+        file = tmp / name; file.write_bytes(raw)
+        nodes = [{"id": 1, "media": [{"shot": str(file), "src": "data:image/png;base64,eA=="}]}]
+        warnings = []
+        build.embed_media(nodes, home, warnings.append)
+        assert "src" not in nodes[0]["media"][0], name
+        assert warnings and "screenshot rejected" in warnings[0], (name, warnings)
+        inv = json.loads((home / "inventory.json").read_text())
+        previous = inv["projects"][0]["nodes"][0]["media"]
+        inv["projects"][0]["nodes"][0]["media"] = [{"shot": str(file)}]
+        (home / "inventory.json").write_text(json.dumps(inv))
+        result = run("build.py", str(home))
+        assert result.returncode == 0 and "screenshot rejected" in result.stdout, result.stderr
+        assert '"src":' not in (home / "out/index.html").read_text(), name
+        inv["projects"][0]["nodes"][0]["media"] = previous
+        (home / "inventory.json").write_text(json.dumps(inv))
+    assert build.checked_png(PNG) == "image/png"
+    # the real dashboards ship WebP screenshots: they must still embed
+    assert (build.checked_image(WEBP), build.checked_image(JPEG)) == ("image/webp", "image/jpeg")
+    for path in (shot, home / "relative.png"):
+        path.write_bytes(PNG)
+        nodes = [{"id": 1, "media": [{"shot": str(path) if path == shot else "relative.png"}]}]
+        warnings = []
+        build.embed_media(nodes, home, warnings.append)
+        assert not warnings and nodes[0]["media"][0]["src"].startswith("data:image/png;base64,")
+
+test_shot_validation()
 today = dt.date(2026, 10, 3)
 s = build.ticket_series([
     {"state": "done", "created": "2026-09-01", "completed": "2026-09-10"},
@@ -99,20 +184,669 @@ assert collect.clean_url("git@github.com:o/r.git") == "https://github.com/o/r"
 assert collect.GIT_ENV["GIT_TERMINAL_PROMPT"] == "0"
 
 
-# --- Linear: an empty project is fine, a wrong name is an error -------------------------------
-def fake_linear(projects):
-    body = {"data": {"projects": {"nodes": projects}, "issues": {"nodes": [], "pageInfo": {"hasNextPage": False}}}}
-    return lambda req, timeout: io.BytesIO(json.dumps(body).encode())
+# --- Linear project identity is independent of its display name ------------------------------
+from unittest.mock import patch
 
-collect.os.environ["LINEAR_API_KEY"] = "k"
-urllib.request.urlopen = fake_linear([{"id": "1"}])
-assert collect.linear_tickets("New") == []
-urllib.request.urlopen = fake_linear([])
-try:
-    collect.linear_tickets("Typo"); raise AssertionError("missing project must raise")
-except RuntimeError as e:
-    assert "no Linear project named" in str(e)
 
+@case
+def test_linear_project_identity():
+    issue = {"identifier": "L-1", "title": "one project", "url": "https://linear.app/i",
+             "createdAt": "2026-10-01", "completedAt": None, "canceledAt": None,
+             "state": {"name": "Open", "type": "unstarted"}}
+    for spec, archived, empty in [({"project_id": "a", "project": "Old name"}, None, False),
+                                  ({"project_id": "a"}, "2026-09-01", False),
+                                  ({"project_id": "a"}, None, True),
+                                  ({"project": "Unique"}, "2026-09-01", True)]:
+        requests = []
+        def api(req, timeout):
+            q = json.loads(req.data); requests.append(q)
+            variables = q["variables"]
+            if q["query"] == collect.LINEAR_PROJECT_Q:
+                assert variables == {"id": "a"}
+                data = {"project": {"id": "a", "name": "Renamed", "archivedAt": archived}}
+            elif q["query"] == collect.LINEAR_NAME_Q:
+                assert "includeArchived:true" in q["query"]
+                data = {"projects": {"nodes": [{"id": "a", "name": "Unique", "archivedAt": archived}]}}
+            else:
+                assert variables["id"] == "a" and "name" not in variables
+                assert "project:{id:{eq:$id}}" in q["query"] and "includeArchived:true" in q["query"]
+                more = not empty and variables["after"] is None
+                data = {"issues": {"nodes": [issue] if more else [],
+                    "pageInfo": {"hasNextPage": more, "endCursor": "cursor" if more else None}}}
+            return io.BytesIO(json.dumps({"data": data}).encode())
+        with patch.dict(collect.os.environ, {"LINEAR_API_KEY": "fixture"}), patch.object(urllib.request, "urlopen", side_effect=api):
+            tickets = collect.linear_tickets(spec)
+        assert len(tickets) == (0 if empty else 1)
+        assert len(requests) == (2 if empty else 3)
+        if not empty:
+            assert requests[-1]["variables"]["after"] == "cursor"
+
+
+@case
+def test_linear_legacy_migration_and_permissions():
+    cases = [({"projects": {"nodes": [{"id": "a"}, {"id": "b"}]}}, {"project": "Same"}, "ambiguous"),
+             ({"projects": {"nodes": []}}, {"project": "Old"}, "renamed or inaccessible"),
+             ({"project": None}, {"project_id": "hidden"}, "not found or inaccessible")]
+    for data, spec, expected in cases:
+        with patch.dict(collect.os.environ, {"LINEAR_API_KEY": "fixture"}), patch.object(urllib.request, "urlopen", return_value=io.BytesIO(json.dumps({"data": data}).encode())) as api:
+            try:
+                collect.linear_tickets(spec); raise AssertionError("must not mix or silently lose projects")
+            except RuntimeError as e:
+                assert expected in str(e), str(e)
+                if expected == "ambiguous":
+                    assert "project_id" in str(e) and "a, b" in str(e)
+            assert api.call_count == 1, "issues must not be read after unresolved identity"
+    for response in ({"errors": [{"message": "permission denied"}], "data": None},
+                     urllib.error.HTTPError("url", 403, "Forbidden", {}, None)):
+        kwargs = {"side_effect": response} if isinstance(response, Exception) else {"return_value": io.BytesIO(json.dumps(response).encode())}
+        with patch.dict(collect.os.environ, {"LINEAR_API_KEY": "fixture"}), patch.object(urllib.request, "urlopen", **kwargs):
+            try:
+                collect.linear_tickets({"project_id": "hidden"}); raise AssertionError("permission error required")
+            except RuntimeError as e:
+                assert "permission denied" in str(e) or "HTTP 403" in str(e)
+
+
+test_linear_project_identity()
+test_linear_legacy_migration_and_permissions()
+
+
+# --- wave 1b: collection failures must remain visible -----------------------------------------
+from unittest.mock import patch
+from contextlib import redirect_stdout
+import os, uuid
+
+def fixture(name, sources):
+    root = tmp / name; (root / "gathered").mkdir(parents=True)
+    (root / "inventory.json").write_text(json.dumps({"projects": [
+        {"key": "p", "name": "P", "color": "#c00", "sources": sources}]}))
+    return root
+
+def gather(root, status="ok", source="notion", tickets=None):
+    rid = uuid.uuid4().hex
+    stamp = dt.datetime.now().astimezone().isoformat()
+    (root / "gathered" / f"{dt.date.today()}.json").write_text(json.dumps({"_run": {"run_id": rid}, "p": {
+        "sources": {source: dict(run_id=rid, attempted_at=stamp, fetched_at=stamp,
+          status=status, complete=status == "ok", error=None if status == "ok" else "403")},
+        "tickets": tickets or [], "read": [source] if status == "ok" else [], "errors": []}}))
+    return rid
+
+def snapshot(root):
+    return json.loads((root / "facts" / f"{dt.date.today()}.json").read_text())
+
+def page_data(root):
+    import re
+    result = run("build.py", str(root)); assert result.returncode == 0, result.stdout + result.stderr
+    page = (root / "out/index.html").read_text()
+    return json.loads(re.search(r"const D = (.*?);\nconst L", page, re.S)[1].replace("<\\/", "</"))
+
+OLD_TICKET = {"id": "N-1", "url": "https://notion.so/full-page-id", "title": "old", "source": "notion", "state": "wait", "created": "2026-09-01"}
+
+@case
+def test_commit_count_uncapped_worktrees_branches_and_repos():
+    repo = tmp / "busy"; repo.mkdir(); git(repo, "init", "-q")
+    old = (dt.date.today() - dt.timedelta(days=30)).isoformat() + "T12:00:00+00:00"
+    subprocess.run(["git", "-c", "user.email=a@b", "-c", "user.name=a", "commit", "-q", "--allow-empty", "-m", "old"],
+                   cwd=repo, check=True, capture_output=True,
+                   env={**os.environ, "GIT_AUTHOR_DATE": old, "GIT_COMMITTER_DATE": old})
+    for n in range(45):
+        git(repo, "commit", "-q", "--allow-empty", "-m", f"busy {n}")
+    wt = tmp / "busy-wt"
+    git(repo, "worktree", "add", "-q", "-b", "side", str(wt))
+    git(wt, "commit", "-q", "--allow-empty", "-m", "only on side branch")
+    clone = tmp / "busy-clone"
+    git(tmp, "clone", "-q", "--no-hardlinks", str(repo), str(clone))
+    git(clone, "remote", "remove", "origin")
+    other = tmp / "independent"; other.mkdir(); git(other, "init", "-q")
+    git(other, "commit", "-q", "--allow-empty", "-m", "independent commit")
+    root = fixture("busy-home", {"local": [{"label": p.name, "path": str(p)} for p in (repo, wt, clone, other)]})
+    with redirect_stdout(io.StringIO()):
+        code, path, _ = collect.collect_snapshot(root)
+    f = json.loads(path.read_text())["projects"]["p"]
+    assert code == 0 and f["commit_count_14"] == 47, f["errors"]
+    assert sum(w["n"] for w in f["weekly"]) == 48  # includes one old commit
+    assert len(f["repos"][0]["recent"]) == 40
+    assert all(len(c["hash"]) == 40 for c in f["commits"])
+    assert build.now(f, dt.date.today())["c14"] == 47
+    assert page_data(root)["projects"][0]["now"]["c14"] == 47
+    # The summary must also survive display history being much smaller than the recent set.
+    with patch.object(collect, "HISTORY", 10), redirect_stdout(io.StringIO()):
+        code, path, _ = collect.collect_snapshot(root)
+    f = json.loads(path.read_text())["projects"]["p"]
+    assert code == 0 and f["commit_count_14"] == 47 and len(f["commits"]) < 47
+    assert page_data(root)["projects"][0]["now"]["c14"] == 47
+
+
+@case
+def test_commit_count_legacy_snapshot():
+    since = dt.date.today()
+    recent = [{"hash": f"{n:040x}", "date": since.isoformat(), "subject": str(n)} for n in range(45)]
+    f = {"commits": recent, "repos": [{"recent": recent[:40], "last_commit": None}], "errors": [], "tickets": []}
+    assert build.now(f, since)["c14"] == 45
+    f["commits"].append({"hash": "old", "date": "2000-01-01", "subject": "old"})
+    assert build.now(f, since)["c14"] == 45
+    del f["commits"]
+    assert build.now(f, since)["c14"] == 40  # very old snapshots only retain the display list
+
+
+test_commit_count_uncapped_worktrees_branches_and_repos()
+test_commit_count_legacy_snapshot()
+
+
+@case
+def test_sqlite_identifier_validation():
+    import sqlite3
+    path = tmp / "quoted.sqlite"
+    with sqlite3.connect(path) as con:
+        con.execute('CREATE TABLE "day""table" ("date""quoted" TEXT, date TEXT)')
+        con.execute('INSERT INTO "day""table" VALUES (?, ?)', ("2026-10-05", "2026-10-04"))
+        con.execute('CREATE TABLE empty (date TEXT)')
+        con.execute('CREATE TABLE nulls (date TEXT)')
+        con.execute('INSERT INTO nulls VALUES (NULL)')
+    spec = {"path": str(path), "kind": "sqlite", "table": 'day"table', "column": 'date"quoted'}
+    assert collect.newest_date(spec) == "2026-10-05"
+    assert collect.newest_date({**spec, "column": "DATE"}) == "2026-10-04"
+    for changes, message in [({"column": "2026-10-05"}, "column '2026-10-05' not found"),
+                             ({"column": "typo"}, "column 'typo' not found"),
+                             ({"table": "missing"}, 'table/source "missing" not found'),
+                             ({"table": 'missing"; DROP TABLE empty; --'}, "not found or unreadable"),
+                             ({"table": "empty", "column": "date"}, "empty table/source"),
+                             ({"table": "nulls", "column": "date"}, "no values in column")]:
+        try:
+            collect.newest_date({**spec, **changes}); raise AssertionError("accurate error required")
+        except RuntimeError as e:
+            assert message in str(e), str(e)
+    with sqlite3.connect(path) as con:
+        assert con.execute('SELECT COUNT(*) FROM empty').fetchone()[0] == 0
+
+
+@case
+def test_duckdb_identifier_validation():
+    # Exercise the optional adapter with a stdlib SQL backend; never require/install duckdb.
+    import sqlite3
+    path = tmp / "quoted.sqlite"
+    calls = []
+    def connect(name, read_only):
+        calls.append((name, read_only))
+        return sqlite3.connect(f"file:{name}?mode=ro", uri=True)
+    with patch.dict(sys.modules, {"duckdb": types.SimpleNamespace(connect=connect)}):
+        spec = {"kind": "duckdb", "path": str(path), "table": 'day"table', "column": 'date"quoted'}
+        assert collect.newest_date(spec) == "2026-10-05"
+        for changes, message in [({"column": "2026-10-05"}, "not found"),
+                                 ({"table": "missing"}, "not found or unreadable"),
+                                 ({"table": "empty", "column": "date"}, "empty table/source")]:
+            try:
+                collect.newest_date({**spec, **changes}); raise AssertionError("metadata validation required")
+            except RuntimeError as e:
+                assert message in str(e), str(e)
+    assert len(calls) == 4 and all(read_only for _, read_only in calls)
+
+
+@case
+def test_real_duckdb():
+    # The sqlite stand-in above iterates cursors; real DuckDB's execute() returns a non-iterable
+    # connection. This broke all 12 real DuckDB sources once, so run the real engine when present.
+    try:
+        import duckdb
+    except ImportError:
+        raise SkipTest("duckdb not installed")
+    path = tmp / "real.duckdb"
+    con = duckdb.connect(str(path))
+    con.execute("CREATE TABLE native (d DATE); INSERT INTO native VALUES ('2026-10-01'), ('2026-10-05')")
+    con.execute("CREATE TABLE text (d VARCHAR); INSERT INTO text VALUES ('2026-10-05T23:30:00+08:00'), ('2026-10-05T16:00:00Z')")
+    con.execute("CREATE TABLE stamp (t TIMESTAMP); INSERT INTO stamp VALUES ('2026-10-05 16:15:00')")
+    con.close()
+    assert collect.newest_date({"kind": "duckdb", "path": str(path), "table": "native", "column": "d"}) == "2026-10-05"
+    # native TIMESTAMPs print as "YYYY-MM-DD HH:MM:SS" (space, not T): still a valid date
+    assert collect.newest_date({"kind": "duckdb", "path": str(path), "table": "stamp", "column": "t"}).startswith("2026-10-05")
+    # 16:00Z is later than 23:30+08:00 (=15:30Z): text dates must be parsed, not compared as strings
+    assert collect.newest_date({"kind": "duckdb", "path": str(path), "table": "text", "column": "d"}, "UTC") == "2026-10-05T16:00:00+00:00"
+
+
+test_sqlite_identifier_validation()
+test_duckdb_identifier_validation()
+test_real_duckdb()
+
+
+@case
+def test_github_pr_pagination():
+    for count in (0, 50, 51, 101):
+        calls = []
+        def api(cmd, **kwargs):
+            page = len(calls); calls.append(cmd)
+            assert cmd[:3] == ["gh", "api", "graphql"]
+            assert (f"after=c{page}" in cmd) if page else not any(x.startswith("after=") for x in cmd)
+            nodes = [{"number": n, "title": str(n)} for n in range(page * 50, min(count, (page + 1) * 50))]
+            return json.dumps({"data": {"repository": {"pullRequests": {"nodes": nodes,
+                "pageInfo": {"hasNextPage": (page + 1) * 50 < count, "endCursor": f"c{page + 1}"}}}}})
+        with patch.object(collect, "run", side_effect=api):
+            prs = collect.gh_prs("o/r")
+        assert len(prs) == count and all(p["repo"] == "o/r" for p in prs)
+        assert len(calls) == max(1, (count + 49) // 50)
+
+
+@case
+def test_github_denied_second_page():
+    first = json.dumps({"data": {"repository": {"pullRequests": {"nodes": [{"number": n} for n in range(50)],
+        "pageInfo": {"hasNextPage": True, "endCursor": "next"}}}}})
+    root = fixture("github-denied", {"github": ["o/r"]})
+    with patch.object(collect.shutil, "which", return_value="gh"), patch.object(collect, "run", side_effect=[first, RuntimeError("permission denied")]), redirect_stdout(io.StringIO()):
+        code, path, _ = collect.collect_snapshot(root)
+    f = json.loads(path.read_text())["projects"]["p"]
+    assert code == 1 and f["prs"] == []
+    assert f["sources"]["github:o/r"]["status"] == "failed" and not f["sources"]["github:o/r"]["complete"]
+    assert any("PR page 2: permission denied" in e for e in f["errors"])
+    assert run("build.py", str(root)).returncode == 0
+    assert "permission denied" in (root / "out/index.html").read_text()
+
+
+@case
+def test_github_mcp_with_unauthed_cli():
+    root = fixture("github-mcp-cli", {"github": ["o/r"]})
+    gather(root, source="github:o/r")
+    path = next((root / "gathered").glob("*.json"))
+    g = json.loads(path.read_text()); g["p"]["prs"] = [{"number": 1, "repo": "o/r", "title": "PR"}]
+    path.write_text(json.dumps(g))
+    with patch.object(collect.shutil, "which", return_value="gh"), patch.object(collect, "run", side_effect=RuntimeError("not logged in")) as api, redirect_stdout(io.StringIO()):
+        code, path, _ = collect.collect_snapshot(root)
+    assert code == 0 and len(json.loads(path.read_text())["projects"]["p"]["prs"]) == 1
+    api.assert_not_called()
+
+
+test_github_pr_pagination()
+test_github_denied_second_page()
+test_github_mcp_with_unauthed_cli()
+
+
+@case
+def test_same_day_reuse():
+    root = fixture("same-day", {"notion": {"url": "https://notion.so/fixture"}})
+    rid = gather(root, tickets=[OLD_TICKET])
+    first = run("collect.py", str(root)); assert first.returncode == 0, first.stdout + first.stderr
+    assert snapshot(root)["run_id"] == rid
+    assert page_data(root)["projects"][0]["counts"]["wait"] == 1
+    second = run("collect.py", str(root)); assert second.returncode == 1, second.stdout + second.stderr
+    f = snapshot(root)["projects"]["p"]
+    assert snapshot(root)["run_id"] != rid and f["sources"]["notion"]["status"] == "stale"
+    assert f["tickets"] == [] and f["stale_tickets"] == [OLD_TICKET]
+    p = page_data(root)["projects"][0]
+    assert p["counts"]["wait"] == 0 and p["trend_tickets"] is None
+    assert 'stale' in (root / "out/index.html").read_text()
+
+@case
+def test_cron_takeover():
+    root = fixture("cron", {"linear": {"project": "P"}})
+    gather(root, source="linear", tickets=[{**OLD_TICKET, "source": "linear"}])
+    with patch.dict(os.environ, {"LINEAR_API_KEY": "fixture"}), patch.object(collect, "linear_tickets", return_value=[]) as api:
+        for _ in range(2):
+            with patch.object(sys, "argv", ["collect.py", str(root)]), redirect_stdout(io.StringIO()):
+                try: collect.main()
+                except SystemExit as e: assert e.code == 0
+        assert api.call_count == 2
+    f = snapshot(root)["projects"]["p"]
+    assert f["sources"]["linear"]["status"] == "ok" and f["tickets"] == []
+
+@case
+def test_failed_source_keeps_tickets():
+    root = fixture("failed-old", {"notion": {"url": "https://notion.so/fixture"}})
+    gather(root, status="failed", tickets=[OLD_TICKET])
+    result = run("collect.py", str(root)); assert result.returncode == 1
+    f = snapshot(root)["projects"]["p"]
+    assert f["sources"]["notion"]["status"] == "failed" and f["tickets"] == []
+    p = page_data(root)["projects"][0]
+    assert p["counts"]["wait"] == 0 and p["now"]["wait"] == 0 and p["trend_tickets"] is None
+
+@case
+def test_mcp_prs_per_repo():
+    root = fixture("mcp-prs", {"github": ["o/a", "o/b"]})
+    gather(root, source="github:o/a")
+    with patch.object(collect.shutil, "which", return_value=None), patch.object(sys, "argv", ["collect.py", str(root)]), redirect_stdout(io.StringIO()):
+        try: collect.main()
+        except SystemExit as e: assert e.code == 1
+    states = snapshot(root)["projects"]["p"]["sources"]
+    assert states["github:o/a"]["status"] == "ok" and states["github:o/b"]["status"] == "unavailable"
+
+def rendered(root):
+    result = subprocess.run(["node", str(Path(__file__).with_name("html_collection.js"))],
+        input=(root / "out/index.html").read_text(), text=True, capture_output=True)
+    assert result.returncode == 0, result.stderr
+    return json.loads(result.stdout)
+
+@case
+def test_git_fetch_failures():
+    repo = tmp / "fetch-repo"; repo.mkdir(); git(repo, "init", "-q")
+    git(repo, "commit", "-q", "--allow-empty", "-m", "local")
+    (repo / "dirty.txt").write_text("local work")
+    git(repo, "remote", "add", "origin", str(tmp / "nonexistent-origin"))
+    original_run = collect.run
+    for name, error in [("offline", None), ("permission", RuntimeError("Permission denied (publickey)")),
+                        ("timeout", subprocess.TimeoutExpired(["git", "fetch"], 60))]:
+        root = fixture("fetch-" + name, {"local": [{"label": "local", "path": str(repo)}]})
+        def local_run(cmd, **kwargs):
+            if cmd[1] == "fetch" and error is not None: raise error
+            return original_run(cmd, **kwargs)
+        with patch.object(collect, "run", side_effect=local_run), patch.object(sys, "argv", ["collect.py", str(root)]), redirect_stdout(io.StringIO()):
+            try: collect.main()
+            except SystemExit as e: assert e.code == 1
+        f = snapshot(root)["projects"]["p"]; r = f["repos"][0]
+        assert r["dirty"] == 1 and r["ahead"] is None and r["behind"] is None
+        assert f["sources"]["git:" + str(repo)]["status"] == "partial" and f["errors"]
+        page_data(root); fragments = rendered(root)[0]
+        assert "Remote refresh failed; remote comparison unknown" in fragments["facts"]
+        assert "Uncommitted files 1" in fragments["facts"] and "some sources failed" in fragments["now"]
+    # Last successful fetch survives the next failure.
+    root = fixture("fetch-last-good", {"local": [{"label": "local", "path": str(repo)}]})
+    def success(cmd, **kwargs):
+        return "" if cmd[1] == "fetch" else original_run(cmd, **kwargs)
+    with patch.object(collect, "run", side_effect=success), patch.object(sys, "argv", ["collect.py", str(root)]), redirect_stdout(io.StringIO()):
+        try: collect.main()
+        except SystemExit as e: assert e.code == 0
+    last = snapshot(root)["projects"]["p"]["repos"][0]["last_fetched_at"]
+    result = run("collect.py", str(root)); assert result.returncode == 1
+    assert snapshot(root)["projects"]["p"]["repos"][0]["last_fetched_at"] == last
+
+@case
+def test_fatal_refresh_inputs():
+    for name, bad_inventory, added in [("invalid-inventory", True, False),
+                                      ("invalid-gathered", False, False),
+                                      ("new-project-fatal", False, True)]:
+        root = fixture(name, {})
+        result = run("collect.py", str(root), "--refresh"); assert result.returncode == 0, result.stderr
+        before = page_data(root); saved = (root / "facts" / f"{dt.date.today()}.json").read_bytes()
+        if bad_inventory:
+            (root / "inventory.json").write_text("{bad")
+        else:
+            if added:
+                inv = json.loads((root / "inventory.json").read_text())
+                inv["projects"].append({"key": "new", "name": "New", "color": "#000", "sources": {}})
+                (root / "inventory.json").write_text(json.dumps(inv))
+            (root / "gathered" / f"{dt.date.today()}.json").write_text("{bad")
+        result = run("collect.py", str(root), "--refresh")
+        assert result.returncode == 2 and "FAILED:" in result.stderr and "rerun collect.py HOME --refresh" in result.stderr
+        assert "Traceback" not in result.stderr and "built " not in result.stdout
+        assert (root / "facts" / f"{dt.date.today()}.json").read_bytes() == saved
+        manifest = json.loads((root / "refresh.json").read_text()); assert manifest["status"] == "fatal"
+        # Even the old documented collect; build sequence cannot hide this failure.
+        result = run("build.py", str(root)); assert result.returncode == 2 and "built " not in result.stdout
+        page = (root / "out/index.html").read_text()
+        assert 'role="alert"' in page and "FAILED: refresh" in page
+        assert before["generated_at"] in page, "failure must retain the last-good timestamp"
+        assert "FAILED: refresh" in (root / "out/artifact.html").read_text()
+        # Restore inputs: one command recovers and removes the failure banner.
+        (root / "inventory.json").write_text(json.dumps({"projects": [{"key": "p", "name": "P", "color": "#c00", "sources": {}}]}))
+        (root / "gathered" / f"{dt.date.today()}.json").write_text("{}")
+        result = run("collect.py", str(root), "--refresh"); assert result.returncode == 0, result.stderr
+        assert "<!--refresh-failure-->" not in (root / "out/index.html").read_text()
+
+@case
+def test_snapshot_write_failure():
+    root = fixture("write-failed", {})
+    assert run("collect.py", str(root), "--refresh").returncode == 0
+    saved = (root / "facts" / f"{dt.date.today()}.json").read_bytes()
+    original_replace = Path.replace
+    def deny_snapshot(path, target):
+        if Path(target).parent == root / "facts": raise PermissionError("fixture: facts write denied")
+        return original_replace(path, target)
+    output = io.StringIO()
+    from contextlib import redirect_stderr
+    with patch.object(Path, "replace", deny_snapshot), patch.object(sys, "argv", ["collect.py", str(root), "--refresh"]), redirect_stdout(output), redirect_stderr(output):
+        try: collect.main()
+        except SystemExit as e: assert e.code == 2
+    assert "facts write denied" in output.getvalue() and "rerun collect.py HOME --refresh" in output.getvalue()
+    assert (root / "facts" / f"{dt.date.today()}.json").read_bytes() == saved
+    assert not list((root / "facts").glob(".pending-*")), "failed atomic writes must clean up"
+    result = run("build.py", str(root)); assert result.returncode == 2
+    assert "FAILED: refresh" in (root / "out/index.html").read_text()
+
+@case
+def test_manifest_write_failure():
+    root = fixture("manifest-denied", {})
+    assert run("collect.py", str(root), "--refresh").returncode == 0
+    original_write = collect.atomic_write
+    def deny_manifest(path, text):
+        if path.name == "refresh.json": raise PermissionError("fixture: manifest denied")
+        return original_write(path, text)
+    from contextlib import redirect_stderr
+    output = io.StringIO()
+    with patch.object(collect, "atomic_write", side_effect=deny_manifest), patch.object(sys, "argv", ["collect.py", str(root), "--refresh"]), redirect_stdout(output), redirect_stderr(output):
+        try: collect.main()
+        except SystemExit as e: assert e.code == 2
+    assert "no build was attempted" in output.getvalue()
+    result = run("build.py", str(root)); assert result.returncode == 2 and "latest refresh failed" in result.stderr
+    assert "FAILED: refresh" in (root / "out/index.html").read_text()
+    assert run("collect.py", str(root), "--refresh").returncode == 0
+
+@case
+def test_refresh_manifest_and_partial():
+    root = fixture("partial-refresh", {"notion": {"url": "https://notion.so/fixture"}})
+    gather(root, tickets=[OLD_TICKET])
+    result = run("collect.py", str(root), "--refresh", "--script-only")
+    assert result.returncode == 1 and "built " in result.stdout, result.stdout + result.stderr
+    manifest = json.loads((root / "refresh.json").read_text())
+    assert manifest["status"] == "partial" and manifest["run_id"] == snapshot(root)["run_id"]
+    assert page_data(root)["projects"][0]["counts"]["wait"] == 0
+    result = run("build.py", str(root), "--run-id", "wrong-run")
+    assert result.returncode == 2 and "run_id does not match" in result.stderr and "built " not in result.stdout
+    assert run("collect.py", str(root), "--refresh", "--script-only").returncode == 1
+    result = run("build.py", str(root), "--snapshot", str(root / "facts" / "other.json"))
+    assert result.returncode == 2 and "snapshot does not match" in result.stderr
+
+@case
+def test_five_ticket_states():
+    labels = {"empty": "Read successfully, 0 tickets.", "not_connected": "No Linear or Notion source.",
+              "failed": "Ticket read failed", "partial": "Ticket read partly failed", "stale": "Ticket data is stale"}
+    for status in labels:
+        root = fixture("state-" + status, {} if status == "not_connected" else {"notion": {"url": "https://notion.so/fixture"}})
+        if status != "not_connected":
+            gather(root, status="failed" if status == "failed" else "ok", tickets=[OLD_TICKET] if status in ("failed", "stale", "partial") else [])
+        if status == "partial":
+            inv = json.loads((root / "inventory.json").read_text())
+            inv["projects"][0]["sources"]["linear"] = {"project": "P"}
+            (root / "inventory.json").write_text(json.dumps(inv))
+            gathered = root / "gathered" / f"{dt.date.today()}.json"
+            g = json.loads(gathered.read_text())
+            g["p"]["sources"]["linear"] = {"status": "failed", "error": "403", "fetched_at": "2026-09-01T00:00:00+00:00"}
+            gathered.write_text(json.dumps(g))
+        with patch.dict(os.environ, {}, clear=True):
+            result = run("collect.py", str(root))
+        assert result.returncode == (0 if status in ("empty", "not_connected", "stale") else 1), result.stdout + result.stderr
+        if status == "stale":
+            for _ in range(3):
+                assert run("collect.py", str(root)).returncode == 1, "reused gather must stay stale on every run"
+        p = page_data(root)["projects"][0]; fragments = rendered(root)[0]
+        assert p["ticket_state"]["status"] == status, p["ticket_state"]
+        assert labels[status] in fragments["tickets"] and 'data-panel="tickets"' in fragments["project"]
+        if status in ("failed", "partial", "stale"):
+            assert p["trend_tickets"] is None and labels[status] in fragments["trends"]
+            assert "Check source permissions and gather again." in fragments["tickets"]
+            assert "Last successful read:" in fragments["tickets"]
+            assert "done in the last 7 days" not in fragments["now"]
+            assert labels[status] in fragments["now"]
+        if status == "partial":
+            assert p["counts"]["wait"] == 1 and "available data only" in fragments["tickets"]
+            assert "403" in fragments["tickets"] and "2026-09-01" in fragments["tickets"]
+        elif status == "empty":
+            assert p["trend_tickets"] and sum(p["trend_tickets"]["open"]) == 0
+        else:
+            assert sum(p["counts"].values()) == 0
+        inv = json.loads((root / "inventory.json").read_text()); inv["lang"] = "zh-TW"
+        (root / "inventory.json").write_text(json.dumps(inv))
+        page_data(root)
+        zh = {"empty": "已讀取，0 張待辦", "not_connected": "沒有接 Linear 或 Notion",
+              "failed": "待辦讀取失敗", "partial": "待辦部分讀取失敗", "stale": "待辦資料已過期"}
+        assert zh[status] in rendered(root)[0]["tickets"]
+
+
+@case
+def test_partial_ticket_read():
+    root = fixture("partial-source", {"notion": {"url": "https://notion.so/fixture"}})
+    gather(root, status="partial", tickets=[OLD_TICKET])
+    assert run("collect.py", str(root)).returncode == 1
+    p = page_data(root)["projects"][0]
+    assert p["ticket_state"]["status"] == "partial" and p["trend_tickets"] is None
+    assert p["counts"]["wait"] == 0 and "Previous data" in rendered(root)[0]["tickets"]
+
+
+@case
+def test_old_and_legacy_ticket_states():
+    root = fixture("aged-state", {"notion": {"url": "https://notion.so/fixture"}})
+    gather(root, tickets=[OLD_TICKET]); assert run("collect.py", str(root)).returncode == 0
+    path = root / "facts" / f"{dt.date.today()}.json"
+    snap = snapshot(root)
+    snap["projects"]["p"]["sources"]["notion"]["fetched_at"] = "2000-01-01T00:00:00+00:00"
+    path.write_text(json.dumps(snap))
+    p = page_data(root)["projects"][0]
+    assert p["ticket_state"]["status"] == "stale" and p["trend_tickets"] is None and p["counts"]["wait"] == 0
+    snap["projects"]["p"].pop("sources")
+    path.write_text(json.dumps(snap))
+    p = page_data(root)["projects"][0]
+    assert p["ticket_state"]["status"] == "stale" and p["counts"]["wait"] == 0
+    assert "Source freshness was not recorded" in rendered(root)[0]["tickets"]
+    snap["projects"]["p"]["errors"] = ["notion: 403"]
+    path.write_text(json.dumps(snap))
+    assert page_data(root)["projects"][0]["ticket_state"]["status"] == "failed"
+
+
+@case
+def test_last_success_across_days():
+    root = fixture("last-read-yesterday", {"notion": {"url": "https://notion.so/fixture"}})
+    gather(root); assert run("collect.py", str(root)).returncode == 0
+    snap = snapshot(root); last = snap["projects"]["p"]["sources"]["notion"]["fetched_at"]
+    current = root / "facts" / f"{dt.date.today()}.json"
+    current.rename(root / "facts" / f"{dt.date.today() - dt.timedelta(days=1)}.json")
+    (root / "gathered" / f"{dt.date.today()}.json").unlink()
+    assert run("collect.py", str(root)).returncode == 1
+    assert snapshot(root)["projects"]["p"]["sources"]["notion"]["fetched_at"] == last
+    page_data(root); assert last in rendered(root)[0]["tickets"]
+
+test_five_ticket_states()
+test_partial_ticket_read()
+test_old_and_legacy_ticket_states()
+test_last_success_across_days()
+test_fatal_refresh_inputs()
+test_snapshot_write_failure()
+test_manifest_write_failure()
+test_refresh_manifest_and_partial()
+test_git_fetch_failures()
+test_same_day_reuse()
+test_cron_takeover()
+test_failed_source_keeps_tickets()
+test_mcp_prs_per_repo()
+os.environ.pop("LINEAR_API_KEY", None)
+
+from test_contracts import run_validation_tests
+run_validation_tests(tmp, run)
+
+@case
+def test_notes_tasks_counts_fences_nested():
+    from validation import validate_notes
+    for count in (0, 1, 51):
+        vault = tmp / f"notes-{count}"; vault.mkdir()
+        # Longer fences cannot be closed by a shorter marker; tilde fences also hide examples.
+        prefix = "````md\n- [ ] example\n```\n- [x] example done\n````\n~~~\n- [ ] example2\n~~~\n"
+        lines = ["  " * (i % 3) + f"{['-', '*', '+', '1.'][i % 4]} [ ] task {i}" for i in range(count)]
+        (vault / "tasks.md").write_text(prefix + "\n".join(lines) + "\n  - [X] actual done\n")
+        excluded = vault / ".trash"; excluded.mkdir(); (excluded / "ignored.md").write_text("- [ ] ignored")
+        notes = collect.obsidian_tasks(vault)
+        assert (notes["open"], notes["done"], notes["total"], notes["shown"]) == (count, 1, count, min(count, 50))
+        assert [i["line"] for i in notes["items"]] == list(range(9, 9 + min(count, 50)))
+        assert all(i["file"] == "tasks.md" for i in notes["items"])
+        validate_notes([notes], "notes")
+        root = fixture(f"notes-home-{count}", {"obsidian": [{"path": str(vault)}]})
+        assert run("collect.py", str(root)).returncode == 0
+        p = page_data(root)["projects"][0]
+        todos = p["todo"]
+        assert len(todos) == bool(count)
+        if count:
+            assert todos[0]["kind"] == "notes" and todos[0]["n"] == count
+            assert todos[0]["go"] == "#p/facts/notes"
+        output = subprocess.run(["node", str(Path(__file__).with_name("html_todos.js"))],
+            input=(root / "out/index.html").read_text(), text=True, capture_output=True)
+        assert output.returncode == 0, output.stderr
+        homepage = json.loads(output.stdout)["home"]
+        assert ("No items to inspect" in homepage) == (count == 0)
+        if count:
+            assert f'>{count}</span>' in homepage and 'href="#p/facts/notes"' in homepage
+        facts = rendered(root)[0]["facts"]
+        assert ('id="d-p-notes"' in facts)
+        if count:
+            assert "tasks.md:9" in facts
+        assert ("Showing first 50 of 51 tasks" in facts) == (count == 51)
+        inv = json.loads((root / "inventory.json").read_text()); inv["lang"] = "zh-TW"
+        (root / "inventory.json").write_text(json.dumps(inv)); page_data(root)
+        assert ("僅顯示前 50 個，共 51 個" in rendered(root)[0]["facts"]) == (count == 51)
+    broken = dict(notes, shown=49)
+    try:
+        validate_notes([broken], "notes")
+    except ValueError as error:
+        assert "total/shown" in str(error)
+    else:
+        raise AssertionError("inconsistent task counts accepted")
+
+
+test_notes_tasks_counts_fences_nested()
+@case
+def test_todo_pr_draft_order_aggregate():
+    import copy
+    root = fixture("todo-semantics", {"local": [{"label": "checkout", "path": str(a)}]})
+    assert run("collect.py", str(root)).returncode == 0
+    snap = snapshot(root); facts = snap["projects"]["p"]
+    facts["repos"][0]["dirty"] = 2
+    facts["prs"] = [{"number": 1, "repo": "o/r", "title": "Other person's PR", "isDraft": True,
+                      "url": "https://github.com/o/r/pull/1", "reviewRequests": ["someone-else"]}]
+    facts["tickets"] = [dict(id=f"N-{n}", source="notion", source_id=f"full-{n}",
+                              title="Review", state="wait") for n in range(20)]
+    facts["sources"]["notion"] = collect.source_state(snap["run_id"], snap["generated_at"], snap["generated_at"], "ok", True)
+    inv = json.loads((root / "inventory.json").read_text()); inv["lang"] = "zh-TW"
+    inv["projects"][0]["sources"]["notion"] = {"url": "https://notion.so/fixture"}
+    for key in ("late", "stale"):
+        other = copy.deepcopy(facts)
+        other.update(prs=[], tickets=[], repos=[], obsidian=[], sources={}, data=[], errors=[])
+        if key == "late":
+            other["errors"] = ["github: denied"]
+        else:
+            other["data"] = [dict(label="old", path="old.csv", newest="2026-01-01", stale=True, age_days=200, max_age_days=1)]
+        snap["projects"][key] = other
+        inv["projects"].append(dict(key=key, name=key, color="#c00", sources={}))
+    (root / "inventory.json").write_text(json.dumps(inv))
+    (root / "facts" / f"{dt.date.today()}.json").write_text(json.dumps(snap))
+    data = page_data(root); p = data["projects"][0]
+    assert [(t["kind"], t["n"]) for t in p["todo"]] == [("review", 20), ("pr", 1), ("git", None)]
+    assert p["todo"][1]["drafts"] == 1, "Draft is still an open PR, never promised as ready to merge"
+    result = subprocess.run(["node", str(Path(__file__).with_name("html_todos.js"))],
+        input=(root / "out/index.html").read_text(), text=True, capture_output=True)
+    assert result.returncode == 0, result.stderr
+    homepage = json.loads(result.stdout)["home"]
+    # Match row hrefs only, excluding project cards; later projects' risks must come first.
+    import re
+    rows = re.findall(r'<a class="todo pc"[^>]*href="([^"]+)"', homepage)
+    assert rows == ["#late/facts", "#stale/facts", "#p/tickets", "#p/facts", "#p/facts"]
+    assert "3 類待處理事項" in homepage and "21 類" not in homepage
+    assert '>20</b>' in homepage and "本機未同步事項（依工作目錄彙總）" in homepage
+    assert "開啟中的 PR" in homepage and "Draft 1" in homepage and "等你合併" not in homepage
+    facts_html = rendered(root)[0]["facts"]
+    assert "Draft</span>" in facts_html and "Other person&#39;s PR" in facts_html
+    assert "等你合併" not in facts_html
+    # Non-drafts and other people's review requests remain neutral open PRs.
+    facts["prs"][0]["isDraft"] = False
+    inv["lang"] = "en"; (root / "inventory.json").write_text(json.dumps(inv))
+    (root / "facts" / f"{dt.date.today()}.json").write_text(json.dumps(snap))
+    data = page_data(root)
+    assert data["projects"][0]["todo"][1]["drafts"] == 0
+    assert "Draft</span>" not in rendered(root)[0]["facts"]
+    result = subprocess.run(["node", str(Path(__file__).with_name("html_todos.js"))],
+        input=(root / "out/index.html").read_text(), text=True, capture_output=True)
+    homepage = json.loads(result.stdout)["home"]
+    assert "3 categories of items to inspect" in homepage and "Open PRs" in homepage
+    assert "merge" not in homepage and "Draft" not in homepage
+
+
+test_todo_pr_draft_order_aggregate()
+from test_wave3 import test_install_paths, test_artifact_fragment, test_text_token_contrast, test_ui_copy_defaults, test_zero_service_demo
+test_install_paths()
+test_artifact_fragment()
+test_text_token_contrast()
+test_ui_copy_defaults()
+test_zero_service_demo()
 
 # --- Vercel -----------------------------------------------------------------------------------
 vhome = tmp / "vhome"; (vhome / "out").mkdir(parents=True); (vhome / "out/index.html").write_text("x")
@@ -124,16 +858,18 @@ calls = []
 
 def fake_call(method, path, body=None, team=None):
     calls.append((method, path, team))
-    if method == "GET" and path.startswith("/v9/projects/"):
-        return 200, {"id": "prj_1", "accountId": "acc"}
+    if method == "GET" and path.startswith("/v9/projects/") and "/domains?" not in path:
+        return 200, {"id": "prj_1", "accountId": "acc", "ssoProtection": {"deploymentType": "all"}}
     if method == "PATCH":
         return 200, {"ssoProtection": {"deploymentType": "all"}}
+    if "/domains?" in path:
+        return 200, {"domains": [], "pagination": {"next": None}}
     return 200, {"alias": []}
 
-def deploy(codes, *args):
-    pv.call = fake_call
+def deploy(codes, *args, api=fake_call):
+    pv.call = api
     pv.subprocess.run = lambda *a, **k: types.SimpleNamespace(returncode=0, stdout="https://x-1.vercel.app\n", stderr="")
-    pv.anon_status = lambda url: codes
+    pv.anon_status = lambda url: codes(url) if callable(codes) else codes
     sys.argv = ["publish_vercel.py", str(vhome), "dash", *args]
     try:
         pv.main(); return "ok"
@@ -145,12 +881,12 @@ calls.clear()
 assert "already exists" in deploy(401)
 assert not any(m == "PATCH" for m, _, _ in calls), "must stop before touching the project"
 # --reuse takes it over and remembers it; the next run needs no flag
-assert deploy(401, "--reuse") == "ok"
+assert deploy("Vercel login redirect", "--reuse") == "ok"
 assert json.loads((vhome / "vercel.json").read_text()) == {"dash": "prj_1"}
-assert deploy(401) == "ok"
+assert deploy("Vercel login redirect") == "ok"
 # only a login wall proves the lock: 200 is public, 404 and "unreachable" prove nothing
-assert deploy(302) == "ok"
-for bad in (200, 404, "unreachable (x)"):
+assert deploy(302) != "ok"
+for bad in (200, 401, 403, 404, 500, 302, "unreachable (x)"):
     assert "could not confirm the page is locked" in deploy(bad), bad
 
 # a redirect counts as the lock only when it goes to Vercel's sign-in
@@ -162,10 +898,74 @@ def redirect_to(loc):
             raise urllib.error.HTTPError(url, 302, "Found", h, None)
         return types.SimpleNamespace(open=open_)
     return opener
-pv.urllib.request.build_opener = redirect_to("https://vercel.com/sso-api?url=x")
-assert REAL_ANON("https://x/") == 302
+pv.urllib.request.build_opener = redirect_to("https://vercel.com/sso-api?url=https%3A%2F%2Fx%2F")
+assert REAL_ANON("https://x/") == "Vercel login redirect"
 pv.urllib.request.build_opener = redirect_to("https://example.com/")
 assert REAL_ANON("https://x/") == "302 to https://example.com/"
+
+@case
+def test_vercel_fail_closed():
+    def verify(api, codes="Vercel login redirect"):
+        output = io.StringIO()
+        from contextlib import redirect_stdout
+        with redirect_stdout(output):
+            result = deploy(codes, api=api)
+        assert result != "ok" and result.startswith("FAILED:"), result
+        assert "deployed:" not in output.getvalue(), output.getvalue()
+        assert "Deployment Protection" in result and "PUBLIC" in result, result
+        return result
+    for endpoint in ("/v13/deployments/", "/domains?"):
+        for status in (403, 429):
+            def api(method, path, body=None, team=None):
+                return (status, {}) if endpoint in path else fake_call(method, path, body, team)
+            assert f"API {status}" in verify(api)
+    for aliases in (None, {}, "dash.vercel.app", [None], ["x/attack"]):
+        def api(method, path, body=None, team=None):
+            return (200, {"alias": aliases}) if "/v13/" in path else fake_call(method, path, body, team)
+        verify(api)
+    visited = []
+    def api(method, path, body=None, team=None):
+        if "/v13/" in path:
+            return 200, {"alias": ["dash.vercel.app", "public-exception.vercel.app"]}
+        if "/domains?" in path:
+            return 200, {"domains": [{"name": "private.example.com"}, {"name": "public.example.com"}],
+                         "pagination": {"next": None}}
+        return fake_call(method, path, body, team)
+    for public in ("public.example.com", "public-exception.vercel.app"):
+        visited.clear()
+        def codes(url):
+            visited.append(url)
+            return 200 if public in url else "Vercel login redirect"
+        assert public in verify(api, codes)
+        assert len(visited) == 5, visited  # deployment, both aliases and both custom domains
+    for bad in ("unreachable (timeout)", "302 to https://vercel.com/docs", 401, 403):
+        verify(api, lambda url: bad if "private.example.com" in url else "Vercel login redirect")
+    def pages(method, path, body=None, team=None):
+        if "/domains?" in path:
+            return (200, {"domains": [{"name": "page2.example.com"}], "pagination": {"next": None}}) if "until=" in path else (200, {"domains": [], "pagination": {"next": 123}})
+        return fake_call(method, path, body, team)
+    assert "page2.example.com" in verify(pages, lambda url: 200 if "page2" in url else "Vercel login redirect")
+    for domains in ({}, {"domains": "x"}, {"domains": [None]}, {"domains": [{"name": "x/y"}]},
+                    {"domains": [], "pagination": {}}):
+        def malformed(method, path, body=None, team=None):
+            return (200, domains) if "/domains?" in path else fake_call(method, path, body, team)
+        verify(malformed)
+
+@case
+def test_vercel_login_redirect():
+    for loc in ("https://vercel.com/", "https://vercel.com/docs", "https://vercel.com/login",
+                "https://vercel.com.evil/sso-api?url=https%3A%2F%2Fx%2F", "https://vercel.com/sso-api?url=wrong"):
+        pv.urllib.request.build_opener = redirect_to(loc)
+        assert REAL_ANON("https://x/") != "Vercel login redirect", loc
+    def offline(*_):
+        def open_(url, timeout):
+            raise urllib.error.URLError("offline")
+        return types.SimpleNamespace(open=open_)
+    pv.urllib.request.build_opener = offline
+    assert "unreachable" in REAL_ANON("https://x/")
+
+test_vercel_fail_closed()
+test_vercel_login_redirect()
 
 # team: an id goes as teamId=, a slug as slug=
 class R(io.BytesIO):
@@ -175,4 +975,24 @@ urllib.request.urlopen = lambda req, timeout: urls.append(req.full_url) or R(b"{
 real_call("GET", "/v9/projects/x", team="team_abc"); real_call("GET", "/v9/projects/x", team="my-team")
 assert urls == ["https://api.vercel.com/v9/projects/x?teamId=team_abc", "https://api.vercel.com/v9/projects/x?slug=my-team"], urls
 
-print("OK")
+@case
+def test_vercel_access_scope():
+    from contextlib import redirect_stdout
+    output = io.StringIO()
+    with redirect_stdout(output):
+        assert deploy("Vercel login redirect", "--team", "team_abc") == "ok"
+    text = output.getvalue()
+    assert "account=acc team=team_abc project=dash (prj_1)" in text
+    assert "Vercel-authorized users" in text and "sharing and bypass settings" in text
+    repo = S.parents[2]
+    for path, bad in [(repo / "README.md", "only your logged-in Vercel account"),
+                      (repo / "說明書.md", "只有登入你 Vercel 帳號的人"),
+                      (S.parent / "SKILL.md", "only the user's logged-in Vercel account")]:
+        assert bad not in path.read_text(), path
+    assert "only the owner's" not in pv.__doc__
+
+test_vercel_access_scope()
+from test_notion_contract import test_notion_adapter_contract
+test_notion_adapter_contract()
+from test_support import summary
+print("OK: " + summary())

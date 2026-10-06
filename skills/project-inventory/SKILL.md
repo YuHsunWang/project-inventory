@@ -5,11 +5,17 @@ description: >
   "how it works" diagram, tickets (Linear / Notion), GitHub PRs, git state, Obsidian
   note tasks, data freshness, recent activity and trends, plus a home list of what
   waits on the user. Use when the user says "inventory my projects", "project status",
-  "盤點專案", "專案總覽", "/project-inventory", or asks which data is out of date
+  "盤點專案", "專案總覽", "/project-inventory", "/project-inventory:project-inventory", or asks which data is out of date
   across projects. First run sets up inventory.json with the user; later runs just refresh.
 ---
 
 # project-inventory
+
+Installed plugin command: `/project-inventory:project-inventory`; standalone skill:
+`/project-inventory`. After installation or replacement, reload plugins/start a new
+host session. File-copy checks cover clean, existing and reinstall homes; actual
+Claude Code, Codex and Hermes loading and host versions remain manually unverified.
+See the repository README for explicit installation paths.
 
 All state lives in one folder, `HOME` = `~/.project-inventory` unless the user names another:
 
@@ -19,11 +25,11 @@ HOME/gathered/<date>.json    tickets/PRs you fetched through MCP tools  (you wri
 HOME/facts/<date>.json       one snapshot per run                       (collect.py)
 HOME/summaries.json          one plain-words summary per project-week   (you write it)
 HOME/out/index.html          the page                                   (build.py)
-HOME/out/artifact.html       same page for a claude.ai Artifact          (build.py)
+HOME/out/artifact.html       HTML fragment for manual host import          (build.py)
 ```
 
-`SCRIPTS` = the `scripts/` folder next to this file. Not running in Claude Code? Everything works
-the same except the Artifact publish option and `/schedule`; MCP steps need the matching
+`SCRIPTS` = the `scripts/` folder next to this file. Not running in Claude Code? The Python scripts are portable;
+`/schedule` is host-specific and Artifact import/publication remains unverified. MCP steps need the matching
 connector in your own tool, and without one, say which source was not read. Schemas for every file: `reference/schema.md`.
 Talk to the user in their language and write page text (names, tags, diagram) in it too; set
 `"lang"` in inventory.json (`zh-TW` and `en` have page labels; anything else falls back to `en`).
@@ -41,6 +47,10 @@ Talk to the user in their language and write page text (names, tags, diagram) in
    Obsidian vault folders. Never include a project the user did not confirm.
 2. **Sources per project.** Fill `sources` (see schema): `linear`, `notion`, `github`, `local`,
    `obsidian`. Check each one actually answers now (one MCP call / one `git -C <path> status`).
+   For Linear, confirm and save `sources.linear.project_id` (project UUID) and `project`
+   (display name), including archived projects. Same names can span teams: show the candidate
+   IDs/team names and let the user choose; never merge them. Legacy name-only settings work
+   only with one match; migrate by saving its confirmed UUID, especially before a rename.
    A source with no connector: tell the user which connector to add, leave it out for now.
 3. **Data to watch.** Look for data the project produces (data/, *.csv, *.parquet, *.sqlite,
    *.jsonl, generated JSON). Show the candidates; for each one the user keeps, find the
@@ -65,21 +75,36 @@ Talk to the user in their language and write page text (names, tags, diagram) in
    can differ from the date you believe it is (time zones, runs near midnight).
    - Linear: skip this if `LINEAR_API_KEY` is set in the environment — collect.py then reads
      Linear itself (faster, exact). Otherwise: every issue of the project, archived ones included (`list_issues` with the
-     project, `includeArchived: true`, `limit: 250`; it returns one page at a time — pass the
+     confirmed project UUID (resolve legacy names uniquely first), `includeArchived: true`, `limit: 250`; it returns one page at a time — pass the
      returned `cursor` back until there is no next page).
      Map exactly as collect.py does: status type completed → `done`, canceled → `dead`, status
      name containing "review" → `wait`, everything else → `open`. Ask for the `createdAt`,
      `completedAt` and `canceledAt` fields and keep them as `created` / `completed` / `canceled`
      (the page's ticket chart is rebuilt from these dates).
-   - Notion: query the database (or read the page's to-do blocks). Map its status property the
-     same way; say which values you mapped how the first time and save that in inventory.json
-     (`sources.notion.status_map`).
-   - GitHub PRs only if `gh` is not installed: use the GitHub MCP, put them under `prs`.
+   - Notion: follow the connector playbook in `reference/schema.md#notion-connector-playbook`.
+     Resolve database versus data source identity before querying; paginate every query and
+     recursively paginate child blocks until `has_more: false`. Normalize raw statuses using
+     the saved `sources.notion.status_map`; to-do `checked` maps to done/open. Preserve full
+     page/block IDs, raw status, date availability and date coverage. Unknown statuses or any
+     unread page/child make the source partial/failed, never a complete current list.
+     This contract has offline mock coverage only; validate it in an authorized workspace
+     before claiming a real Notion integration succeeded.
+   - GitHub PRs: scripts paginate every open PR with `gh api graphql`. If `gh` is missing,
+     not logged in (`gh auth status` fails), or cannot read the repo, use GitHub MCP instead.
+     Follow every returned cursor, put normalized `number`, `title`, `url`, `createdAt`,
+     `isDraft`, `headRefName`, and `repo` under `prs`. Mark the per-repo source `ok` and
+     `complete: true` only after the final page, including zero PRs. A denied later page is
+     `failed`/`partial` with its error, never a complete short list. A fresh MCP gather takes
+     precedence even when `gh` is installed; collect.py otherwise reports CLI failures.
+   - Create a unique `_run.run_id` for this gather. For each source write
+     `run_id`, `attempted_at`, `fetched_at`, `status`, `complete`, and `error` under `sources`
+     (see schema). Track MCP PRs per `github:<owner/repo>`. Never reuse a gather run.
    - List every source you read in `read`. If a source fails, write the error into `errors`
      (start the text with the source name) — never drop it silently.
-2. `python3 SCRIPTS/collect.py HOME` — git (fetches origin first), PRs via `gh`, Obsidian tasks,
-   data checks. Exit 1 = some source failed; the page shows it. Read the printed ERROR lines.
-3. `python3 SCRIPTS/build.py HOME` → `HOME/out/index.html`.
+2. `python3 SCRIPTS/collect.py HOME --refresh` — collect and build this run's exact snapshot.
+   Exit 0 = success; 1 = partial, with visible errors; 2 = fatal, retaining last-good data/time
+   with a failure summary. On exit 2 fix the input or permissions and rerun; do not publish.
+3. `python3 SCRIPTS/build.py HOME` rebuilds only the snapshot in `refresh.json` → `HOME/out/index.html`.
    It prints `SUMMARIES n weeks need a summary: HOME/out/summaries-needed.json` when a week has
    no summary yet or got new work since its summary was written (the current week, usually; on
    the first run, every past week). For each listed week write 2–3 short sentences in the page
@@ -102,18 +127,38 @@ Talk to the user in their language and write page text (names, tags, diagram) in
 | Option | How | Who can see it |
 |---|---|---|
 | Local file (default) | `HOME/out/index.html`, open in a browser | only this computer |
-| claude.ai Artifact (Claude Code only) | Artifact tool, publish `HOME/out/artifact.html` (build.py writes it without the html/head/body wrapper the host adds; the same file path every run keeps one URL) | private to the user |
-| Vercel | `python3 SCRIPTS/publish_vercel.py HOME <project-name>` (refuses an existing project it did not create; `--reuse` only after the user confirms that project is for this page) — creates the project, locks it (Vercel Authentication, all deployments) BEFORE deploying, then checks an anonymous visitor is turned away | only the user's logged-in Vercel account |
+| HTML for manual Artifact import | `HOME/out/artifact.html` is generated without document wrappers/meta tags; offer it for manual import only if the chosen host accepts it. No publishing API, capability detection or identity storage exists. | Host-dependent; publishing/sharing/access unverified. |
+| Vercel | `python3 SCRIPTS/publish_vercel.py HOME <project-name>` (refuses an existing project it did not create; `--reuse` only after the user confirms that project is for this page) — creates the project, locks it (Vercel Authentication, all deployments) BEFORE deploying, then checks an anonymous visitor is turned away | Vercel-authorized users; actual access depends on team/project membership, granted access, sharing and bypass settings |
 | GitHub Pages | see below | **everyone on the internet** |
 
-**GitHub Pages is public**, also from a private repo on a free plan. The page lists project
-names, tickets, branches, file paths and data locations. Before the first Pages publish, say
-this in one plain sentence and get an explicit yes. Then: a repo the user names (create it with
-`gh repo create <name> --private` if needed), copy `out/index.html` to the repo root, commit,
-push, and enable Pages on the repo's default branch (`gh repo view <owner>/<repo> --json defaultBranchRef -q .defaultBranchRef.name`;
-it is not always `main`): `gh api -X POST repos/<owner>/<repo>/pages -f "source[branch]=<branch>" -f "source[path]=/"`.
-Each later run: copy, commit, push. Pushing and creating repos are outward-facing — confirm the
-first time.
+Artifact end-to-end acceptance is **pending**: record the host/version, verify import,
+create/update identity and URL behavior, external fonts/MathJax script restrictions,
+CSP handling and sharing permissions before claiming support. The local file path
+cannot establish artifact identity, a stable URL or private access.
+
+**Standard GitHub Pages sites are public.** Check the account plan and repo visibility first:
+
+| Path | Supported / visibility |
+|---|---|
+| GitHub Free + public repo | Supported; repo and site public. |
+| GitHub Free + private repo | Not supported. Offer local/another host; never change visibility automatically. |
+| GitHub Pro/Team + private repo | Supported; repo private, standard site public. |
+
+[Official plan requirements](https://docs.github.com/en/pages/getting-started-with-github-pages/what-is-github-pages).
+Enterprise access-controlled Pages is separate and unverified in this workflow.
+Preview `out/index.html`, its embedded facts and assets with the user: project names,
+tickets, branches, paths and screenshots can be exposed. Offer a minimal public copy in
+another home: only approved project names/tags/diagram text, empty `sources` and `data`,
+no `notes`, node `paths` or `media`. Collect/build that home; preview again. No automatic
+redaction exists. Get explicit approval for the exact content, plan and visibility before
+publishing. Never make a private repository public to work around a failed deployment.
+
+Use the repo the user names. If creating one, use `gh repo create <name> --public` only
+for the approved Free/public path, or `--private` only with a confirmed supporting paid
+plan. Copy the approved `out/index.html` to its root, commit, push, and enable Pages on
+its default branch (`gh repo view <owner>/<repo> --json defaultBranchRef -q .defaultBranchRef.name`;
+not always `main`): `gh api -X POST repos/<owner>/<repo>/pages -f "source[branch]=<branch>" -f "source[path]=/"`.
+Each later run: preview, copy, commit, push within the agreed publishing scope.
 
 Never send the page anywhere the user did not choose.
 
@@ -127,6 +172,6 @@ Never send the page anywhere the user did not choose.
   dates and the commit chart from git history, so both show on the first run.
 - `build.py` prints `WARN` lines (a screenshot not found, a page over 8 MB). Report them.
 - Scheduling is not built in. If the user wants it nightly, point them to `/schedule` in Claude Code (or cron
-  for the script-only part: `collect.py HOME; build.py HOME` — `;`, not `&&`: collect.py exits 1
-  whenever Notion (or Linear without `LINEAR_API_KEY`) was not gathered, so `&&` would never build.
+  for the script-only part: `collect.py HOME --refresh --script-only`; partial failures still build,
+  fatal failures stop and retain last-good data with a warning.
   Cron has a bare environment: set `PATH` so it finds git and gh, and `LINEAR_API_KEY` if used).
