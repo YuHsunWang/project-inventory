@@ -389,6 +389,94 @@ def test_refresh_manifest_and_partial():
     result = run("build.py", str(root), "--snapshot", str(root / "facts" / "other.json"))
     assert result.returncode == 2 and "snapshot does not match" in result.stderr
 
+def test_five_ticket_states():
+    labels = {"empty": "Read successfully, 0 tickets.", "not_connected": "No Linear or Notion source.",
+              "failed": "Ticket read failed", "partial": "Ticket read partly failed", "stale": "Ticket data is stale"}
+    for status in labels:
+        root = fixture("state-" + status, {} if status == "not_connected" else {"notion": {"url": "x"}})
+        if status != "not_connected":
+            gather(root, status="failed" if status == "failed" else "ok", tickets=[OLD_TICKET] if status in ("failed", "stale", "partial") else [])
+        if status == "partial":
+            inv = json.loads((root / "inventory.json").read_text())
+            inv["projects"][0]["sources"]["linear"] = {"project": "P"}
+            (root / "inventory.json").write_text(json.dumps(inv))
+            gathered = root / "gathered" / f"{dt.date.today()}.json"
+            g = json.loads(gathered.read_text())
+            g["p"]["sources"]["linear"] = {"status": "failed", "error": "403", "fetched_at": "2026-09-01T00:00:00+00:00"}
+            gathered.write_text(json.dumps(g))
+        with patch.dict(os.environ, {}, clear=True):
+            result = run("collect.py", str(root))
+        assert result.returncode == (0 if status in ("empty", "not_connected", "stale") else 1), result.stdout + result.stderr
+        if status == "stale":
+            for _ in range(3):
+                assert run("collect.py", str(root)).returncode == 1, "reused gather must stay stale on every run"
+        p = page_data(root)["projects"][0]; fragments = rendered(root)[0]
+        assert p["ticket_state"]["status"] == status, p["ticket_state"]
+        assert labels[status] in fragments["tickets"] and 'data-panel="tickets"' in fragments["project"]
+        if status in ("failed", "partial", "stale"):
+            assert p["trend_tickets"] is None and labels[status] in fragments["trends"]
+            assert "Check source permissions and gather again." in fragments["tickets"]
+            assert "Last successful read:" in fragments["tickets"]
+            assert "done in the last 7 days" not in fragments["now"]
+            assert labels[status] in fragments["now"]
+        if status == "partial":
+            assert p["counts"]["wait"] == 1 and "available data only" in fragments["tickets"]
+            assert "403" in fragments["tickets"] and "2026-09-01" in fragments["tickets"]
+        elif status == "empty":
+            assert p["trend_tickets"] and sum(p["trend_tickets"]["open"]) == 0
+        else:
+            assert sum(p["counts"].values()) == 0
+        inv = json.loads((root / "inventory.json").read_text()); inv["lang"] = "zh-TW"
+        (root / "inventory.json").write_text(json.dumps(inv))
+        page_data(root)
+        zh = {"empty": "已讀取，0 張待辦", "not_connected": "沒有接 Linear 或 Notion",
+              "failed": "待辦讀取失敗", "partial": "待辦部分讀取失敗", "stale": "待辦資料已過期"}
+        assert zh[status] in rendered(root)[0]["tickets"]
+
+
+def test_partial_ticket_read():
+    root = fixture("partial-source", {"notion": {"url": "x"}})
+    gather(root, status="partial", tickets=[OLD_TICKET])
+    assert run("collect.py", str(root)).returncode == 1
+    p = page_data(root)["projects"][0]
+    assert p["ticket_state"]["status"] == "partial" and p["trend_tickets"] is None
+    assert p["counts"]["wait"] == 0 and "Previous data" in rendered(root)[0]["tickets"]
+
+
+def test_old_and_legacy_ticket_states():
+    root = fixture("aged-state", {"notion": {"url": "x"}})
+    gather(root, tickets=[OLD_TICKET]); assert run("collect.py", str(root)).returncode == 0
+    path = root / "facts" / f"{dt.date.today()}.json"
+    snap = snapshot(root)
+    snap["projects"]["p"]["sources"]["notion"]["fetched_at"] = "2000-01-01T00:00:00+00:00"
+    path.write_text(json.dumps(snap))
+    p = page_data(root)["projects"][0]
+    assert p["ticket_state"]["status"] == "stale" and p["trend_tickets"] is None and p["counts"]["wait"] == 0
+    snap["projects"]["p"].pop("sources")
+    path.write_text(json.dumps(snap))
+    p = page_data(root)["projects"][0]
+    assert p["ticket_state"]["status"] == "stale" and p["counts"]["wait"] == 0
+    assert "Source freshness was not recorded" in rendered(root)[0]["tickets"]
+    snap["projects"]["p"]["errors"] = ["notion: 403"]
+    path.write_text(json.dumps(snap))
+    assert page_data(root)["projects"][0]["ticket_state"]["status"] == "failed"
+
+
+def test_last_success_across_days():
+    root = fixture("last-read-yesterday", {"notion": {"url": "x"}})
+    gather(root); assert run("collect.py", str(root)).returncode == 0
+    snap = snapshot(root); last = snap["projects"]["p"]["sources"]["notion"]["fetched_at"]
+    current = root / "facts" / f"{dt.date.today()}.json"
+    current.rename(root / "facts" / f"{dt.date.today() - dt.timedelta(days=1)}.json")
+    (root / "gathered" / f"{dt.date.today()}.json").unlink()
+    assert run("collect.py", str(root)).returncode == 1
+    assert snapshot(root)["projects"]["p"]["sources"]["notion"]["fetched_at"] == last
+    page_data(root); assert last in rendered(root)[0]["tickets"]
+
+test_five_ticket_states()
+test_partial_ticket_read()
+test_old_and_legacy_ticket_states()
+test_last_success_across_days()
 test_fatal_refresh_inputs()
 test_snapshot_write_failure()
 test_manifest_write_failure()

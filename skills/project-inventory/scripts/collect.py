@@ -216,12 +216,13 @@ def collect_snapshot(home, requested_run=None, script_only=False):
     today = dt.date.today()
     gathered_f = home / "gathered" / f"{today}.json"
     gathered = json.loads(gathered_f.read_text(encoding="utf-8")) if gathered_f.exists() else {}
-    previous_f = home / "facts" / f"{today}.json"
-    previous = json.loads(previous_f.read_text(encoding="utf-8")) if previous_f.exists() else {}
+    previous_files = sorted(x for x in (home / "facts").glob("*.json") if x.stem <= today.isoformat())
+    previous = json.loads(previous_files[-1].read_text(encoding="utf-8")) if previous_files else {}
     offered = gathered.get("_run", {}).get("run_id")
-    run_id = offered if offered and offered != previous.get("run_id") else uuid.uuid4().hex
+    consumed = previous.get("gathered_run_id", previous.get("run_id"))
+    run_id = offered if offered and offered != consumed else uuid.uuid4().hex
     if requested_run:
-        run_id = requested_run if requested_run != previous.get("run_id") else uuid.uuid4().hex
+        run_id = requested_run if requested_run != consumed else uuid.uuid4().hex
     if script_only:
         run_id = uuid.uuid4().hex
     attempted_at = dt.datetime.now().astimezone().isoformat(timespec="seconds")
@@ -230,7 +231,7 @@ def collect_snapshot(home, requested_run=None, script_only=False):
     others = sorted(x.name for x in (home / "gathered").glob("*.json") if x != gathered_f) if not gathered_f.exists() else []
     other = f"; newest gathered file is {others[-1]}, this computer's date is {today}" if others else ""
     snap = {"date": today.isoformat(), "generated_at": dt.datetime.now().isoformat(timespec="seconds"),
-            "gathered": gathered_f.exists(), "run_id": run_id, "projects": {}}
+            "gathered": gathered_f.exists(), "run_id": run_id, "gathered_run_id": offered, "projects": {}}
     failed = 0
     for p in inv["projects"]:
         src, g = p.get("sources", {}), gathered.get(p["key"], {})

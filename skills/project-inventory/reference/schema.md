@@ -116,9 +116,23 @@ build.py lists a week in `out/summaries-needed.json` again when its count change
 
 ## facts/&lt;date&gt;.json (written by collect.py)
 
-Per project: `tickets` (copied from gathered), `repos` (branch, upstream, remote URL, ahead,
+Top level: `date`, `generated_at`, `run_id`, and `gathered_run_id` (the offered MCP run,
+retained even when stale so later collects cannot make it fresh again).
+
+Per project: `sources` (source-level provenance/state), `tickets` (fresh rows only),
+`stale_tickets` (previous or incomplete rows, excluded from current metrics), `repos` (branch, upstream, remote URL, ahead,
 behind, dirty, last_commit, weekly commit counts for 12 weeks, recent commits for 14 days),
 `weekly` (the project's commits per week across all its checkouts, each commit counted once),
 `commits` (the whole history, newest 3000 per checkout, deduped), `prs`,
 `obsidian` (open/done counts, first 50 open items), `data` (newest, age_days, stale, or error),
 `errors`.
+
+
+`build.py` shows tickets as empty, not connected, failed, partial, stale, or ready.
+A complete read must belong to this run and be at most 24 hours old to feed current metrics.
+Legacy snapshots lacking source provenance are shown as stale, with their rows retained.
+`fetched_at` is the last successful source read; it is carried across daily snapshots.
+
+`refresh.json` records `run_id`, `attempted_at`, `status` (`running`, `ok`, `partial`, `fatal`),
+`snapshot` (the exact absolute snapshot path), and `error`. `collect.py HOME --refresh` runs
+collection and build together; fatal failures stop rebuilding and mark last-good output.

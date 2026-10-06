@@ -239,16 +239,14 @@ def build_page(home, snapshot=None, run_id=None):
         f = snap["projects"].get(p["key"])
         if f is None:
             raise ValueError(f"project {p['key']} is not in this snapshot - run collect.py HOME --refresh again")
+        availability = ticket_state(p, f, snap)
         on_node = {t: n["id"] for n in p.get("nodes", []) for t in n.get("tickets", [])}  # ticket id -> step
         f["tickets"] = [{**t, "node": t.get("node", on_node.get(t.get("id")))} for t in f["tickets"]]
         embed_media(p.get("nodes", []), home, lambda s, k=p["key"]: warnings.append(f"{k}: {s}"))
-        src = p.get("sources") or {}
-        has_tk = bool(f["tickets"] or src.get("linear") or src.get("notion"))
-        projects.append({**p, "facts": f, "counts": {s: sum(t.get("state") == s for t in f["tickets"]) for s in STATES},
+        projects.append({**p, "facts": f, "ticket_state": availability, "counts": {s: sum(t.get("state") == s for t in f["tickets"]) for s in STATES},
                          "todo": todos(p, f), "now": now(f, today), "history": history(f, sums.get(p["key"], {})),
                          "weekly": f.get("weekly") if f["repos"] else None,
-                         "trend_tickets": ticket_series(f["tickets"], today) if has_tk and all(
-                             v["status"] == "ok" for k, v in f.get("sources", {}).items() if k in ("linear", "notion")) else None})
+                         "trend_tickets": ticket_series(f["tickets"], today) if availability["status"] in ("ready", "empty") else None})
     for p in projects:
         weeks = [{"week": w["week"], "n": len(w["items"]), "old": w["summary"],
                   "items": [f'{x["date"]} {x["kind"]}: {x["text"]}' for x in w["items"]]} for w in p["history"] if not w["fresh"]]
@@ -304,6 +302,48 @@ def mark_failed_page(home, manifest):
             atomic_write(path, text)
         except OSError as e:
             print(f"FAILED: cannot mark {path}: {e}; last page was not refreshed", file=sys.stderr)
+
+
+def ticket_state(p, f, snap):
+    """Only complete, recent reads of this run can produce current ticket metrics."""
+    names = [name for name in ("linear", "notion") if (p.get("sources") or {}).get(name)]
+    states, good = {}, []
+    for name in names:
+        state = dict(f.get("sources", {}).get(name, {}))
+        if not state:
+            error = next((e for e in f["errors"] if e.startswith(name + ":")), None)
+            state = {"status": "failed" if error else "stale", "fetched_at": None,
+                     "error": error or "Source freshness was not recorded; gather again"}
+        if state.get("status") == "ok":
+            try:
+                fetched = dt.datetime.fromisoformat(state["fetched_at"])
+                if fetched.tzinfo is None:
+                    fetched = fetched.astimezone()
+                recent = dt.timedelta(0) <= dt.datetime.now().astimezone() - fetched <= dt.timedelta(days=1)
+            except (ValueError, KeyError, TypeError):
+                recent = False
+            if not (state.get("complete") and recent and snap.get("run_id") and state.get("run_id") == snap["run_id"]):
+                state.update(status="stale", error="Read is old or incomplete; gather the source again")
+            else:
+                good.append(name)
+        states[name] = state
+        f.setdefault("sources", {})[name] = state
+        if state["status"] != "ok" and not any(e.startswith(name + ":") for e in f["errors"]):
+            f["errors"].append(f"{name}: {state.get('error') or state['status']}")
+    current = [t for t in f["tickets"] if t.get("source") in good]
+    f.setdefault("stale_tickets", []).extend(t for t in f["tickets"] if t.get("source") not in good)
+    f["tickets"] = current
+    if not names:
+        status = "not_connected"
+    elif len(good) == len(names):
+        status = "ready" if current else "empty"
+    elif good or any(s["status"] == "partial" for s in states.values()):
+        status = "partial"
+    elif all(s["status"] == "stale" for s in states.values()):
+        status = "stale"
+    else:
+        status = "failed"
+    return {"status": status, "sources": states}
 
 
 def main():

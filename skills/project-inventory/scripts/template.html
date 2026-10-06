@@ -333,6 +333,8 @@ const L = {
   lg_done:"做完了", lg_wait:"改好了，等你確認", lg_open:"還沒做", lg_dead:"取消",
   tk_h:"待辦：做了什麼、還差什麼", tk_counts:"做完 A 張 · 等你確認 B 張 · 還沒做 C 張 · 取消 D 張",
   col_done:"帶來了什麼", col_wait:"改好了，等你按合併", col_open:"做完會帶來什麼", gain:"做完會得到 → ", dead_sum:"取消的待辦（X 張）— 點開看",
+  tk_empty:"已讀取，0 張待辦。", tk_failed:"待辦讀取失敗", tk_partial:"待辦部分讀取失敗；只列出已取得的資料", tk_stale:"待辦資料已過期；未納入最新統計",
+  tk_recover:"檢查來源權限並重新盤點。", tk_last:"最後成功讀取：", tk_never:"未記錄成功讀取時間", tk_old:"上次資料（未納入最新統計）",
   notickets:"這個專案沒有接 Linear 或 Notion。",
   facts_hint:"本機是這台電腦上的資料夾和資料；雲端是 GitHub、Linear、Notion 上的狀態。", f_local:"本機", f_cloud:"雲端", gh:"GitHub", remote_none:"沒有設定 GitHub", no_up:"這條分支還沒推上去", repo:"程式碼", branch:"分支", ahead:"還沒推", behind:"落後 GitHub", dirtyf:"改到一半的檔", last:"最後一次改動",
   local_only:"只在本機，沒有 GitHub", data:"資料", newest:"最新到", days:"天前", limit:"超過 X 天算過期", stale1:"過期", ok1:"新鮮",
@@ -360,6 +362,8 @@ const L = {
   lg_done:"Done", lg_wait:"Done, waiting for your review", lg_open:"Open", lg_dead:"Canceled",
   tk_h:"Tickets: what got done, what is left", tk_counts:"A done · B in review · C open · D canceled",
   col_done:"what it brought", col_wait:"waiting for your merge", col_open:"what finishing it brings", gain:"Brings → ", dead_sum:"Canceled tickets (X) — click to show",
+  tk_empty:"Read successfully, 0 tickets.", tk_failed:"Ticket read failed", tk_partial:"Ticket read partly failed; showing available data only", tk_stale:"Ticket data is stale; excluded from current metrics",
+  tk_recover:"Check source permissions and gather again.", tk_last:"Last successful read: ", tk_never:"No successful read time recorded", tk_old:"Previous data (excluded from current metrics)",
   notickets:"No Linear or Notion source.",
   facts_hint:"Local: folders and data on this computer. Cloud: state on GitHub, Linear, Notion.", f_local:"Local", f_cloud:"Cloud", gh:"GitHub", remote_none:"No GitHub remote", no_up:"branch not pushed yet", repo:"Code", branch:"Branch", ahead:"Unpushed", behind:"Behind GitHub", dirtyf:"Uncommitted files", last:"Last commit",
   local_only:"Local only, no GitHub", data:"Data", newest:"Newest", days:"days ago", limit:"Stale after X days", stale1:"stale", ok1:"fresh",
@@ -373,6 +377,8 @@ const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt
 const mdOf = iso => iso ? `${+iso.slice(5,7)}/${+iso.slice(8,10)}` : "";
 const P = D.projects;
 const tkOf = p => p.facts.tickets;
+const ticketComplete = p => !p.ticket_state || ["ready", "empty"].includes(p.ticket_state.status);
+const ticketLabel = p => ({empty:T.tk_empty, not_connected:T.notickets, failed:T.tk_failed, partial:T.tk_partial, stale:T.tk_stale})[p.ticket_state?.status] || "";
 const hasTk = p => tkOf(p).length > 0 || !!((p.sources || {}).linear || (p.sources || {}).notion);
 const imageSrc = s => typeof s === "string" && /^data:image\/(?:png|jpeg|gif|webp);base64,[A-Za-z0-9+/]+={0,2}$/.test(s);
 const httpURL = u => { try { const v = new URL(u); return ["http:", "https:"].includes(v.protocol); } catch { return false; } };
@@ -585,9 +591,18 @@ function placeDetail(det, fresh){
 function drawAllCharts(){ document.querySelectorAll(".detail:not([hidden])").forEach(d => placeDetail(d)); document.querySelectorAll(".viz").forEach(el => { if (el.offsetParent) drawChart(el); }); document.querySelectorAll(".road").forEach(el => { if (el.offsetParent) drawRoad(el); }); }
 function tableOf(head, rows){ return `<details class="tbl"><summary>${T.table}</summary><table><tr>${head.map(h=>`<th>${esc(h)}</th>`).join("")}</tr>${rows.map(r=>`<tr>${r.map(v=>`<td>${esc(v)}</td>`).join("")}</tr>`).join("")}</table></details>`; }
 
+function ticketNotice(p){
+  if (!p.ticket_state || p.ticket_state.status === "ready") return "";
+  const status = p.ticket_state.status, bad = ["failed", "partial", "stale"].includes(status);
+  const sources = bad ? Object.entries(p.ticket_state.sources).map(([name, s]) =>
+    `<div>${esc(name)}: ${esc(s.error || s.status)}<div class="small">${T.tk_last}${esc(s.fetched_at || T.tk_never)}</div></div>`).join("") : "";
+  return `<div class="card" data-ticket-state="${esc(status)}"${bad ? ' role="status"' : ""}><p class="${bad ? "st bad" : "empty"}">${esc(ticketLabel(p))}</p>${sources}${bad ? `<p>${T.tk_recover}</p>` : ""}</div>`;
+}
+
 function renderTrends(p){
   let h = `<h3>${T.trends}</h3><p class="hint">${T.trends_hint}</p><div class="trends">`;
   const t = p.trend_tickets;
+  if (!ticketComplete(p)) h += ticketNotice(p);
   if (t){
     const s = [{name:T.s_done, short:T.s_done_s, cls:"--viz-done", vals:t.done}, {name:T.s_open, short:T.s_open_s, cls:"--viz-open", vals:t.open, dashed:true}];
     const wk = t.days.map((d,i)=>[d,i]).filter(([,i]) => (t.days.length-1-i) % 7 === 0);
@@ -623,7 +638,10 @@ function renderActivity(p){
 }
 function renderTickets(p){
   const tk = tkOf(p);
-  if (!tk.length) return `<p class="empty">${hasTk(p) ? "0" : T.notickets}</p>`;
+  const notice = ticketNotice(p);
+  const old = p.facts.stale_tickets || [];
+  const previous = old.length ? `<details><summary>${T.tk_old}</summary><ul>${old.map(t => `<li>${esc(t.id)} ${esc(t.title)}</li>`).join("")}</ul></details>` : "";
+  if (!tk.length) return notice + previous || `<p class="empty">${T.notickets}</p>`;
   const g = s => tk.filter(t => t.state === s), c = p.counts;
   const li = (t, inner) => `<li id="t-${esc(p.key)}-${esc(t.id || "")}">${ext(t.url, esc(t.id || "•"), `id ${t.state}`)}<div>${inner}</div></li>`;
   let h = `<div class="legend">${[["done","lg_done"],["wait","lg_wait"],["open","lg_open"],["dead","lg_dead"]].map(([s,k]) => `<span><i class="sw" style="background:var(--${s})"></i>${T[k]}</span>`).join("")}</div>
@@ -632,7 +650,7 @@ function renderTickets(p){
   if (g("wait").length) h += `<h4><span class="pill wait">${T.t_wait}</span>${T.col_wait}</h4><ul class="tk">${g("wait").map(t => li(t, `<span class="why">${esc(t.title)}</span>${t.benefit ? `<span class="note2">${esc(t.benefit)}</span>` : ""}`)).join("")}</ul><div style="height:18px"></div>`;
   h += `<h4><span class="pill open">${T.t_open}</span>${T.col_open}</h4><ul class="tk">${g("open").map(t => li(t, `<span class="why"><b>${esc(t.title)}</b></span>${t.benefit ? `<span class="gain"><b>${T.gain}</b>${esc(t.benefit)}</span>` : ""}`)).join("")}</ul></div></div>`;
   if (g("dead").length) h += `<details class="dead"><summary>${X(T.dead_sum, g("dead").length)}</summary><ul class="tk">${g("dead").map(t => li(t, esc(t.title))).join("")}</ul></details>`;
-  return h;
+  return notice + h + previous;
 }
 function renderFacts(p){
   const f = p.facts, src = p.sources || {}, local = [], cloud = [];
@@ -663,7 +681,8 @@ function renderFacts(p){
 function nowLine(p){
   const n = p.now, bits = [];
   if (n.last) bits.push(X(T.now_last, mdOf(n.last)));
-  if (hasTk(p)){ bits.push(X(T.now_done7, n.done7)); if (n.wait) bits.push(X(T.now_wait, n.wait)); }
+  if (hasTk(p) && !ticketComplete(p)) bits.push(esc(ticketLabel(p)));
+  else if (hasTk(p)){ bits.push(X(T.now_done7, n.done7)); if (n.wait) bits.push(X(T.now_wait, n.wait)); }
   else if (n.last) bits.push(X(T.now_c14, n.c14));
   if (!bits.length) bits.push(T.now_none);
   return bits.join(T.dot) + T.dot.trim() + (n.err ? ` <span class="st bad">${T.now_err}</span>` : "");
@@ -676,7 +695,7 @@ function todoRows(list){
   return list.map(t => `<a class="todo pc" style="--pc0:${esc(t.color)}" href="${esc(String(t.go).startsWith("#") ? t.go : "#")}"><span class="tn">${t.n ?? ""}</span><span class="tt">${todoText(t)}</span><span class="tp">${esc(t.pname || "")}</span><span class="ta" aria-hidden="true">›</span></a>`).join("");
 }
 const PANELS = [["road", "road"], ["progress", "progress"], ["tickets", "tickets"], ["facts", "facts"]];
-const panelsOf = p => PANELS.filter(([k]) => k !== "tickets" || hasTk(p));
+const panelsOf = p => PANELS;
 function renderProject(p){
   const c = p.counts;
   let h = `<section class="proj pc" id="${esc(p.key)}" style="--pc0:${esc(p.color)}" hidden>
@@ -689,7 +708,7 @@ function renderProject(p){
     <nav class="subnav">${panelsOf(p).map(([k]) => `<a href="#${esc(p.key)}/${k}" data-panel="${k}">${T[k]}${k === "tickets" && c.open + c.wait ? `<small>${c.open + c.wait}</small>` : ""}</a>`).join("")}</nav>`;
   h += `<div class="panel" data-panel="road"><p class="hint">${T.road_hint}${hasTk(p) ? T.road_hint_tk : ""}</p>${renderRoad(p)}</div>`;
   h += `<div class="panel" data-panel="progress">${renderTrends(p)}${renderActivity(p)}</div>`;
-  if (hasTk(p)) h += `<div class="panel" data-panel="tickets">${renderTickets(p)}</div>`;
+  h += `<div class="panel" data-panel="tickets">${renderTickets(p)}</div>`;
   h += `<div class="panel" data-panel="facts">${renderFacts(p)}</div>`;
   return h + `</section>`;
 }
@@ -712,7 +731,7 @@ function renderHome(){
     return `<a class="drawer pc" href="#${esc(p.key)}" style="--pc0:${esc(p.color)}">
       <span class="dn">${esc(p.name)}</span>${p.tag ? `<span class="dt2">${esc(p.tag)}</span>` : ""}
       <span class="dnow">${nowLine(p)}</span>
-      <span class="dfoot">${p.weekly ? `${spark(p.weekly)}<span>${X(T.d_weeks, commits)}</span>` : ""}${hasTk(p) ? `<span>${X(T.d_open, c.open)}${c.wait ? T.join + X(T.d_wait, c.wait) : ""}</span>` : ""}${p.todo.length ? `<span class="dtodo">${X(T.d_todo, p.todo.length)}</span>` : ""}</span></a>`;
+      <span class="dfoot">${p.weekly ? `${spark(p.weekly)}<span>${X(T.d_weeks, commits)}</span>` : ""}${hasTk(p) && ticketComplete(p) ? `<span>${X(T.d_open, c.open)}${c.wait ? T.join + X(T.d_wait, c.wait) : ""}</span>` : ""}${p.todo.length ? `<span class="dtodo">${X(T.d_todo, p.todo.length)}</span>` : ""}</span></a>`;
   }).join("")}</div>`;
   $("#home").innerHTML = h;
 }
