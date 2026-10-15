@@ -153,6 +153,7 @@ h3{font-family:var(--display);font-size:22px;margin:30px 0 4px;font-weight:700;l
 .node .ic svg{width:28px;height:28px}
 .node .t{font-family:var(--display);font-size:20px;font-weight:700;line-height:1.2}
 .node .s{font-size:13px;color:var(--ink);line-height:1.45}
+.node .ai-updated{grid-column:2;font-size:11px;color:var(--muted)}
 .node .n{position:absolute;top:-10px;left:-10px;width:24px;height:24px;border-radius:50%;background:var(--ink);color:var(--paper);font:600 11px var(--mono);display:grid;place-items:center}
 .node .more{grid-column:1/-1;display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
 .node .more span{font-size:11.5px;font-weight:700;padding:1px 8px;border-radius:999px;background:var(--paper);border:1px solid var(--line);color:var(--muted)}
@@ -312,7 +313,7 @@ footer p{margin:4px 0;max-width:80ch}
 <script>
 const D = /*__DATA__*/null;
 const L = {
- "zh-TW": {all:"全部專案", projects:"個專案", todo_h:"要處理的事", nothing:"目前沒有要處理的事", projects_h:"專案", back:"‹ 全部專案",
+ "zh-TW": {ai_updated:"AI 自動更新（X）", all:"全部專案", projects:"個專案", todo_h:"要處理的事", nothing:"目前沒有要處理的事", projects_h:"專案", back:"‹ 全部專案",
   prs:"個開啟中的 PR", review:"件待辦做好了、等你確認", dirty:"個檔案尚未提交", unpushed:"次提交尚未推送到遠端",
   fetch_failed:"遠端更新失敗；遠端比較未知", last_fetch:"最後成功取得遠端資料：",
   no_upstream:"這條分支尚未設定追蹤分支", stale:"份資料沒更新到最新", errors:"項資料這次沒抓到", join:"、",
@@ -341,7 +342,7 @@ const L = {
   local_only:"只在本機，沒有遠端", data:"資料", newest:"最新到", days:"天前", limit:"超過 X 天算過期", stale1:"過期", ok1:"新鮮",
   notes:"筆記待辦", notes_todo:"個筆記待辦還沒勾", k_notes:"筆記待辦", notes_truncated:"僅顯示前 A 個，共 B 個", notes_open:"個還沒勾", notes_done:"個已勾", pr_open:"開啟中的 PR", errs:"沒抓到的東西",
   foot:["待辦：Linear／Notion", "開啟中的 PR：GitHub", "git 狀態、資料日期：這台電腦"]},
- "en": {all:"All projects", projects:"projects", todo_h:"Items to inspect", nothing:"No items to inspect", projects_h:"Projects", back:"‹ All projects",
+ "en": {ai_updated:"AI-updated (X)", all:"All projects", projects:"projects", todo_h:"Items to inspect", nothing:"No items to inspect", projects_h:"Projects", back:"‹ All projects",
   prs:"open PRs", review:"tickets are done and wait for review", dirty:"files have uncommitted changes", unpushed:"commits are not pushed",
   fetch_failed:"Remote refresh failed; remote comparison unknown", last_fetch:"Last successful fetch: ",
   no_upstream:"branch has no upstream configured", stale:"datasets are stale", errors:"sources failed this run", join:", ",
@@ -455,6 +456,7 @@ function renderRoad(p){
     return `<button type="button" class="node${br ? " br" : ""}" data-id="${esc(n.id)}" aria-expanded="false" aria-controls="${esc(did(n))}">
       <span class="n">${esc(n.id)}</span><span class="ic">${icon(n.icon)}</span>
       <span class="t">${esc(n.title)}</span><span class="s">${esc((n.sub || "").replace(/\n/g, ""))}</span>
+      ${n.auto_updated ? `<span class="ai-updated">${esc(T.ai_updated.replace("X", n.auto_updated))}</span>` : ""}
       <span class="more">${kinds.map(k => `<span>${k}</span>`).join("")}${cnt}<span class="x">${T.open_x}</span></span></button>`;
   };
   const detail = (n, pos) => {

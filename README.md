@@ -194,6 +194,28 @@ MCP sources needing a read, missing summaries and manual Artifact publishing, wi
 exact `/project-inventory` command. Manual and automatic collection share an OS lock;
 a crashed process releases it immediately. A live run is never evicted by age.
 
+With a text CLI enabled, commits touching a diagram step's `paths` can also update its
+`title`, `sub` and `zone` directly in `inventory.json`. The first run only records each
+checkout's HEAD. Later runs send all changed steps of a project in one read-only session,
+at most once per calendar day in the inventory timezone. The model may read the project;
+repository content is treated as data. Relative paths resolve against each local checkout;
+absolute and `~` paths inside it count too, while paths outside all checkouts are ignored.
+Invalid steps retain their checked commit for a later day's retry; a valid empty object
+means no change is needed. `none` disables step rewriting as well as notes.
+
+Updated boxes show “AI-updated (YYYY-MM-DD)”. Previous text is kept in `step_history.json`;
+checked commits and the daily session date live in `state/steps.json`. To undo the latest
+rewrite for one step, then rebuild locally:
+
+```sh
+python3 $S/auto_refresh.py ~/.project-inventory --revert-step PROJECT_KEY STEP_ID
+python3 $S/auto_refresh.py ~/.project-inventory
+```
+
+Revert restores only the text and removes the label. It refuses if you edited any step text
+after the rewrite; other node settings are preserved. A failed model session also consumes
+that day's allowance, without advancing the affected steps' checked commits.
+
 Local HTML is always built on changed runs. Vercel (`publish.to: vercel`, `project`,
 optional `team`) deploys only changed page hashes via the existing protected publisher.
 GitHub Pages never publishes automatically; Artifact publishing remains manual.

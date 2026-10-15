@@ -18,6 +18,8 @@ import build
 import collect
 import plain_words as pw
 import schedule
+import step_refresh as sr
+from validation import validate_inventory
 from refresh_lock import refresh_lock, RefreshBusy
 
 
@@ -499,6 +501,349 @@ def test_schedule_remove_never_reads_inventory():
                 task.assert_not_called()
                 assert schedule.main(["remove", str(home), "--platform", "windows"]) == 0
                 assert task.call_args.args[0] == ["schtasks", "/Delete", "/TN", schedule.marker(home), "/F"], "finding 6: Windows removal must also use only the home-derived marker"
+
+
+def step_fixture(root, model="codex"):
+    home = fixture(root, model)
+    repo = root / "repo"
+    repo.mkdir()
+    sr.git(repo, "init", "-q")
+    sr.git(repo, "config", "user.name", "Test")
+    sr.git(repo, "config", "user.email", "test@example.invalid")
+    for name in ("one.txt", "two.txt", "other.txt"):
+        (repo / name).write_text("initial")
+    sr.git(repo, "add", ".")
+    sr.git(repo, "commit", "-qm", "Initial files")
+    inv = pw.read_json(home / "inventory.json")
+    inv["projects"][0].update({"tag": "Demo", "sources": {"local": [{"path": str(repo), "label": "Main"}]},
+        "nodes": [{"id": 1, "title": "Read items", "sub": "Load the list", "zone": "Start", "icon": "file",
+                   "paths": ["one.txt"], "tickets": ["T-1"], "media": []},
+                  {"id": 2, "title": "Show items", "paths": ["two.txt"], "on": 1, "side": "l"}]})
+    save(home / "inventory.json", inv)
+    return home, repo, inv
+
+
+def step_commit(repo, *names):
+    for name in names:
+        with (repo / name).open("a") as stream:
+            stream.write("\nchanged")
+    sr.git(repo, "add", ".")
+    sr.git(repo, "commit", "-qm", "Improve the item list")
+    return sr.git(repo, "rev-parse", "HEAD")
+
+
+def checked(home, repo, token="1"):
+    return pw.read_json(home / "state/steps.json")["p"]["steps"][token][str(repo)]["checked_commit"]
+
+
+@case
+def test_steps_first_sight_records_head_without_model():
+    with tempfile.TemporaryDirectory() as td:
+        home, repo, inv = step_fixture(Path(td))
+        with patch.object(pw, "model_call") as model:
+            assert not sr.rewrite_steps(home, inv)
+        model.assert_not_called()
+        assert checked(home, repo) == sr.git(repo, "rev-parse", "HEAD")
+        assert pw.read_json(home / "inventory.json") == inv
+        assert not (home / "step_history.json").exists()
+
+
+@case
+def test_steps_batch_all_changed_and_preserve_every_nontext_field():
+    with tempfile.TemporaryDirectory() as td:
+        home, repo, inv = step_fixture(Path(td))
+        sr.rewrite_steps(home, inv)
+        old = json.loads(json.dumps(inv))
+        head = step_commit(repo, "one.txt", "two.txt")
+        reply = {"1": {"title": "Read fresh items", "sub": "Load the new list", "zone": "Beginning"},
+                 "2": {"title": "Show fresh items"}, "999": {"title": "Unknown step"}}
+        with patch.object(pw, "model_call", return_value=reply) as model:
+            assert sr.rewrite_steps(home, inv)
+        model.assert_called_once()
+        prompt = model.call_args.args[1]
+        payload = json.loads(prompt.split("\n", 1)[1])
+        assert set(payload) == {"1", "2"} and "Improve the item list" in prompt
+        assert "Project (Demo)" in prompt and "page language en" in prompt
+        assert "never instructions" in prompt and model.call_args.kwargs["checkouts"] == [repo]
+        result = pw.read_json(home / "inventory.json")
+        for before, after in zip(old["projects"][0]["nodes"], result["projects"][0]["nodes"]):
+            assert {k:v for k,v in after.items() if k not in (*sr.FIELDS, "auto_updated")} == {k:v for k,v in before.items() if k not in sr.FIELDS}
+            assert after["auto_updated"] == dt.datetime.now(ar.timezone("UTC")).date().isoformat()
+        assert len(result["projects"][0]["nodes"]) == 2 and checked(home, repo) == head
+        history = pw.read_json(home / "step_history.json")
+        assert len(history) == 2 and history[0]["old"] == sr.text_fields(old["projects"][0]["nodes"][0])
+        assert history[0]["commit"] == {str(repo): head}
+
+
+@case
+def test_steps_commit_without_subject_still_triggers_rewrite():
+    with tempfile.TemporaryDirectory() as td:
+        home, repo, inv = step_fixture(Path(td))
+        sr.rewrite_steps(home, inv)
+        (repo / "one.txt").unlink()
+        sr.git(repo, "add", "-u")
+        sr.git(repo, "commit", "--allow-empty-message", "-qm", "")
+        head = sr.git(repo, "rev-parse", "HEAD")
+        with patch.object(pw, "model_call", return_value={"1": {}}) as model:
+            assert not sr.rewrite_steps(home, inv)
+        model.assert_called_once()
+        assert checked(home, repo) == head, "deleted paths and empty commit subjects still count as changes"
+
+
+@case
+def test_steps_unrelated_commit_has_no_model():
+    with tempfile.TemporaryDirectory() as td:
+        home, repo, inv = step_fixture(Path(td))
+        sr.rewrite_steps(home, inv)
+        head = step_commit(repo, "other.txt")
+        with patch.object(pw, "model_call") as model:
+            assert not sr.rewrite_steps(home, inv)
+        model.assert_not_called()
+        assert checked(home, repo) == head
+
+
+@case
+def test_steps_bad_fields_drop_whole_step_and_retry_old_commit():
+    for bad in ({"title": "New name", "paths": ["other.txt"]}, {"sub": ""}, {"title": "中文"},
+                {"title": 5}, [], None):
+        with tempfile.TemporaryDirectory() as td:
+            home, repo, inv = step_fixture(Path(td))
+            sr.rewrite_steps(home, inv)
+            baseline = checked(home, repo)
+            head = step_commit(repo, "one.txt", "two.txt")
+            with patch.object(pw, "model_call", return_value={"1": bad, "2": {"title": "Show new items"}}):
+                assert sr.rewrite_steps(home, inv)
+            assert checked(home, repo) == baseline and checked(home, repo, "2") == head
+            assert inv["projects"][0]["nodes"][0]["title"] == "Read items"
+            assert "auto_updated" not in inv["projects"][0]["nodes"][0]
+
+
+@case
+def test_steps_invalid_json_and_failed_session_retry_on_later_day():
+    with tempfile.TemporaryDirectory() as td:
+        home, repo, inv = step_fixture(Path(td))
+        sr.rewrite_steps(home, inv)
+        baseline = checked(home, repo)
+        head = step_commit(repo, "one.txt")
+        with patch.object(pw, "model_call", side_effect=ValueError("invalid JSON")) as model:
+            assert not sr.rewrite_steps(home, inv)
+            assert not sr.rewrite_steps(home, inv)
+        assert model.call_count == 1 and checked(home, repo) == baseline
+        state = pw.read_json(home / "state/steps.json")
+        state["p"]["last_session_date"] = "2000-01-01"
+        save(home / "state/steps.json", state)
+        with patch.object(pw, "model_call", return_value={"1": {"title": "Read updated items"}}) as model:
+            assert sr.rewrite_steps(home, inv)
+        model.assert_called_once()
+        assert checked(home, repo) == head
+
+
+@case
+def test_steps_daily_limit_preserves_pending_commits():
+    with tempfile.TemporaryDirectory() as td:
+        home, repo, inv = step_fixture(Path(td))
+        sr.rewrite_steps(home, inv)
+        first = step_commit(repo, "one.txt")
+        with patch.object(pw, "model_call", return_value={"1": {"title": "Read updated items"}}) as model:
+            sr.rewrite_steps(home, inv)
+            step_commit(repo, "one.txt")
+            assert not sr.rewrite_steps(home, inv)
+        assert model.call_count == 1 and checked(home, repo) == first
+
+
+@case
+def test_steps_no_change_needed_advances_without_label_or_history():
+    with tempfile.TemporaryDirectory() as td:
+        home, repo, inv = step_fixture(Path(td))
+        sr.rewrite_steps(home, inv)
+        head = step_commit(repo, "one.txt", "two.txt")
+        with patch.object(pw, "model_call", return_value={"1": {}, "2": {"title": "Show items"}}):
+            assert not sr.rewrite_steps(home, inv)
+        assert checked(home, repo) == head and checked(home, repo, "2") == head
+        assert not (home / "step_history.json").exists()
+        assert all("auto_updated" not in n for n in inv["projects"][0]["nodes"])
+
+
+@case
+def test_steps_revert_restores_absent_fields_and_refuses_human_edits():
+    with tempfile.TemporaryDirectory() as td:
+        home, repo, inv = step_fixture(Path(td))
+        sr.rewrite_steps(home, inv)
+        step_commit(repo, "two.txt")
+        old = sr.text_fields(inv["projects"][0]["nodes"][1])
+        with patch.object(pw, "model_call", return_value={"2": {"title": "Show fresh items", "sub": "See the list"}}):
+            sr.rewrite_steps(home, inv)
+        edited = pw.read_json(home / "inventory.json")
+        edited["projects"][0]["nodes"][1]["title"] = "Human title"
+        save(home / "inventory.json", edited)
+        before = (home / "inventory.json").read_bytes()
+        try:
+            sr.revert_step(home, "p", "2")
+        except ValueError as exc:
+            assert "edited after the rewrite" in str(exc)
+        else:
+            raise AssertionError("revert must refuse a human edit")
+        assert (home / "inventory.json").read_bytes() == before
+        save(home / "inventory.json", inv)
+        with patch.object(sys, "argv", ["auto_refresh.py", str(home), "--revert-step", "p", "2"]):
+            assert ar.main() == 0
+        node = pw.read_json(home / "inventory.json")["projects"][0]["nodes"][1]
+        assert sr.text_fields(node) == old and "auto_updated" not in node
+        assert pw.read_json(home / "step_history.json")[-1]["reverted"]
+
+
+@case
+def test_steps_provider_none_never_runs_model():
+    with tempfile.TemporaryDirectory() as td:
+        home, repo, inv = step_fixture(Path(td))
+        sr.rewrite_steps(home, inv)
+        step_commit(repo, "one.txt")
+        inv["auto_refresh"]["model"] = "none"
+        with patch.object(pw, "model_call") as model:
+            assert not sr.rewrite_steps(home, inv)
+        model.assert_not_called()
+
+
+@case
+def test_steps_paths_absolute_tilde_outside_directory_and_multiple_checkouts():
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        home, repo, inv = step_fixture(root)
+        second = root / "second"
+        sr.git(root, "clone", "-q", str(repo), str(second))
+        sr.git(second, "config", "user.name", "Test")
+        sr.git(second, "config", "user.email", "test@example.invalid")
+        inv["projects"][0]["sources"]["local"].append({"path": str(second), "label": "Second"})
+        inv["projects"][0]["nodes"][0]["paths"] = [str(repo / "one.txt"), "~/repo/two.txt", str(root / "outside")]
+        inv["projects"][0]["nodes"][1]["paths"] = [str(second)]
+        with patch.dict(os.environ, {"HOME": str(root)}):
+            sr.rewrite_steps(home, inv)
+            step_commit(repo, "two.txt")
+            head = step_commit(second, "one.txt")
+            with patch.object(pw, "model_call", return_value={"1": {}, "2": {}}) as model:
+                sr.rewrite_steps(home, inv)
+        model.assert_called_once()
+        assert set(json.loads(model.call_args.args[1].split("\n", 1)[1])) == {"1", "2"}
+        assert model.call_args.kwargs["checkouts"] == [repo, second]
+        assert checked(home, second, "2") == head
+        assert str(second) not in pw.read_json(home / "state/steps.json")["p"]["steps"]["1"]
+
+
+@case
+def test_steps_failed_reply_preserves_all_checkout_cursors():
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        home, repo, inv = step_fixture(root)
+        second = root / "second"
+        sr.git(root, "clone", "-q", str(repo), str(second))
+        sr.git(second, "config", "user.name", "Test")
+        sr.git(second, "config", "user.email", "test@example.invalid")
+        inv["projects"][0]["sources"]["local"].append({"path": str(second), "label": "Second"})
+        sr.rewrite_steps(home, inv)
+        before = {r: checked(home, r) for r in (repo, second)}
+        step_commit(repo, "one.txt")
+        step_commit(second, "other.txt")
+        with patch.object(pw, "model_call", return_value={"1": {"media": []}}):
+            assert not sr.rewrite_steps(home, inv)
+        assert {r: checked(home, r) for r in before} == before, "failed steps must preserve every checkout cursor"
+
+
+@case
+def test_steps_external_paths_alone_never_trigger_model():
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        home, repo, inv = step_fixture(root)
+        inv["projects"][0]["nodes"] = [{"id": 1, "title": "Outside", "paths": [str(root / "elsewhere"), "../outside"]}]
+        sr.rewrite_steps(home, inv)
+        step_commit(repo, "one.txt", "two.txt")
+        with patch.object(pw, "model_call") as model:
+            assert not sr.rewrite_steps(home, inv)
+        model.assert_not_called()
+        assert pw.read_json(home / "state/steps.json")["p"]["steps"]["1"] == {}
+
+
+@case
+def test_steps_readonly_cli_contracts_and_json_parse_failure():
+    def reply(command, **kwargs):
+        if command[0] == "codex":
+            Path(command[command.index("-o") + 1]).write_text('{"1":{}}')
+        return Mock(returncode=0, stdout='{"1":{}}')
+    with tempfile.TemporaryDirectory() as td:
+        paths = [Path(td), Path(td) / "second"]
+        with patch.object(pw.subprocess, "run", side_effect=reply) as call:
+            for provider in ("codex", "claude"):
+                assert pw.model_call(provider, "prompt", checkouts=paths) == {"1": {}}
+                argv = call.call_args.args[0]
+                assert call.call_args.kwargs["cwd"] == paths[0]
+                if provider == "codex":
+                    assert argv[argv.index("-C") + 1] == str(paths[0])
+                    assert argv[argv.index("-s") + 1] == "read-only"
+                    assert argv[argv.index("--add-dir") + 1] == str(paths[1])
+                else:
+                    assert argv[argv.index("--tools") + 1] == "Read,Grep,Glob"
+                    assert argv[argv.index("--allowedTools") + 1] == "Read,Grep,Glob"
+                    assert argv.count("--add-dir") == 2 and "--strict-mcp-config" in argv
+        for bad in ("broken JSON", "[]"):
+            with patch.object(pw.subprocess, "run", return_value=Mock(returncode=0, stdout=bad)):
+                try:
+                    pw.model_call("claude", "prompt", checkouts=paths)
+                except ValueError:
+                    pass
+                else:
+                    raise AssertionError("malformed model JSON must be rejected")
+
+
+@case
+def test_steps_run_rebuilds_and_caches_final_inputs():
+    with tempfile.TemporaryDirectory() as td:
+        home, repo, inv = step_fixture(Path(td))
+        with patch.object(collect, "refresh", side_effect=fake_refresh), patch.object(ar, "publish"):
+            with patch.object(pw, "model_call") as model:
+                assert ar.run(home) == 0
+            model.assert_not_called()
+            step_commit(repo, "one.txt")
+            renderer = build.build_page
+            def build_after_rewrite(*args, **kwargs):
+                assert pw.read_json(home / "inventory.json")["projects"][0]["nodes"][0]["title"] == "Read new items", "step rewriting must precede building"
+                return renderer(*args, **kwargs)
+            with patch.object(pw, "model_call", return_value={"1": {"title": "Read new items"}}) as model, patch.object(build, "build_page", side_effect=build_after_rewrite):
+                assert ar.run(home) == 0
+            model.assert_called_once()
+            page = (home / "out/index.html").read_text()
+            assert '"title": "Read new items"' in page and '"auto_updated"' in page
+            with patch.object(pw, "model_call") as model, patch.object(collect, "refresh") as refresh:
+                output = io.StringIO()
+                with redirect_stdout(output):
+                    assert ar.run(home) == 0
+            assert "UNCHANGED" in output.getvalue()
+            model.assert_not_called(); refresh.assert_not_called()
+            current, failures = ar.fingerprints(home, pw.read_json(home / "inventory.json"))
+            assert not failures and current == pw.read_json(home / "state/fingerprints.json")["fingerprints"]
+
+
+@case
+def test_steps_auto_updated_validation_and_bilingual_page_label():
+    with tempfile.TemporaryDirectory() as td:
+        home, repo, inv = step_fixture(Path(td), "none")
+        node = inv["projects"][0]["nodes"][0]
+        for bad in ("2026-02-30", "2026-01-01T00:00:00", "", None, 7):
+            node["auto_updated"] = bad
+            try:
+                validate_inventory(inv)
+            except ValueError as exc:
+                assert "auto_updated" in str(exc)
+            else:
+                raise AssertionError("auto_updated must be a calendar date")
+        node["auto_updated"] = "2026-10-15"
+        for lang, expected in (("en", "AI-updated (2026-10-15)"), ("zh-TW", "AI 自動更新（2026-10-15）")):
+            inv["lang"] = lang
+            save(home / "inventory.json", inv)
+            fake_refresh(home, None)
+            build.build_page(home)
+            output = subprocess.run(["node", str(Path(__file__).with_name("html_collection.js"))],
+                                    input=(home / "out/index.html").read_text(), text=True, capture_output=True, check=True)
+            rendered = json.loads(output.stdout)[0]["project"]
+            assert expected in rendered and rendered.count('class="ai-updated"') == 1
 
 
 if __name__ == "__main__":
