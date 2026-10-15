@@ -82,8 +82,8 @@ new tool session so it discovers the updated skill.
 | Hermes standalone | Same file installation checks; expected compatible, no host version verified. Manual loading check pending in a new session. |
 
 Any other tool that can run shell commands: tell it to read
-`skills/project-inventory/SKILL.md` and follow it. `/schedule` is a Claude Code
-host feature. Linear and Notion need that tool's own connector (or
+`skills/project-inventory/SKILL.md` and follow it. Optional unattended refresh uses
+the operating system scheduler through `schedule.py`. Linear and Notion need that tool's own connector (or
 `LINEAR_API_KEY` for Linear).
 
 ## Use
@@ -160,23 +160,43 @@ python3 $S/publish_vercel.py ~/.project-inventory <vercel-project-name>
 ```
 
 Run without Claude, the scripts do not refresh Notion, or Linear unless `LINEAR_API_KEY` is set,
-and they write no week summaries: new weeks show "no summary yet" until the next Claude run
+and without an optional text CLI they write no week summaries: new weeks show "no summary yet" until the next Claude run
 (`build.py` lists them in `out/summaries-needed.json`).
 Use `python3 collect.py HOME --refresh` for one refresh: it builds only that run's snapshot.
 Exit 0 means success, 1 means partial collection (the page shows failed sources), and 2 means
 fatal failure. `refresh.json` records the run and exact snapshot. Fatal failures retain the
 last page's data/time with a visible failure summary; fix the input or permissions and rerun.
 Do not publish after exit 2. Standalone build checks this manifest; legacy homes without one
-can still be built. For cron, add `--script-only` to avoid consuming old MCP results:
+can still be built.
 
-```
-# crontab: cron has almost no environment. Give it PATH (git, gh), and keep LINEAR_API_KEY in a
-# file only you can read (chmod 600) rather than in the crontab line.
-0 7 * * * PATH=/usr/local/bin:/usr/bin:/bin sh -c '. ~/.project-inventory/env; cd ~/project-inventory/skills/project-inventory/scripts; python3 collect.py ~/.project-inventory --refresh --script-only'
+Unattended refresh is opt-in during Setup. Choose `auto_refresh.model` as `none`
+(default; no AI calls), `claude` (Haiku), or `codex` (gpt-6-luna). Then, only with
+consent, preview and install one OS schedule (cron on macOS/Linux, schtasks on Windows):
+
+```sh
+python3 $S/schedule.py print ~/.project-inventory
+python3 $S/schedule.py install ~/.project-inventory  # only after reviewing the printed command
+python3 $S/schedule.py remove ~/.project-inventory
+python3 $S/auto_refresh.py ~/.project-inventory     # run once without installing anything
 ```
 
-`~/.project-inventory/env` holds one line, `export LINEAR_API_KEY=lin_api_...` (leave it empty if
-you do not use the key).
+Default: every 2 hours, 08:00–22:00 inclusive, computer local time; customize with
+`--every`, `--start`, `--end` or `auto_refresh.schedule` (schema below). Install
+replaces this home's marked entry; PATH is captured for git/gh/codex/claude/vercel.
+Keep `LINEAR_API_KEY` in the scheduler environment, not the printed command.
+Reinstall after moving the skill or changing CLI locations. No chat session is scheduled.
+
+Same source fingerprints and calendar day skip collect/build/model/publish. Failed
+script reads always run and show errors. Data freshness still reads dates inside data.
+An enabled text CLI batches missing week summaries and uncached commit/PR notes once
+per project; failures leave them missing. The top **Needs Claude** banner lists only
+MCP sources needing a read, missing summaries and manual Artifact publishing, with the
+exact `/project-inventory` command. Manual and automatic collection share an OS lock;
+a crashed process releases it immediately. A live run is never evicted by age.
+
+Local HTML is always built on changed runs. Vercel (`publish.to: vercel`, `project`,
+optional `team`) deploys only changed page hashes via the existing protected publisher.
+GitHub Pages never publishes automatically; Artifact publishing remains manual.
 
 `publish_vercel.py` will not overwrite a Vercel project it did not create. To use one you already
 have, pass `--reuse` once.

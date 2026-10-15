@@ -19,6 +19,7 @@ def main():
     with tempfile.TemporaryDirectory(prefix='release-') as td:
         commands = [
             ('unit, contracts and JS render', [sys.executable, str(ROOT / 'tests/test_scripts.py')]),
+            ('unattended refresh regressions', [sys.executable, str(ROOT / 'tests/test_auto_refresh.py')]),
             ('browser regressions', [sys.executable, str(ROOT / 'tests/test_check_page.py')]),
             ('create zero-service demo', [sys.executable, str(S.parent / 'reference/demo.py'), td + '/demo']),
             ('add local demo history', [sys.executable, str(ROOT / 'tests/demo_fixture.py'), td + '/demo']),

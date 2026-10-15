@@ -8,6 +8,7 @@
   "lang": "zh-TW",
   "timezone": "Asia/Taipei",          // optional IANA timezone; default UTC
   "publish": {"to": "local"},
+  "auto_refresh": {"model": "none"}, // optional; no schedule unless explicitly installed
   "projects": [
     {
       "key": "cvs",                       // short id, used in page URLs (#cvs)
@@ -233,3 +234,54 @@ across the window; this does not claim they existed on every historical day.
 The chart, tooltip and number table show all four series, alongside known/total
 coverage and missing-date/reopen counts. On the snapshot day their sum equals
 the ticket total. Current-state counters still include all tickets.
+
+## Unattended refresh (optional, backward compatible)
+
+`auto_refresh.model`: `none` (default, sends nothing), `claude`, or `codex`.
+`auto_refresh.schedule`: absent/null by default; configuring it does not install anything.
+After explicit Setup consent, save for example:
+
+```json
+{"auto_refresh": {"model": "none", "schedule": {"every_hours": 2, "start_hour": 8, "end_hour": 22}}}
+```
+
+Hours are inclusive, 0–23, in the scheduler computer's local time; start <= end,
+`every_hours` is 1–24. `schedule.py print/install/remove HOME` reads these defaults;
+`--every`, `--start`, `--end` override them for that command. Install replaces this
+home's marked entry/task; remove preserves unrelated jobs. `--crontab-file FILE`
+is an offline test target and never invokes real crontab. PATH is captured on install.
+No schedule is installed merely by collecting/building or opening the skill.
+
+For unattended Vercel use `{"publish":{"to":"vercel","project":"chosen-project","team":"optional-team"}}`.
+Local/absent publish settings never deploy. GitHub Pages never publishes automatically;
+`{"publish":{"to":"artifact"}}` adds a manual publish reminder. An unknown existing
+Vercel project is still refused by publish_vercel.py; no automatic `--reuse`.
+
+State files (all under HOME, not the project checkout):
+
+- `state/fingerprints.json`: `{fingerprints: {day, sources}, cacheable}` after a successful
+  build (and any configured deploy). Each source has independent git refs/counts, PR
+  numbers/updatedAt, script-side Linear data digest, or `[file_count,total_bytes,newest_mtime_ns]`.
+  Day uses inventory timezone. Settings/gathered files/summaries/notes are also fingerprinted.
+  A failed probe or failed script source prevents unchanged skipping. MCP-only gaps may
+  be cached but remain visible. Values/dates are always collected from the data itself.
+- `state/notes.json`: `{ "<full commit SHA or PR URL>": "one plain sentence" }`.
+  Existing keys are never sent again for individual notes; relevant listed work may still
+  occur in a missing week's summary input. Notes appear in existing history note rows.
+- `summaries.json`: unchanged format. Optional CLI summaries preserve build.py's exact `n`;
+  invalid/failed results leave the week in `out/summaries-needed.json` and the banner.
+- `state/deployed.json`: `{project,team,hash}`; SHA-256 of the exact last successfully
+  deployed index.html. Failed deployment/protection verification never advances it.
+- `state/refresh.lock`: shared OS lock, not an age-based sentinel. A dead process releases
+  it immediately, so an old file cannot block future runs; a live run never loses its lock
+  merely for lasting 30 minutes. Busy scheduled/manual collects and standalone builds return 0 without writing; stop a manual run on `BUSY:`.
+- `state/schedule.log`: cron job output. Never put API secrets in schedule commands.
+
+Snapshot source metadata may additionally include `via: mcp | gh | api` to distinguish
+MCP reminders from script/API failures. Legacy metadata without it remains readable.
+Text calls are optional and isolated in a temporary working directory. Claude uses
+`claude -p --model claude-haiku-4-5-20251001 --tools "" --strict-mcp-config --no-session-persistence`;
+Codex uses `codex exec -m gpt-6-luna -c model_reasoning_effort=max -s read-only
+--skip-git-repo-check --ephemeral -C <tmp> -o <file> -`. One batch per project returns a
+JSON token-to-text object; only requested tokens, nonempty strings and checkable page
+scripts are accepted (zh-TW: Big5 plus Chinese; en: Latin and no CJK). No diagrams change.

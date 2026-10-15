@@ -74,6 +74,16 @@ def links(value, path):
 def validate_inventory(inv):
     typed(inv, dict, "inventory")
     timezone(inv.get("timezone", "UTC"))
+    if "auto_refresh" in inv:
+        config = typed(inv["auto_refresh"], dict, "auto_refresh")
+        choice(config.get("model", "none"), ("none", "claude", "codex"), "auto_refresh.model")
+        if config.get("schedule") is not None:
+            schedule = typed(config["schedule"], dict, "auto_refresh.schedule")
+            every = typed(schedule.get("every_hours", 2), int, "auto_refresh.schedule.every_hours")
+            start = typed(schedule.get("start_hour", 8), int, "auto_refresh.schedule.start_hour")
+            end = typed(schedule.get("end_hour", 22), int, "auto_refresh.schedule.end_hour")
+            if not (1 <= every <= 24 and 0 <= start <= end <= 23):
+                fail("auto_refresh.schedule", "require every_hours 1..24 and 0 <= start_hour <= end_hour <= 23")
     keys = set()
     for field in ("title", "lang"):
         if field in inv:

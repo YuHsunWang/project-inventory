@@ -85,7 +85,7 @@ def weekly(dates, today):
 
 GH_PRS_Q = """query($owner:String!, $repo:String!, $after:String){
   repository(owner:$owner, name:$repo){ pullRequests(first:50, after:$after, states:OPEN){
-    nodes{ number title url createdAt isDraft headRefName }
+    nodes{ number title url createdAt updatedAt isDraft headRefName }
     pageInfo{ hasNextPage endCursor } } } }"""
 
 
@@ -353,6 +353,7 @@ def collect_snapshot(home, requested_run=None, script_only=False):
                     f["errors"] = [e for e in f["errors"] if not e.startswith("linear:")]
                 except Exception as e:
                     state = source_state(run_id, attempted_at, state["fetched_at"], "failed", False, str(e))
+            state["via"] = "api" if name == "linear" and os.environ.get("LINEAR_API_KEY") else "mcp"
             f["sources"][name] = state
             f["tickets" if state["status"] == "ok" else "stale_tickets"] += tickets
             if state["status"] != "ok":
@@ -382,12 +383,14 @@ def collect_snapshot(home, requested_run=None, script_only=False):
             name = f"github:{repo}"
             state = gathered_state(g, name, run_id, attempted_at, old.get(name))
             prs = [pr for pr in g.get("prs", []) if pr.get("repo") == repo]
+            state["via"] = "mcp"
             if state["status"] != "ok" and have_gh:
                 try:
                     prs = gh_prs(repo)
                     state = source_state(run_id, attempted_at, dt.datetime.now().astimezone().isoformat(timespec="seconds"), "ok", True)
                 except Exception as e:
                     state = source_state(run_id, attempted_at, state["fetched_at"], "failed", False, str(e))
+                state["via"] = "gh"
             f["sources"][name] = state
             if state["status"] == "ok":
                 f["prs"] += prs
@@ -440,7 +443,18 @@ def main():
     parser.add_argument("--refresh", action="store_true", help="collect and build only this run's snapshot")
     parser.add_argument("--script-only", action="store_true", help="cron: refresh APIs without consuming MCP results")
     args = parser.parse_args()
+    from refresh_lock import refresh_lock, RefreshBusy
     home = Path(args.home).expanduser()
+    try:
+        with refresh_lock(home):
+            code = refresh(home, args)
+    except RefreshBusy as exc:
+        print(f"BUSY: {exc}")
+        code = 0
+    sys.exit(code)
+
+
+def refresh(home, args):
     manifest_f = home / "refresh.json"
     manifest = {"run_id": args.run_id or uuid.uuid4().hex,
                 "attempted_at": dt.datetime.now().astimezone().isoformat(),
@@ -450,6 +464,9 @@ def main():
         code, out, rid = collect_snapshot(home, args.run_id, args.script_only)
         manifest.update(run_id=rid, status="partial" if code else "ok", snapshot=str(out.resolve()))
         atomic_write(manifest_f, json.dumps(manifest))
+        if args.refresh:
+            import build
+            build.build_page(home, out, rid)
     except (OSError, ValueError, KeyError, TypeError, AttributeError) as e:
         message = f"FAILED: collection could not complete: {e}. Fix the input or directory permissions and rerun collect.py HOME --refresh."
         manifest.update(status="fatal", error=message)
@@ -461,13 +478,8 @@ def main():
         import build
         build.mark_failed_page(home, manifest)
         print(message, file=sys.stderr)
-        sys.exit(2)
-    if args.refresh:
-        result = subprocess.run([sys.executable, str(Path(__file__).with_name("build.py")), str(home),
-                                 "--snapshot", str(out), "--run-id", rid])
-        if result.returncode:
-            sys.exit(2)
-    sys.exit(code)
+        return 2
+    return code
 
 
 if __name__ == "__main__":
