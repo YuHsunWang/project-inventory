@@ -1,5 +1,5 @@
 """Offline refresh regressions. Assertions name the behavior they guard; no live services."""
-from contextlib import redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
 import datetime as dt
 import io
 import json
@@ -71,6 +71,27 @@ def test_failed_source_always_runs_and_builds_failure():
             assert "missing.json" in page and '"error"' in page, "full run must expose the actual collection failure"
             assert not pw.read_json(home / "state/fingerprints.json")["cacheable"]
             model.assert_not_called()
+
+
+@case
+def test_post_collect_build_failure_marks_refresh_fatal():
+    for failed_build in (1, 2):
+        for error_type in (OSError, ValueError, KeyError, TypeError, AttributeError):
+            with tempfile.TemporaryDirectory() as td:
+                home = fixture(Path(td))
+                error = error_type("broken page")
+                output = io.StringIO()
+                results = [error] if failed_build == 1 else [None, error]
+                with patch.object(collect, "refresh", side_effect=fake_refresh), patch.object(build, "build_page", side_effect=results) as renderer, patch.object(build, "mark_failed_page", wraps=build.mark_failed_page) as mark_failed, patch.object(ar, "write_notes", return_value=pw.NotesResult(changed=True)), patch.object(ar, "publish") as publish, redirect_stderr(output):
+                    assert ar.run(home) == 2, "a failed build after steps or notes must fail the refresh"
+                manifest = pw.read_json(home / "refresh.json")
+                assert manifest["status"] == "fatal" and "broken page" in manifest["error"]
+                mark_failed.assert_called_once_with(home, manifest)
+                assert manifest["error"] in output.getvalue(), "build failures must be reported to stderr"
+                assert "refresh-failure" in (home / "out/index.html").read_text(), "the retained page must show the fatal banner"
+                assert renderer.call_count == failed_build
+                publish.assert_not_called()
+                assert not (home / "state/fingerprints.json").exists(), "failed builds must remain retryable"
 
 
 @case
@@ -727,6 +748,26 @@ def test_steps_paths_absolute_tilde_outside_directory_and_multiple_checkouts():
         assert model.call_args.kwargs["checkouts"] == [repo, second]
         assert checked(home, second, "2") == head
         assert str(second) not in pw.read_json(home / "state/steps.json")["p"]["steps"]["1"]
+
+
+@case
+def test_steps_missing_first_checkout_uses_only_probed_checkouts():
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        home, repo, inv = step_fixture(root)
+        inv["projects"][0]["sources"]["local"].insert(0, {"path": str(root / "missing"), "label": "Missing"})
+        with patch.object(pw, "model_call") as model:
+            assert not sr.rewrite_steps(home, inv)
+        model.assert_not_called()
+        head = step_commit(repo, "one.txt")
+        def reply(provider, prompt, checkouts):
+            assert checkouts == [repo], "a failed checkout probe must not become the model's working directory"
+            return {"1": {"title": "Read fresh items"}}
+        with patch.object(pw, "model_call", side_effect=reply) as model:
+            assert sr.rewrite_steps(home, inv)
+        model.assert_called_once()
+        assert pw.read_json(home / "inventory.json")["projects"][0]["nodes"][0]["title"] == "Read fresh items"
+        assert checked(home, repo) == head
 
 
 @case

@@ -91,7 +91,8 @@ def rewrite_steps(home, inv):
                 targets[token] = (node, tracked, affected, untouched)
             else:
                 tracked.update(untouched)
-        if not requests or project_state.get("last_session_date") == day:
+        checkouts = [checkout for checkout in checkouts if str(checkout) in heads]
+        if not checkouts or not requests or project_state.get("last_session_date") == day:
             continue
         # Even failed/invalid sessions consume today's allowance; pending commits remain.
         project_state["last_session_date"] = day

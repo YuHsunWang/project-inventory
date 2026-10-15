@@ -140,6 +140,23 @@ def atomic_json(path, value):
     collect.atomic_write(path, json.dumps(value, ensure_ascii=False, indent=1))
 
 
+def build_page_or_fail(home, manifest):
+    import build
+    try:
+        build.build_page(home)
+    except (OSError, ValueError, KeyError, TypeError, AttributeError) as exc:
+        message = f"FAILED: page build could not complete: {exc}. Fix the input or directory permissions and rerun auto_refresh.py HOME."
+        manifest.update(status="fatal", error=message)
+        try:
+            atomic_json(home / "refresh.json", manifest)
+        except OSError as record_error:
+            print(f"FAILED: cannot record refresh failure: {record_error}", file=sys.stderr)
+        build.mark_failed_page(home, manifest)
+        print(message, file=sys.stderr)
+        return False
+    return True
+
+
 def run(home):
     with refresh_lock(home):
         inv = validate_inventory(read_json(home / "inventory.json"))
@@ -156,11 +173,11 @@ def run(home):
         manifest = read_json(home / "refresh.json")
         snapshot = read_json(Path(manifest["snapshot"]))
         rewrite_steps(home, inv)
-        import build
-        build.build_page(home)
+        if not build_page_or_fail(home, manifest):
+            return 2
         notes = write_notes(home, inv, snapshot)
-        if notes:
-            build.build_page(home)
+        if notes and not build_page_or_fail(home, manifest):
+            return 2
         publish(home, inv)
         # Collection may update tracking refs; generated text and step state are build inputs.
         for project in inv["projects"]:
