@@ -105,11 +105,11 @@ def history(f, sums):
     """Everything that happened, newest week first: commits, finished tickets, PRs opened.
     Each week carries its plain-words summary from summaries.json; `fresh` is false when the
     summary is missing or was written for a different number of items (new work arrived)."""
-    items = [{"date": c["date"], "kind": "commit", "text": c["subject"], "ref": c["hash"], "where": c.get("where")}
+    items = [{"date": c["date"], "kind": "commit", "text": c["subject"], "ref": c["hash"], "where": c.get("where"), "note": c.get("note")}
              for c in f.get("commits", [])]
     items += [{"date": t["completed"][:10], "kind": "done", "text": t["title"], "ref": t.get("id"), "url": t.get("url"),
                "note": t.get("benefit")} for t in f["tickets"] if t.get("state") == "done" and t.get("completed")]
-    items += [{"date": pr["createdAt"][:10], "kind": "pr", "text": pr["title"], "ref": f'#{pr["number"]}', "url": pr["url"]}
+    items += [{"date": pr["createdAt"][:10], "kind": "pr", "text": pr["title"], "ref": f'#{pr["number"]}', "url": pr.get("url"), "note": pr.get("note")}
               for pr in f["prs"] if pr.get("createdAt")]
     weeks = {}
     for x in sorted(items, key=lambda x: x["date"], reverse=True):
@@ -268,11 +268,19 @@ def build_page(home, snapshot=None, run_id=None):
     today = dt.date.fromisoformat(snap["date"])
     sums_f = home / "summaries.json"
     sums = json.loads(sums_f.read_text(encoding="utf-8")) if sums_f.exists() else {}
+    notes_f = home / "state" / "notes.json"
+    notes = json.loads(notes_f.read_text(encoding="utf-8")) if notes_f.exists() else {}
     warnings, projects, need = [], [], {}
     for p in inv["projects"]:
         f = snap["projects"].get(p["key"])
         if f is None:
             raise ValueError(f"project {p['key']} is not in this snapshot - run collect.py HOME --refresh again")
+        for commit in f.get("commits", []):
+            if commit["hash"] in notes:
+                commit["note"] = notes[commit["hash"]]
+        for pr in f.get("prs", []):
+            if pr.get("url") and pr.get("url") in notes:
+                pr["note"] = notes[pr["url"]]
         zone = inv.get("timezone", "UTC")
         for ticket in f["tickets"]:
             for field in ("created", "completed", "canceled", "reopened"):
@@ -293,9 +301,11 @@ def build_page(home, snapshot=None, run_id=None):
             need[p["key"]] = weeks
     page = {"title": inv.get("title", "Projects"), "lang": inv.get("lang", "en"),
             "date": snap["date"], "generated_at": snap["generated_at"], "projects": projects}
+    banner = needs_claude(inv, snap, need)
     has_math = any("math" in m for p in projects for n in p.get("nodes", []) for m in n.get("media", []))
     html = (HERE / "template.html").read_text(encoding="utf-8")
     html = html.replace("__LANG__", htmllib.escape(page["lang"])).replace("__TITLE__", htmllib.escape(page["title"]))
+    html = html.replace("<!--__NEEDS_CLAUDE__-->", banner)
     html = html.replace("<!--__MATHJAX__-->", MATHJAX if has_math else "")
     html = html.replace("/*__DATA__*/null", json.dumps(page, ensure_ascii=False).replace("</", "<\\/").replace("<!--", "<\\!--"))
     hashes = ["'sha256-" + base64.b64encode(hashlib.sha256(s.encode()).digest()).decode() + "'"
@@ -323,6 +333,30 @@ def build_page(home, snapshot=None, run_id=None):
     for w in warnings:
         print(f"WARN {w}")
     print(f"built {out} ({size:,} bytes, {len(projects)} projects, snapshot {snap['date']})")
+
+
+def needs_claude(inv, snap, need):
+    """Only MCP reads requiring attention, missing summaries, and manual Artifact publishing."""
+    zh = inv.get("lang") == "zh-TW"
+    rows = []
+    for project in inv["projects"]:
+        states = snap["projects"].get(project["key"], {}).get("sources", {})
+        for name, state in states.items():
+            mcp = name == "notion" or (name == "linear" and state.get("via", "mcp") == "mcp") or (name.startswith("github:") and state.get("via", "mcp") == "mcp")
+            if mcp and (state.get("status") != "ok" or not state.get("complete")):
+                label = "MCP 來源需重讀" if zh else "MCP source needs a fresh read"
+                rows.append(f"{project['name']}: {name} — {label}")
+    missing = sum(len(weeks) for weeks in need.values())
+    if missing:
+        rows.append(f"{missing} 週摘要待補" if zh else f"{missing} week summaries missing")
+    if inv.get("publish", {}).get("to") == "artifact":
+        rows.append("透過 Claude 發布 Artifact" if zh else "Publish via Claude (Artifact)")
+    if not rows:
+        return ""
+    title = "需要 Claude 協助" if zh else "Needs Claude"
+    instruction = "輸入" if zh else "Type"
+    items = "".join(f"<li>{htmllib.escape(row)} · {instruction} <code>/project-inventory</code></li>" for row in rows)
+    return f'<aside class="card" role="status" data-needs-claude><strong>{title}</strong><ul>{items}</ul></aside>'
 
 
 def mark_failed_page(home, manifest):
@@ -392,8 +426,12 @@ def main():
     parser.add_argument("--run-id")
     args = parser.parse_args()
     home = Path(args.home).expanduser()
+    from refresh_lock import refresh_lock, RefreshBusy
     try:
-        build_page(home, args.snapshot, args.run_id)
+        with refresh_lock(home):
+            build_page(home, args.snapshot, args.run_id)
+    except RefreshBusy as exc:
+        print(f"BUSY: {exc}")
     except (OSError, ValueError, KeyError, TypeError, AttributeError) as e:
         message = f"FAILED: build could not complete: {e}. Fix the input or directory permissions and rerun collect.py HOME --refresh."
         manifest = {"error": message, "attempted_at": dt.datetime.now().astimezone().isoformat()}

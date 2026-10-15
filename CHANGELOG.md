@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased — unattended refresh (PR 1)
+
+- Add opt-in cron / Windows schedules, source fingerprints with day rollover,
+  a shared crash-safe refresh lock and an unattended script entry point.
+- Optionally batch plain-words week summaries and cached commit/PR notes through
+  Claude Haiku or Codex gpt-6-luna; default none sends nothing.
+- Add a bilingual Needs Claude banner and hash-gated protected Vercel deployment.
+  GitHub Pages and Artifact publication remain manual; diagram text is unchanged.
+- Add offline regressions for skip/failure/lock/model/cache/schedule/publish behavior.
+
 ## Unreleased — audit-wave1
 
 Fixes on this branch, grouped by issue (not claims of live service acceptance):

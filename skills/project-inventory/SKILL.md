@@ -29,7 +29,7 @@ HOME/out/artifact.html       HTML fragment for manual host import          (buil
 ```
 
 `SCRIPTS` = the `scripts/` folder next to this file. Not running in Claude Code? The Python scripts are portable;
-`/schedule` is host-specific and Artifact import/publication remains unverified. MCP steps need the matching
+OS scheduling uses `schedule.py`; Artifact import/publication remains unverified. MCP steps need the matching
 connector in your own tool, and without one, say which source was not read. Schemas for every file: `reference/schema.md`.
 Talk to the user in their language and write page text (names, tags, diagram) in it too; set
 `"lang"` in inventory.json (`zh-TW` and `en` have page labels; anything else falls back to `en`).
@@ -67,6 +67,16 @@ Talk to the user in their language and write page text (names, tags, diagram) in
    a `math` formula the code actually computes, a `link`, or a `shot` screenshot — ask the user
    for screenshot files; never invent one. Skip media the user does not want.
 5. Save `HOME/inventory.json`. Pick distinct `color`s that read in light and dark mode.
+6. **Optional plain words.** Ask which CLI may write summaries and commit/PR notes:
+   `claude` (Haiku), `codex` (gpt-6-luna), or `none` (default; nothing sent).
+   Save `auto_refresh.model`. Explain that an enabled CLI receives only listed work,
+   one batch per project; successful notes are cached by full commit hash / PR URL.
+7. **Optional schedule, ask once.** Ask whether to install unattended refresh; default is no.
+   Only on yes: offer every 2 hours, 08:00–22:00 inclusive in this computer's local time;
+   let the user change the hours/cadence. Save `auto_refresh.schedule` (see schema).
+   Run `python3 SCRIPTS/schedule.py print HOME` and show the exact cron line / schtasks
+   command before `python3 SCRIPTS/schedule.py install HOME`. Never install on silence.
+   `remove HOME` removes only this home's marked entry. No Claude/Codex chat is scheduled.
 
 ## Refresh (every run)
 
@@ -102,6 +112,7 @@ Talk to the user in their language and write page text (names, tags, diagram) in
    - List every source you read in `read`. If a source fails, write the error into `errors`
      (start the text with the source name) — never drop it silently.
 2. `python3 SCRIPTS/collect.py HOME --refresh` — collect and build this run's exact snapshot.
+   A `BUSY:` message means another refresh owns the lock: stop this manual run and let it finish.
    Exit 0 = success; 1 = partial, with visible errors; 2 = fatal, retaining last-good data/time
    with a failure summary. On exit 2 fix the input or permissions and rerun; do not publish.
 3. `python3 SCRIPTS/build.py HOME` rebuilds only the snapshot in `refresh.json` → `HOME/out/index.html`.
@@ -171,7 +182,24 @@ Never send the page anywhere the user did not choose.
 - Re-runs on the same day overwrite that day's snapshot. The ticket chart is rebuilt from ticket
   dates and the commit chart from git history, so both show on the first run.
 - `build.py` prints `WARN` lines (a screenshot not found, a page over 8 MB). Report them.
-- Scheduling is not built in. If the user wants it nightly, point them to `/schedule` in Claude Code (or cron
-  for the script-only part: `collect.py HOME --refresh --script-only`; partial failures still build,
-  fatal failures stop and retain last-good data with a warning.
-  Cron has a bare environment: set `PATH` so it finds git and gh, and `LINEAR_API_KEY` if used).
+- Scheduled entry point: `python3 SCRIPTS/auto_refresh.py HOME`. It probes git local branch
+  heads, live remote refs, dirty/untracked counts, PR number/updatedAt, file statistics for
+  data/Obsidian and script-side Linear. Same fingerprints and calendar day skip collection,
+  build, model and publishing. Failed script reads always retry and stay visible on the page.
+  File mtimes only decide whether to read again; freshness values still come from the data.
+- Both scheduled refresh and manual `collect.py` / standalone `build.py` use `HOME/state/refresh.lock`. OS locks
+  release immediately when a process dies (no 30-minute stale-file delay). Busy runs exit 0.
+- The scheduled job builds locally, optionally fills `summaries-needed.json` and cached notes
+  via one JSON-only CLI call per project, and rebuilds when text was added. Failed/invalid
+  model output leaves notes missing without failing the run. zh-TW text must encode in Big5
+  and contain Chinese script; en rejects CJK text. Cached notes are never requested again.
+- The top **Needs Claude** banner lists stale/unread MCP sources, missing week summaries,
+  and Artifact publishing, with `/project-inventory` on each row. Invoke that command to
+  gather MCP sources or fill missing summaries; automatic jobs never call MCP.
+- Automatic Vercel publishing requires `publish.to = "vercel"` and `publish.project` (optional
+  `team`). Only changed page hashes deploy, through `publish_vercel.py` with its ownership
+  and before/after authentication checks; automatic jobs never pass `--reuse`. A successful
+  deployment records `state/deployed.json`. GitHub Pages always requires manual publication;
+  Artifact users get the banner. Keep API keys in the scheduler's environment, never the
+  displayed command. Cron has no interactive shell setup; install captures PATH for
+  git/gh/codex/claude/vercel. Reinstall after moving the skill or changing executable locations.
