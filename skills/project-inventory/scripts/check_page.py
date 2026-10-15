@@ -269,7 +269,7 @@ def main():
                 c = None
                 try:
                     portfile = Path(profile) / "DevToolsActivePort"
-                    deadline = time.monotonic() + 15
+                    deadline = time.monotonic() + 60  # shared CI runners can take >15s to boot Chromium
                     while not portfile.exists():
                         if browser.poll() is not None or time.monotonic() > deadline:
                             log.flush(); log.seek(0)
