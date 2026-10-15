@@ -262,7 +262,8 @@ def main():
             raise RuntimeError("built page missing: " + str(page))
         if args.shots:
             args.shots.mkdir(parents=True, exist_ok=True)
-        with tempfile.TemporaryDirectory(prefix="check-page-") as profile:
+        profile = tempfile.mkdtemp(prefix="check-page-")
+        try:
             with open(Path(profile) / "browser.log", "w+") as log:
                 browser = subprocess.Popen([chromium(), "--headless", "--no-sandbox", "--disable-dev-shm-usage",
                     "--remote-debugging-port=0", "--user-data-dir=" + profile, "about:blank"], stdout=log, stderr=log)
@@ -294,6 +295,9 @@ def main():
                     except subprocess.TimeoutExpired:
                         browser.kill()
                         browser.wait()
+        finally:
+            # Chromium helpers can still write Default/ after the browser exits; a leftover profile is not a page failure
+            shutil.rmtree(profile, ignore_errors=True)
     except (RuntimeError, OSError, ValueError, KeyError) as e:
         bad.append(str(e))
     if bad:
