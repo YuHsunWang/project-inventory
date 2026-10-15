@@ -335,6 +335,172 @@ def test_live_remote_refs_invalidate_without_fetching():
             assert not errors and before != after, "live remote ref changes must invalidate even before local fetch"
 
 
+@case
+def test_screenshot_changes_invalidate_and_missing_is_cacheable():
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td); home = fixture(root)
+        absolute = root / "absolute.png"
+        inv = pw.read_json(home / "inventory.json")
+        inv["projects"][0]["nodes"] = [
+            {"id": 1, "media": [{"shot": "relative.png"}]},
+            {"id": 2, "media": [{"shot": str(absolute)}]}]
+        save(home / "inventory.json", inv)
+        with patch.object(collect, "refresh", side_effect=fake_refresh) as refresh, patch.object(ar, "publish"):
+            ar.run(home); ar.run(home)
+            assert refresh.call_count == 1, "finding 1: missing screenshots are stable, successful fingerprints"
+            for shot in (home / "relative.png", absolute):
+                before = refresh.call_count
+                shot.write_bytes(b"image")
+                ar.run(home); ar.run(home)
+                assert refresh.call_count == before + 1, "finding 1: every newly present relative/absolute screenshot invalidates once"
+                stat = shot.stat()
+                os.utime(shot, ns=(stat.st_atime_ns, stat.st_mtime_ns + 1_000_000_000))
+                ar.run(home)
+                assert refresh.call_count == before + 2, "finding 1: replacement with the same size invalidates by mtime_ns"
+                stat = shot.stat()
+                shot.write_bytes(b"larger image")
+                os.utime(shot, ns=(stat.st_atime_ns, stat.st_mtime_ns))
+                ar.run(home)
+                assert refresh.call_count == before + 3, "finding 1: size changes invalidate even with the same mtime"
+                shot.unlink()
+                ar.run(home); ar.run(home)
+                assert refresh.call_count == before + 4, "finding 1: deletion invalidates once, then missing is stable"
+
+
+@case
+def test_unfinished_model_outputs_retry_until_complete():
+    for invalid_kind in ("commit", "week"):
+        with tempfile.TemporaryDirectory() as td:
+            home = fixture(Path(td), "claude")
+            def refresh_with_history(home, args):
+                fake_refresh(home, args)
+                snap = pw.read_json(home / "facts/test.json")
+                snap["projects"]["p"]["commits"] = [
+                    {"hash": "c1", "subject": "Fix dates", "date": snap["date"]},
+                    {"hash": "c2", "subject": "Fix counts", "date": snap["date"]}]
+                save(home / "facts/test.json", snap)
+                build.build_page(home)
+                return 0
+            attempts = []
+            def reply(provider, prompt):
+                payload = json.loads(prompt.split("\n", 1)[1])
+                attempts.append(payload)
+                if len(attempts) == 1:
+                    raise RuntimeError("offline")
+                if len(attempts) == 2:
+                    return {token: ("" if item["kind"] == invalid_kind else "A plain explanation.")
+                            for token, item in payload.items()}
+                assert all(item["kind"] == invalid_kind for item in payload.values()), "successful outputs must stay cached during retries"
+                return {token: "A plain explanation." for token in payload}
+            with patch.object(collect, "refresh", side_effect=refresh_with_history) as refresh, patch.object(pw, "model_call", side_effect=reply) as model, patch.object(ar, "publish"):
+                ar.run(home)
+                assert not pw.read_json(home / "state/fingerprints.json")["cacheable"], "finding 2: failed calls must leave the run retryable"
+                ar.run(home)
+                assert not pw.read_json(home / "state/fingerprints.json")["cacheable"], "finding 2: invalid notes or summaries must leave partial success retryable"
+                ar.run(home)
+                assert pw.read_json(home / "state/fingerprints.json")["cacheable"], "finding 2: all requested outputs written permits caching"
+                ar.run(home)
+                assert refresh.call_count == model.call_count == 3, "finding 2: unchanged runs retry unfinished work, then stop after completion"
+
+
+@case
+def test_script_only_preserves_unconsumed_gather_for_manual_run():
+    for consumed in (None, "previous-gather"):
+        with tempfile.TemporaryDirectory() as td:
+            home = fixture(Path(td))
+            inv = pw.read_json(home / "inventory.json")
+            inv["projects"][0]["sources"] = {"notion": {"url": "https://notion.so/fixture"}}
+            save(home / "inventory.json", inv)
+            today = dt.datetime.now(dt.timezone.utc).date().isoformat()
+            stamp = dt.datetime.now(dt.timezone.utc).isoformat()
+            offered = "fresh-gather"
+            save(home / "gathered" / f"{today}.json", {"_run": {"run_id": offered}, "p": {
+                "sources": {"notion": {"run_id": offered, "fetched_at": stamp, "status": "ok", "complete": True}}, "tickets": []}})
+            if consumed:
+                save(home / "facts" / f"{today}.json", {"run_id": "previous-auto", "gathered_run_id": consumed, "projects": {}})
+            with patch.object(collect.shutil, "which", return_value=None):
+                for _ in range(2):
+                    code, path, run_id = collect.collect_snapshot(home, script_only=True)
+                    snap = pw.read_json(path)
+                    assert code == 1 and run_id != offered
+                    assert snap["gathered_run_id"] == consumed, "finding 3: script-only runs preserve the previous consumed gather id"
+                code, path, run_id = collect.collect_snapshot(home)
+                snap = pw.read_json(path)
+                assert code == 0 and run_id == offered and snap["projects"]["p"]["sources"]["notion"]["status"] == "ok", "finding 3: the next manual run must consume the fresh gather"
+                assert snap["gathered_run_id"] == offered
+
+
+@case
+def test_git_probe_ignores_unreachable_secondary_remote():
+    with tempfile.TemporaryDirectory() as td:
+        home = fixture(Path(td))
+        inv = pw.read_json(home / "inventory.json")
+        inv["projects"][0]["sources"]["local"] = [{"label": "fixture", "path": str(home)}]
+        for remotes in ("origin\nbackup\n", "backup\n"):
+            def git_command(command, **kwargs):
+                if command == ["git", "remote"]:
+                    return remotes
+                if command == ["git", "ls-remote", "origin"]:
+                    return "origin-ref"
+                raise RuntimeError("secondary remote is unreachable")
+            with patch.object(ar, "local_git", return_value={"refs": "local"}), patch.object(collect, "run", side_effect=git_command) as probe:
+                current, errors = ar.fingerprints(home, inv)
+                assert not errors, "finding 4: unused secondary remotes cannot fail fingerprints"
+                expected = {"origin": "origin-ref"} if "origin" in remotes.splitlines() else {}
+                assert current["sources"][f"p:git:{home}"]["remote_refs"] == expected, "finding 4: only origin is probed, and no-origin repositories remain supported"
+                assert all(call.args[0] != ["git", "ls-remote", "backup"] for call in probe.call_args_list)
+
+
+@case
+def test_url_less_gathered_pr_builds_without_requesting_note():
+    with tempfile.TemporaryDirectory() as td:
+        home = fixture(Path(td), "claude")
+        inv = pw.read_json(home / "inventory.json")
+        inv["projects"][0]["sources"]["github"] = ["fixture/repo"]
+        save(home / "inventory.json", inv)
+        today = dt.datetime.now(dt.timezone.utc).date().isoformat()
+        stamp = dt.datetime.now(dt.timezone.utc).isoformat()
+        prs = [{"repo": "fixture/repo", "number": 1, "title": "PR without URL", "createdAt": today},
+               {"repo": "fixture/repo", "number": 2, "title": "PR with URL", "createdAt": today, "url": "https://example.com/pr/2"}]
+        save(home / "gathered" / f"{today}.json", {"_run": {"run_id": "gather"}, "p": {
+            "sources": {"github:fixture/repo": {"run_id": "gather", "fetched_at": stamp, "status": "ok", "complete": True}}, "prs": prs}})
+        with patch.object(collect.shutil, "which", return_value=None):
+            code, path, _ = collect.collect_snapshot(home)
+        assert code == 0
+        save(home / "state/notes.json", {"": "Wrong note", prs[1]["url"]: "Cached PR note."})
+        build.build_page(home)
+        page = (home / "out/index.html").read_text()
+        assert "PR without URL" in page and "Cached PR note." in page and "Wrong note" not in page, "finding 5: URL-less gathered PRs must build and preserve valid PR notes"
+        # Isolate note generation from the separate weekly-summary request.
+        (home / "out/summaries-needed.json").unlink()
+        (home / "state/notes.json").unlink()
+        def reply(provider, prompt):
+            payload = json.loads(prompt.split("\n", 1)[1])
+            assert [item["title"] for item in payload.values()] == ["PR with URL"], "finding 5: URL-less PRs must never request a note"
+            return {token: "A plain explanation." for token in payload}
+        with patch.object(pw, "model_call", side_effect=reply) as model:
+            assert pw.write_notes(home, inv, pw.read_json(path))
+            assert model.call_count == 1
+        assert pw.read_json(home / "state/notes.json") == {prs[1]["url"]: "A plain explanation."}, "finding 5: notes must only use valid URL identities"
+
+
+@case
+def test_schedule_remove_never_reads_inventory():
+    with tempfile.TemporaryDirectory() as td:
+        home = fixture(Path(td))
+        table = Path(td) / "fake-crontab"
+        unrelated = "5 1 * * * unrelated-job\n"
+        for malformed in ('{broken JSON', '{"auto_refresh":{"schedule":{"every_hours":0}}}', '{"auto_refresh":null}'):
+            (home / "inventory.json").write_text(malformed)
+            table.write_text(unrelated + "0 8 * * * old-job # " + schedule.marker(home) + "\n")
+            with redirect_stdout(io.StringIO()), patch.object(schedule, "read_json", side_effect=AssertionError("inventory must not be read")), patch.object(schedule, "executable_path", side_effect=AssertionError("removal needs only its marker")), patch.object(schedule.subprocess, "run") as task:
+                assert schedule.main(["remove", str(home), "--crontab-file", str(table), "--platform", "unix"]) == 0
+                assert table.read_text() == unrelated, "finding 6: remove must work with malformed inventory and preserve unrelated jobs"
+                task.assert_not_called()
+                assert schedule.main(["remove", str(home), "--platform", "windows"]) == 0
+                assert task.call_args.args[0] == ["schtasks", "/Delete", "/TN", schedule.marker(home), "/F"], "finding 6: Windows removal must also use only the home-derived marker"
+
+
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_") and callable(fn):

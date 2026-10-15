@@ -333,7 +333,7 @@ def collect_snapshot(home, requested_run=None, script_only=False):
     others = sorted(x.name for x in (home / "gathered").glob("*.json") if x != gathered_f) if not gathered_f.exists() else []
     other = f"; newest gathered file is {others[-1]}, this computer's date is {today}" if others else ""
     snap = {"date": today.isoformat(), "generated_at": dt.datetime.now(timezone(zone)).isoformat(timespec="seconds"),
-            "gathered": gathered_f.exists(), "run_id": run_id, "gathered_run_id": offered, "projects": {}}
+            "gathered": gathered_f.exists(), "run_id": run_id, "gathered_run_id": consumed if script_only else offered, "projects": {}}
     failed = 0
     for p in inv["projects"]:
         src, g = p.get("sources", {}), gathered.get(p["key"], {})

@@ -109,7 +109,7 @@ def history(f, sums):
              for c in f.get("commits", [])]
     items += [{"date": t["completed"][:10], "kind": "done", "text": t["title"], "ref": t.get("id"), "url": t.get("url"),
                "note": t.get("benefit")} for t in f["tickets"] if t.get("state") == "done" and t.get("completed")]
-    items += [{"date": pr["createdAt"][:10], "kind": "pr", "text": pr["title"], "ref": f'#{pr["number"]}', "url": pr["url"], "note": pr.get("note")}
+    items += [{"date": pr["createdAt"][:10], "kind": "pr", "text": pr["title"], "ref": f'#{pr["number"]}', "url": pr.get("url"), "note": pr.get("note")}
               for pr in f["prs"] if pr.get("createdAt")]
     weeks = {}
     for x in sorted(items, key=lambda x: x["date"], reverse=True):
@@ -279,7 +279,7 @@ def build_page(home, snapshot=None, run_id=None):
             if commit["hash"] in notes:
                 commit["note"] = notes[commit["hash"]]
         for pr in f.get("prs", []):
-            if pr["url"] in notes:
+            if pr.get("url") and pr.get("url") in notes:
                 pr["note"] = notes[pr["url"]]
         zone = inv.get("timezone", "UTC")
         for ticket in f["tickets"]:

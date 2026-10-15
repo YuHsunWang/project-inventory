@@ -40,6 +40,14 @@ def file_fingerprint(path, pattern=None):
     return [len(stats), sum(s.st_size for s in stats), max((s.st_mtime_ns for s in stats), default=0)]
 
 
+def screenshot_fingerprint(path):
+    try:
+        stat = path.stat()
+    except FileNotFoundError:
+        return "missing"
+    return [True, stat.st_size, stat.st_mtime_ns]
+
+
 def local_git(path):
     def git(*args):
         return collect.run(["git", *args], cwd=Path(path).expanduser())
@@ -71,7 +79,7 @@ def fingerprints(home, inv):
             def git_probe(path=path):
                 result = local_git(path)
                 remotes = collect.run(["git", "remote"], cwd=Path(path).expanduser()).splitlines()
-                result["remote_refs"] = {remote: collect.run(["git", "ls-remote", remote], cwd=Path(path).expanduser()) for remote in remotes}
+                result["remote_refs"] = {remote: collect.run(["git", "ls-remote", remote], cwd=Path(path).expanduser()) for remote in remotes if remote == "origin"}
                 return result
             probe(f"{key}:git:{path}", git_probe)
         for repo in src.get("github", []):
@@ -80,6 +88,12 @@ def fingerprints(home, inv):
             probe(f"{key}:linear", lambda spec=src["linear"]: digest(sorted(collect.linear_tickets(spec), key=lambda ticket: ticket["source_id"])))
         for obsidian in src.get("obsidian", []):
             probe(f"{key}:obsidian:{obsidian['path']}", lambda o=obsidian: file_fingerprint(o["path"], "*.md"))
+        for node in project.get("nodes", []):
+            for media in node.get("media", []):
+                if "shot" in media:
+                    path = Path(media["shot"]).expanduser()
+                    path = path if path.is_absolute() else home / path
+                    probe(f"{key}:shot:{path}", lambda path=path: screenshot_fingerprint(path))
         for i, spec in enumerate(project.get("data", [])):
             probe(f"{key}:data:{i}", lambda spec=spec: file_fingerprint(spec["path"], "*.parquet" if spec["kind"] == "parquet" else None))
     # User edits and new MCP gathers must not be hidden behind an unchanged source cache.
@@ -140,7 +154,8 @@ def run(home):
             return 2
         manifest = read_json(home / "refresh.json")
         snapshot = read_json(Path(manifest["snapshot"]))
-        if write_notes(home, inv, snapshot):
+        notes = write_notes(home, inv, snapshot)
+        if notes:
             import build
             build.build_page(home)
         publish(home, inv)
@@ -159,7 +174,7 @@ def run(home):
             for error in facts.get("errors", []):
                 if error.startswith(("git ", "data ", "obsidian ")) or (error.startswith("linear:") and os.environ.get("LINEAR_API_KEY")) or (error.startswith("github:") and any(state.get("via") == "gh" and state.get("status") != "ok" for name, state in facts.get("sources", {}).items() if name.startswith("github:"))):
                     script_errors.append(error)
-        atomic_json(cache, {"fingerprints": current, "cacheable": not failures and not script_errors})
+        atomic_json(cache, {"fingerprints": current, "cacheable": not failures and not script_errors and not notes.pending})
         print("REFRESH complete" + (" (partial sources; see page)" if code else ""))
         return code
 

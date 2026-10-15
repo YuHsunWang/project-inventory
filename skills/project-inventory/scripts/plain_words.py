@@ -1,4 +1,5 @@
 """Optional, batched text generation. Never run a model for provider=none."""
+from dataclasses import dataclass
 import json
 from pathlib import Path
 import re
@@ -7,6 +8,15 @@ import tempfile
 from collect import atomic_write
 
 BATCH = 40  # items per model call
+
+
+@dataclass
+class NotesResult:
+    changed: bool = False
+    pending: bool = False
+
+    def __bool__(self):
+        return self.changed  # Preserve the existing "rebuild after writes" contract.
 
 
 def read_json(path, default=None):
@@ -54,11 +64,11 @@ def model_call(provider, prompt):
 def write_notes(home, inv, snapshot):
     provider = inv.get("auto_refresh", {}).get("model", "none")
     if provider == "none":
-        return False
+        return NotesResult()
     needed = read_json(home / "out" / "summaries-needed.json")
     sums = read_json(home / "summaries.json")
     notes = read_json(home / "state" / "notes.json")
-    changed = False
+    result = NotesResult()
     for project in inv["projects"]:
         key = project["key"]
         facts = snapshot["projects"].get(key, {})
@@ -68,7 +78,7 @@ def write_notes(home, inv, snapshot):
             requests[token] = {"kind": "week", "week": week["week"], "items": week["items"]}
             targets[token] = ("week", week)
         items = [("commit", c["hash"], c["subject"]) for c in facts.get("commits", [])]
-        items += [("pr", p["url"], p["title"]) for p in facts.get("prs", [])]
+        items += [("pr", p.get("url"), p["title"]) for p in facts.get("prs", []) if p.get("url")]
         for kind, identity, title in items:
             if identity in notes:
                 continue
@@ -79,12 +89,14 @@ def write_notes(home, inv, snapshot):
         # A first run can hold hundreds of commits: send BATCH per call so one bad reply loses one batch, not the project.
         for start in range(0, len(tokens), BATCH):
             batch = {t: requests[t] for t in tokens[start:start + BATCH]}
-            changed = send_batch(home, inv, project, provider, batch, targets, sums, notes) or changed
-    return changed
+            written = send_batch(home, inv, project, provider, batch, targets, sums, notes)
+            result.changed |= written.changed
+            result.pending |= written.pending
+    return result
 
 
 def send_batch(home, inv, project, provider, requests, targets, sums, notes):
-    key, changed = project["key"], False
+    key, written = project["key"], 0
     prompt = (f"Write plain words in page language {inv.get('lang', 'en')} for project {project['name']}"
               f"{' (' + project['tag'] + ')' if project.get('tag') else ''}, for a reader who does not code. "
               "For each week write 2-3 short sentences about what changed and why it matters. "
@@ -99,7 +111,7 @@ def send_batch(home, inv, project, provider, requests, targets, sums, notes):
         got = model_call(provider, prompt)
     except (OSError, ValueError, TypeError, AttributeError, RuntimeError, subprocess.SubprocessError) as exc:
         print(f"WARN {key}: plain-words call failed ({type(exc).__name__}); items remain without notes")
-        return False
+        return NotesResult(pending=True)
     for token in requests:
         kind, target = targets[token]
         text = got.get(token)
@@ -109,8 +121,8 @@ def send_batch(home, inv, project, provider, requests, targets, sums, notes):
             sums.setdefault(key, {})[target["week"]] = {"n": target["n"], "text": text.strip()}
         else:
             notes[target] = text.strip()
-        changed = True
+        written += 1
     # Persist each batch's successes before the next model call.
     atomic_write(home / "summaries.json", json.dumps(sums, ensure_ascii=False, indent=1))
     atomic_write(home / "state" / "notes.json", json.dumps(notes, ensure_ascii=False, indent=1))
-    return changed
+    return NotesResult(changed=bool(written), pending=written < len(requests))

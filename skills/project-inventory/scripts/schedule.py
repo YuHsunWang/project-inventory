@@ -62,14 +62,16 @@ def main(argv=None):
     if args.action == "_run":
         return subprocess.run([sys.executable, str(Path(__file__).with_name("auto_refresh.py")), str(home)],
                               env={**os.environ, "PATH": args.path or executable_path()}).returncode
-    saved = read_json(home / "inventory.json").get("auto_refresh", {}).get("schedule") or {}
-    every = args.every if args.every is not None else saved.get("every_hours", 2)
-    start = args.start if args.start is not None else saved.get("start_hour", 8)
-    end = args.end if args.end is not None else saved.get("end_hour", 22)
-    if not (1 <= every <= 24 and 0 <= start <= end <= 23):
-        parser.error("require 1 <= every <= 24 and 0 <= start <= end <= 23")
+    every, start, end = 2, 8, 22
+    if args.action != "remove":
+        saved = read_json(home / "inventory.json").get("auto_refresh", {}).get("schedule") or {}
+        every = args.every if args.every is not None else saved.get("every_hours", 2)
+        start = args.start if args.start is not None else saved.get("start_hour", 8)
+        end = args.end if args.end is not None else saved.get("end_hour", 22)
+        if not (1 <= every <= 24 and 0 <= start <= end <= 23):
+            parser.error("require 1 <= every <= 24 and 0 <= start <= end <= 23")
     command = windows_command(home, args.action, every, start, end) if args.platform == "windows" else None
-    line = cron_line(home, every, start, end)
+    line = cron_line(home, every, start, end) if args.action != "remove" else None
     print(subprocess.list2cmdline(command) if command else (line if args.action != "remove" else "remove entry marked " + marker(home)), flush=True)
     if args.action == "print":
         return 0
