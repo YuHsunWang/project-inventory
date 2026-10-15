@@ -132,6 +132,26 @@ def test_model_none_and_cache_only_send_missing_items():
 
 
 @case
+def test_first_run_is_batched_and_a_bad_batch_loses_only_itself():
+    with tempfile.TemporaryDirectory() as td:
+        home = fixture(Path(td), "codex")
+        inv = pw.read_json(home / "inventory.json")
+        snap = {"projects": {"p": {"commits": [{"hash": f"c{i}", "subject": f"S{i}"} for i in range(90)], "prs": []}}}
+        calls = []
+        def reply(provider, prompt):
+            payload = json.loads(prompt.split("\n", 1)[1])
+            calls.append(len(payload))
+            if len(calls) == 2:
+                raise ValueError("broken JSON from the model")
+            return {key: "A plain explanation." for key in payload}
+        with patch.object(pw, "model_call", side_effect=reply):
+            assert pw.write_notes(home, inv, snap)
+        assert calls == [40, 40, 10], "a first run with hundreds of commits must not be one giant prompt"
+        notes = pw.read_json(home / "state/notes.json")
+        assert len(notes) == 50 and "c0" in notes and "c89" in notes and "c40" not in notes, "only the failed batch stays unwritten"
+
+
+@case
 def test_model_failure_and_language_validation():
     assert pw.valid_text("修好資料日期。", "zh-TW")
     assert not pw.valid_text("简体说明", "zh-TW"), "Big5 check must reject simplified-only characters"
