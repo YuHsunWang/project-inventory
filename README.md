@@ -261,6 +261,6 @@ Captures show their `captured_at` time in the caption. Captions identify the liv
 
 Without `VERCEL_TOKEN`, the publisher runs `vercel whoami` before reading CLI credentials. A failed refresh stops publishing with a login instruction.
 
-Obsidian Setup asks which folders contain real tasks. Each source scans Markdown recursively under its vault `path`; optional `exclude` folders are relative to that path. `.obsidian`, `.trash` and fenced code blocks are always skipped. Counts include all matching tasks; the list shows the first 50 open tasks.
+Obsidian Setup asks which folders contain real tasks. Each source scans Markdown recursively under its vault `path`; optional `exclude` folders are relative to that path. `.obsidian`, `.trash` and fenced code blocks are always skipped. Checkboxes with blank text are ignored. Counts include all matching nonempty tasks; the list shows the first 50 open tasks.
 
 GitHub Issues uses `sources.github_issues: ["owner/repo"]`. It reads all open and closed issues, excludes PRs, and rebuilds ticket trends from creation/closure dates. Closed-as-not-planned is canceled; other closed issues are done. Missing `gh` access or an unread page shows a failed source. Existing configurations remain valid.

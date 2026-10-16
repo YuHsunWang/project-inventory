@@ -247,6 +247,8 @@ def obsidian_tasks(folder, exclude=()):
                 fence = marker[1]
                 continue
             m = TASK.match(line)
+            if m and not m.group(2).strip():
+                continue
             if m and m.group(1) == " ":
                 open_ += 1
                 if len(items) < 50:

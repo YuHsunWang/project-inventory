@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased — cold-start fixes (#48–#49)
+
+- #48: skip Obsidian checkboxes with blank text without counting them as open or done;
+  retain strict validation of collected task text.
+
 ## Unreleased — cold-start fixes (#41–#46)
 
 - #46: collect explicitly configured GitHub Issues through paginated `gh` reads,

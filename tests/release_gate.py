@@ -18,6 +18,7 @@ def main():
     passed = skipped = failed = 0
     with tempfile.TemporaryDirectory(prefix='release-') as td:
         commands = [
+            ('cold-start 3 regressions', [sys.executable, str(ROOT / 'tests/test_coldstart3.py')]),
             ('cold-start 2 regressions', [sys.executable, str(ROOT / 'tests/test_coldstart2.py')]),
             ('project screenshot regressions', [sys.executable, str(ROOT / 'tests/test_capture_shots.py')]),
             ('cold-start regressions', [sys.executable, str(ROOT / 'tests/test_cold_start.py')]),
