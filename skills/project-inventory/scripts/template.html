@@ -340,11 +340,11 @@ const L = {
   col_done:"帶來了什麼", col_wait:"改好了，等你按合併", col_open:"做完會帶來什麼", gain:"做完會得到 → ", dead_sum:"取消的待辦（X 張）— 點開看",
   tk_empty:"已讀取，0 張待辦。", tk_failed:"待辦讀取失敗", tk_partial:"待辦部分讀取失敗；只列出已取得的資料", tk_stale:"待辦資料已過期；未納入最新統計",
   tk_recover:"檢查來源權限並重新盤點。", tk_last:"最後成功讀取：", tk_never:"未記錄成功讀取時間", tk_old:"上次資料（未納入最新統計）",
-  notickets:"這個專案沒有接 Linear 或 Notion。",
-  facts_hint:"本機是這台電腦上的資料夾和資料；雲端是 git 遠端、GitHub PR、Linear、Notion 上的狀態。", f_local:"本機", f_cloud:"雲端", gh:"遠端", remote_none:"沒有設定遠端", no_up:"這條分支還沒推上去", repo:"程式碼", branch:"分支", ahead:"還沒推", behind:"落後遠端", dirtyf:"尚未提交的檔案", last:"最後一次改動",
+  notickets:"未設定待辦來源",
+  facts_hint:"本機是這台電腦上的資料夾和資料；雲端是 git 遠端、GitHub PRX 上的狀態。", f_local:"本機", f_cloud:"雲端", gh:"遠端", remote_none:"沒有設定遠端", no_up:"這條分支還沒推上去", repo:"程式碼", branch:"分支", ahead:"還沒推", behind:"落後遠端", dirtyf:"尚未提交的檔案", last:"最後一次改動",
   local_only:"只在本機，沒有遠端", data:"資料", newest:"最新到", days:"天前", limit:"超過 X 天算過期", stale1:"過期", ok1:"新鮮",
   notes:"筆記待辦", notes_todo:"個筆記待辦還沒勾", k_notes:"筆記待辦", notes_truncated:"僅顯示前 A 個，共 B 個", notes_open:"個還沒勾", notes_done:"個已勾", pr_open:"開啟中的 PR", errs:"沒抓到的東西",
-  foot:["待辦：Linear／Notion", "開啟中的 PR：GitHub", "git 狀態、資料日期：這台電腦"]},
+  foot_tickets:"待辦：X", foot:["開啟中的 PR：GitHub", "git 狀態、資料日期：這台電腦"]},
  "en": {ai_updated:"AI-updated (X)", all:"All projects", projects:"projects", todo_h:"Items to inspect", nothing:"No items to inspect", projects_h:"Projects", back:"‹ All projects",
   prs:"open PRs", review:"tickets are done and wait for review", dirty:"files have uncommitted changes", unpushed:"commits are not pushed",
   fetch_failed:"Remote refresh failed; remote comparison unknown", last_fetch:"Last successful fetch: ",
@@ -370,11 +370,11 @@ const L = {
   col_done:"what it brought", col_wait:"waiting for your merge", col_open:"what finishing it brings", gain:"Brings → ", dead_sum:"Canceled tickets (X) — click to show",
   tk_empty:"Read successfully, 0 tickets.", tk_failed:"Ticket read failed", tk_partial:"Ticket read partly failed; showing available data only", tk_stale:"Ticket data is stale; excluded from current metrics",
   tk_recover:"Check source permissions and gather again.", tk_last:"Last successful read: ", tk_never:"No successful read time recorded", tk_old:"Previous data (excluded from current metrics)",
-  notickets:"No Linear or Notion source.",
-  facts_hint:"Local: folders and data on this computer. Cloud: git remotes, GitHub PRs, Linear, Notion.", f_local:"Local", f_cloud:"Cloud", gh:"Remote", remote_none:"No remote", no_up:"branch not pushed yet", repo:"Code", branch:"Branch", ahead:"Unpushed", behind:"Behind remote", dirtyf:"Uncommitted files", last:"Last commit",
+  notickets:"No ticket source set.",
+  facts_hint:"Local: folders and data on this computer. Cloud: git remotes, GitHub PRsX.", f_local:"Local", f_cloud:"Cloud", gh:"Remote", remote_none:"No remote", no_up:"branch not pushed yet", repo:"Code", branch:"Branch", ahead:"Unpushed", behind:"Behind remote", dirtyf:"Uncommitted files", last:"Last commit",
   local_only:"Local only, no remote", data:"Data", newest:"Newest", days:"days ago", limit:"Stale after X days", stale1:"stale", ok1:"fresh",
   notes:"Note tasks", notes_todo:"open note tasks", k_notes:"Note tasks", notes_truncated:"Showing first A of B tasks", notes_open:"open", notes_done:"done", pr_open:"Open PRs", errs:"What failed",
-  foot:["Tickets: Linear / Notion", "Open PRs: GitHub", "Git state, data dates: this computer"]}
+  foot_tickets:"Tickets: X", foot:["Open PRs: GitHub", "Git state, data dates: this computer"]}
 };
 const T = L[D.lang] || L[D.lang.split("-")[0]] || L.en;
 const X = (s, ...v) => v.reduce((a, x, i) => a.replace(["X","Y","Z"][i], x), s);
@@ -383,6 +383,15 @@ const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt
 const mdOf = iso => iso ? `${+iso.slice(5,7)}/${+iso.slice(8,10)}` : "";
 const P = D.projects;
 const tkOf = p => p.facts.tickets;
+const ticketSources = p => Object.entries(D.ticket_source_labels || {}).filter(([key]) => {
+  const source = (p.sources || {})[key];
+  return Array.isArray(source) ? source.length > 0 : !!source;
+}).map(([, label]) => label);
+function renderFooter(){
+  const sources = Object.values(D.ticket_source_labels || {});
+  const lines = sources.length ? [X(T.foot_tickets, sources.join(" / ")), ...T.foot] : T.foot;
+  return lines.map(s => `<p>${esc(s)}</p>`).join("");
+}
 const ticketComplete = p => !p.ticket_state || ["ready", "empty"].includes(p.ticket_state.status);
 const ticketLabel = p => ({empty:T.tk_empty, not_connected:T.notickets, failed:T.tk_failed, partial:T.tk_partial, stale:T.tk_stale})[p.ticket_state?.status] || "";
 const hasTk = p => tkOf(p).length > 0 || !!((p.sources || {}).linear || (p.sources || {}).notion || (p.sources || {}).github_issues?.length);
@@ -622,6 +631,7 @@ function historyScope(p){
 }
 
 function renderTrends(p){
+  if (!p.trend_tickets && !p.weekly && !hasTk(p)) return gitNotice(p);
   let h = `<h3>${T.trends}</h3><p class="hint">${T.trends_hint}</p>${historyScope(p)}${gitNotice(p)}<div class="trends">`;
   const t = p.trend_tickets;
   if (!ticketComplete(p)) h += ticketNotice(p);
@@ -645,8 +655,9 @@ function renderTrends(p){
 }
 function renderActivity(p){
   const H = p.history, K = {commit:T.k_commit, done:T.k_done, pr:T.k_pr2};
-  let h = `<h3>${T.activity}</h3><p class="hint">${T.act_hint}</p>${historyScope(p)}${gitNotice(p)}<div class="card">`;
-  if (!H.length && p.git_state && p.git_state.status !== "ready") return h + `</div>`;
+  let h = `<h3>${T.activity}</h3><p class="hint">${T.act_hint}</p>${historyScope(p)}${gitNotice(p)}`;
+  if (!H.length && p.git_state && p.git_state.status !== "ready") return h;
+  h += `<div class="card">`;
   if (!H.length) return h + `<p class="empty">${T.noact}</p></div>`;
   const li = x => `<li><span class="d">${mdOf(x.date)}</span><span class="k ${x.kind}">${K[x.kind]}</span><span class="t">${esc(x.text)}${x.url ? ext(x.url, esc(x.ref || ""), "r") : `<span class="r">${esc(x.where || x.ref || "")}</span>`}${x.note ? `<span class="note2">${esc(x.note)}</span>` : ""}</span></li>`;
   const H0 = currentWeek();
@@ -700,14 +711,15 @@ function renderFacts(p){
   }
   for (const r of p.notes || []) local.push([esc(r[0]), esc(r[1])]);
   if (f.prs.length) cloud.push([T.pr_open, f.prs.map(x => `<div>${ext(x.url, `#${esc(x.number)}`)} ${esc(x.title)}${x.isDraft ? ` <span class="st hist">Draft</span>` : ""} <span class="small">${esc(x.repo || "")} · ${mdOf(x.createdAt)}</span></div>`).join("")]);
-  if (src.linear) cloud.push(["Linear", esc(src.linear.project)]);
-  for (const repo of src.github_issues || []) cloud.push(["GitHub Issues", ext(`https://github.com/${repo}/issues`, esc(repo))]);
-  if (src.notion) cloud.push(["Notion", ext(src.notion.url, esc(src.notion.url))]);
+  if (src.linear) cloud.push([esc(D.ticket_source_labels?.linear), esc(src.linear.project)]);
+  for (const repo of src.github_issues || []) cloud.push([esc(D.ticket_source_labels?.github_issues), ext(`https://github.com/${repo}/issues`, esc(repo))]);
+  if (src.notion) cloud.push([esc(D.ticket_source_labels?.notion), ext(src.notion.url, esc(src.notion.url))]);
   const tbl = (head, rows) => rows.length ? `<h3>${head}</h3><div class="facts"><table>${rows.map(([a, b]) => `<tr><th>${a}</th><td>${b}</td></tr>`).join("")}</table></div>` : "";
   for (const [name, state] of Object.entries(f.sources || {})) cloud.push([esc(name),
     `<span class="st ${state.status === "ok" ? "ok" : "bad"}">${esc(state.status)}</span> ${esc(state.error || "")}<div class="small">${esc(state.fetched_at || "—")}</div>`]);
   const errs = f.errors.length ? [[T.errs, f.errors.map(e => `<div><span class="st bad" style="margin-left:0">!</span> ${esc(e)}</div>`).join("")]] : [];
-  return `<p class="hint">${T.facts_hint}</p>${tbl(T.f_local, local)}${tbl(T.f_cloud, cloud)}${tbl(T.errs, errs)}`;
+  const sources = ticketSources(p);
+  return `<p class="hint">${esc(X(T.facts_hint, sources.length ? T.join + sources.join(T.join) : ""))}</p>${tbl(T.f_local, local)}${tbl(T.f_cloud, cloud)}${tbl(T.errs, errs)}`;
 }
 function nowLine(p){
   const n = p.now, bits = [];
@@ -805,7 +817,7 @@ function go(id){
 function boot(){
   $("#brand").textContent = D.title;
   $("#stamp").textContent = T.updated + D.generated_at.slice(0, 16).replace("T", " ");
-  $("#foot").innerHTML = T.foot.map(s => `<p>${s}</p>`).join("");
+  $("#foot").innerHTML = renderFooter();
   renderHome();
   $("#projects").innerHTML = P.map(renderProject).join("");
   $("#menuitems").innerHTML = `<a href="#" data-k="home" class="home"><i></i>${T.all}</a>` + P.map(p => `<a href="#${esc(p.key)}" data-k="${esc(p.key)}"><i style="background:${esc(p.color)}"></i>${esc(p.name)}${p.todo.length ? `<small>${X(T.d_todo, p.todo.length)}</small>` : ""}</a>`).join("");

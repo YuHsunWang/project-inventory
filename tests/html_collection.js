@@ -8,6 +8,6 @@ vm.createContext(sandbox);
 vm.runInContext(source.replace(/boot\(\);\s*$/, ""), sandbox);
 vm.runInContext("renderHome()", sandbox);
 const rendered = vm.runInContext(`D.projects.map(p => ({
-  facts: renderFacts(p), tickets: renderTickets(p), trends: renderTrends(p), now: nowLine(p), project: renderProject(p), history: renderActivity(p)
+  footer: renderFooter(), facts: renderFacts(p), tickets: renderTickets(p), trends: renderTrends(p), now: nowLine(p), project: renderProject(p), history: renderActivity(p)
 }))`, sandbox);
 process.stdout.write(JSON.stringify(rendered.map(p => ({...p, home:home.innerHTML}))));

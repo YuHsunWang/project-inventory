@@ -34,7 +34,9 @@ For each project the page shows:
 - **Data freshness**: the newest date read from inside your data files (not file timestamps).
 - **Progress**: commits per week and open/done tickets over the last 90 days (rebuilt where ticket dates are known; unknown periods and incomplete coverage are labelled). Below that, the whole history week by week: each week has a 2–3 sentence plain-words summary, and opens to every commit, finished ticket and new PR. Four weeks show at first; a button loads four more.
 
-The home page lists everything that waits on you, across all projects.
+The home page lists everything that waits on you, across all projects. The footer names only
+configured ticket providers; projects without one say "No ticket source set." Empty progress
+charts are hidden when no ticket source or local Git history is configured.
 
 中文說明書：[說明書.md](說明書.md)
 
