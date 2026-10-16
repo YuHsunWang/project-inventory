@@ -1,4 +1,4 @@
-"""Regressions for cold-start issues 48–49; fake data and repo-local homes only."""
+"""Regressions for cold-start issues 48–49 and 51; fake data and repo-local homes only."""
 from contextlib import redirect_stdout
 import io
 import json
@@ -41,6 +41,77 @@ def test_issue48_blank_obsidian_checkboxes_collect_and_validate():
             assert ".text" in str(exc), str(exc)
         else:
             raise AssertionError("snapshot validation must still reject empty task text")
+
+
+@case
+def test_issue51_carried_open_task_uses_newest_copy():
+    with tempfile.TemporaryDirectory() as td:
+        vault = Path(td)
+        # Create out of order: the scan uses paths, not creation or modification time.
+        for day in (3, 1, 2):
+            (vault / f"2026-01-0{day}.md").write_text("# Tasks\n" * day + "- [ ]   Buy milk  \n")
+        note = collect.obsidian_tasks(vault)
+        assert (note["open"], note["done"], note["total"], note["shown"]) == (1, 0, 1, 1), note
+        assert note["items"] == [{"text": "Buy milk", "file": "2026-01-03.md", "line": 4}], note
+
+
+@case
+def test_issue51_any_checked_copy_completes_task():
+    with tempfile.TemporaryDirectory() as td:
+        vault = Path(td)
+        # A checked copy wins even if another open copy is scanned later.
+        for checked_day in (3, 1):
+            for day in (1, 2, 3):
+                mark = "X" if day == checked_day else " "
+                (vault / f"2026-01-0{day}.md").write_text(f"- [{mark}] Buy milk\n")
+            note = collect.obsidian_tasks(vault)
+            assert (note["open"], note["done"], note["total"], note["shown"]) == (0, 1, 0, 0), note
+            assert note["items"] == [], note
+        (vault / "2026-01-02.md").write_text("- [x] Buy milk\n- [x] Buy milk\n")
+        note = collect.obsidian_tasks(vault)
+        assert (note["open"], note["done"]) == (0, 1), note
+
+
+@case
+def test_issue51_exact_text_before_display_limit():
+    with tempfile.TemporaryDirectory() as td:
+        vault = Path(td)
+        (vault / "tasks.md").write_text("- [ ] Buy milk\n- [ ] Buy bread\n- [ ]  Buy milk  \n")
+        note = collect.obsidian_tasks(vault)
+        assert (note["open"], note["done"]) == (2, 0), note
+        assert {item["text"] for item in note["items"]} == {"Buy milk", "Buy bread"}, note
+        # Case, internal whitespace and text beyond the displayed prefix remain distinct.
+        texts = ["Buy milk", "buy milk", "Buy  milk", "a" * 160 + " milk", "a" * 160 + " bread"]
+        (vault / "tasks.md").write_text("".join(f"- [ ] {text}\n" for text in texts))
+        note = collect.obsidian_tasks(vault)
+        assert (note["open"], note["done"], note["shown"]) == (5, 0, 5), note
+        assert note["items"][-1]["text"] == note["items"][-2]["text"] == "a" * 160, note
+
+
+@case
+def test_issue51_source_scope_and_completed_tasks_before_list_limit():
+    with tempfile.TemporaryDirectory() as td:
+        home = Path(td)
+        first, second = home / "first", home / "second"
+        first.mkdir(); second.mkdir()
+        tasks = "".join(f"- [ ] Buy item {i}\n" for i in range(52))
+        (first / "2026-01-01.md").write_text(tasks)
+        (first / "2026-01-02.md").write_text(tasks + "- [x] Buy item 0\n")
+        (second / "tasks.md").write_text("- [ ] Buy item 0\n")
+        inv = {"lang": "en", "projects": [{"key": "app", "name": "My App",
+               "sources": {"obsidian": [{"path": str(first)}, {"path": str(second)}]}, "nodes": []}]}
+        (home / "inventory.json").write_text(json.dumps(inv))
+        with redirect_stdout(io.StringIO()):
+            code, snapshot, _ = collect.collect_snapshot(home)
+            build.build_page(home)
+        facts = validation.validate_snapshot(json.loads(snapshot.read_text()), inv)
+        a, b = facts["projects"]["app"]["obsidian"]
+        assert code == 0, facts
+        assert (a["open"], a["done"], a["total"], a["shown"]) == (51, 1, 51, 50), a
+        assert a["items"][0] == {"text": "Buy item 1", "file": "2026-01-02.md", "line": 2}, a
+        assert a["items"][-1]["text"] == "Buy item 50", a
+        assert all(item["file"] == "2026-01-02.md" for item in a["items"]), a
+        assert (b["open"], b["done"], b["shown"]) == (1, 0, 1), b
 
 
 def build_ticket_page(home, lang, sources):

@@ -229,7 +229,7 @@ def obsidian_excluded(file, root, exclude=()):
 
 def obsidian_tasks(folder, exclude=()):
     """Recursively scan Markdown tasks, skipping internal and configured vault folders."""
-    items, open_, done = [], 0, 0
+    tasks = {}
     root = Path(folder).expanduser()
     if not root.is_dir():
         raise RuntimeError(f"folder not found: {root}")
@@ -247,14 +247,17 @@ def obsidian_tasks(folder, exclude=()):
                 fence = marker[1]
                 continue
             m = TASK.match(line)
-            if m and not m.group(2).strip():
+            if not m or not m.group(2).strip():
                 continue
-            if m and m.group(1) == " ":
-                open_ += 1
-                if len(items) < 50:
-                    items.append({"text": m.group(2).strip()[:160], "file": str(f.relative_to(root)), "line": number})
-            elif m:
-                done += 1
+            text = m.group(2).strip()
+            if m.group(1) != " ":
+                tasks[text] = None  # Any checked copy completes this task for the source.
+            elif text not in tasks or tasks[text] is not None:
+                # Later paths in the existing sorted scan hold the newest open copy.
+                tasks[text] = {"text": text[:160], "file": str(f.relative_to(root)), "line": number}
+    items = [item for item in tasks.values() if item is not None]
+    open_, done = len(items), len(tasks) - len(items)
+    items = items[:50]
     return {"path": str(root), "open": open_, "done": done, "total": open_, "shown": len(items), "items": items}
 
 

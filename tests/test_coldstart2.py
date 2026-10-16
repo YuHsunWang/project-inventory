@@ -159,7 +159,7 @@ def test_issue45_obsidian_excludes_and_refresh_scope():
         for folder in ("tasks", "templates", "templates/sub", "templates-other", "marp", ".superpowers", ".obsidian", ".trash"):
             path = vault / folder
             path.mkdir(parents=True, exist_ok=True)
-            (path / "note.md").write_text("- [ ] task in " + folder + "\n- [x] done\n")
+            (path / "note.md").write_text("- [ ] task in " + folder + "\n- [x] done in " + folder + "\n")
         source = {"path": str(vault), "exclude": ["templates", "marp", ".superpowers"]}
         inv = inventory(home, {"obsidian": [source]})
         code, facts = collect_build(home)
@@ -167,7 +167,7 @@ def test_issue45_obsidian_excludes_and_refresh_scope():
         assert code == 0 and note["open"] == 2 and note["done"] == 2, note
         assert {x["file"] for x in note["items"]} == {"tasks/note.md", "templates-other/note.md"}
         before, failed = auto_refresh.fingerprints(home, inv)
-        (vault / "templates/sub/note.md").write_text("- [ ] changed excluded file\n" * 10)
+        (vault / "templates/sub/note.md").write_text("".join(f"- [ ] changed excluded task {i}\n" for i in range(10)))
         after, failed2 = auto_refresh.fingerprints(home, inv)
         assert before == after and not failed and not failed2, "excluded notes must not trigger scheduled refresh"
         assert collect.obsidian_tasks(vault)["open"] == 15, "legacy source scans all non-internal Markdown files"

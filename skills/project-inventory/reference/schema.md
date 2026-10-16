@@ -22,7 +22,7 @@
         "github_issues": ["owner/repo"],                        // explicitly opted-in tickets (gh CLI)
         "github":   ["owner/repo"],                              // open PRs (gh CLI)
         "local":    [{"label": "main checkout", "path": "~/code/my-app"}],
-        "obsidian": [{"path": "/vault/Projects/My App"}]          // counts `- [ ]` / `- [x]` lines
+        "obsidian": [{"path": "/vault/Projects/My App"}]          // unique tasks from `- [ ]` / `- [x]` lines
       },
       "data": [
         {"label": "orders", "path": "~/code/my-app/data/orders.jsonl", "kind": "jsonl", "column": "created_at", "max_age_days": 2}
@@ -109,9 +109,14 @@
   Optional `exclude` lists folder paths relative to that configured vault path, using `/`
   (for example `{"path":"/vault", "exclude":["templates","marp",".superpowers"]}`).
   An excluded folder and all descendants are skipped, but similarly prefixed names are not.
-  `.obsidian` and `.trash` are always excluded. Without `exclude`, existing scans are unchanged.
+  `.obsidian` and `.trash` are always excluded. Without `exclude`, all non-internal folders are scanned.
   Task lines use `-`, `*`, `+` or numbered lists with `[ ]` / `[x]` / `[X]`; fenced code
-  blocks and checkboxes with blank text are ignored. All matching nonempty tasks are counted; only the first 50 open tasks are listed.
+  blocks and checkboxes with blank text are ignored. Within each source, identical full task
+  text after `strip()` counts once, using exact matching only. Any checked copy makes the
+  task done; otherwise it is open. Listed `file` / `line` point to the newest file holding
+  an open copy, using the existing lexicographic path order, not parsed dates or modification
+  times. Counts include all unique tasks; only the first 50 open tasks are listed.
+  Existing configurations need no new key.
   Choose task folders during Setup; template/article checkboxes otherwise count too.
   Scheduled change detection uses the same exclusions.
 - `sources.local[]` supports two optional Git settings. Existing entries need no changes:
