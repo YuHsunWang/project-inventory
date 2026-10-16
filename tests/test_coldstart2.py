@@ -103,6 +103,25 @@ def test_issue42_long_title_menu_and_clipped_control():
         assert result.returncode != 0 and "clipped control text: #menubtn" in result.stdout, result.stdout
 
 
+@case
+def test_issue43_scroll_before_each_full_page_capture():
+    with tempfile.TemporaryDirectory() as td:
+        events = []
+        c = object.__new__(check_page.CDP)
+        def evaluate(expression):
+            events.append(("evaluate", expression))
+        def call(method, **params):
+            assert events and events[-1][0] == "evaluate" and "scrollTo" in events[-1][1], "scroll to top must precede each full-page screenshot"
+            assert params["captureBeyondViewport"] is True
+            events.append((method, params))
+            return {"data": base64.b64encode(PNG).decode()}
+        c.evaluate, c.call = evaluate, call
+        for name in ("road", "opened-step", "progress"):
+            c.shot(Path(td), name)
+            assert (Path(td) / (name + ".png")).read_bytes() == PNG
+        assert len([e for e in events if e[0] == "Page.captureScreenshot"]) == 3
+
+
 if __name__ == "__main__":
     failed = 0
     for name, fn in list(globals().items()):

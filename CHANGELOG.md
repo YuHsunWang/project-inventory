@@ -2,6 +2,8 @@
 
 ## Unreleased — cold-start fixes (#41–#46)
 
+- #43: scroll to the top and wait for layout before every full-page evidence capture.
+
 - #42: preserve mobile project-menu width, truncate long titles and fail page checks
   when menu control text is clipped.
 

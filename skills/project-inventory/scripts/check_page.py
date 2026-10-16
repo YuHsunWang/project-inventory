@@ -176,6 +176,7 @@ class CDP:
 
     def shot(self, directory, name):
         if directory:
+            self.evaluate("window.scrollTo({top:0, left:0, behavior:'instant'}); new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))")
             data = self.call("Page.captureScreenshot", captureBeyondViewport=True)["data"]
             (directory / (name + ".png")).write_bytes(base64.b64decode(data))
 
