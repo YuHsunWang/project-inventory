@@ -11,30 +11,30 @@
   "auto_refresh": {"model": "none"}, // optional; no schedule unless explicitly installed
   "projects": [
     {
-      "key": "cvs",                       // short id, used in page URLs (#cvs)
-      "name": "CVS Radar",
+      "key": "app",                       // short id, used in page URLs (#app)
+      "name": "My App",
       "color": "#C4452C",
       "tag": "One sentence: what this project is for.",
       "links": [["Live site", "https://example.com"]],
       "sources": {
-        "linear":   {"project_id": "confirmed-project-UUID", "project": "CVS Radar"},
+        "linear":   {"project_id": "confirmed-project-UUID", "project": "My App"},
         "notion":   {"url": "https://www.notion.so/...", "status_map": {"Done": "done", "In progress": "open"}},
         "github_issues": ["owner/repo"],                        // explicitly opted-in tickets (gh CLI)
         "github":   ["owner/repo"],                              // open PRs (gh CLI)
-        "local":    [{"label": "main checkout", "path": "~/code/cvs-radar"}],
-        "obsidian": [{"path": "/vault/Projects/CVS Radar"}]       // counts `- [ ]` / `- [x]` lines
+        "local":    [{"label": "main checkout", "path": "~/code/my-app"}],
+        "obsidian": [{"path": "/vault/Projects/My App"}]          // counts `- [ ]` / `- [x]` lines
       },
       "data": [
-        {"label": "posts", "path": "~/code/cvs-radar/data/posts.jsonl", "kind": "jsonl", "column": "posted_at", "max_age_days": 2}
+        {"label": "orders", "path": "~/code/my-app/data/orders.jsonl", "kind": "jsonl", "column": "created_at", "max_age_days": 2}
       ],
       "nodes": [
-        {"id": 1, "zone": "Every hour", "title": "Crawl", "sub": "PTT board → posts.jsonl",
-         "detail": "Longer text shown when the step is opened.", "paths": ["crawler.py"], "tickets": ["DEV-12"]},
-        {"id": 2, "on": 1, "side": "r", "title": "Dedupe", "sub": "drops reposts", "icon": "check",
+        {"id": 1, "zone": "Every hour", "title": "Fetch", "sub": "API → orders.jsonl",
+         "detail": "Longer text shown when the step is opened.", "paths": ["fetch.py"], "tickets": ["DEV-12"]},
+        {"id": 2, "on": 1, "side": "r", "title": "Dedupe", "sub": "drops repeated orders", "icon": "check",
          "media": [
-           {"shot": "shots/dedupe.png", "caption": "What a duplicate looks like", "phone": false},
+           {"shot": "shots/dedupe.png", "caption": "What a duplicate order looks like", "phone": false},
            {"math": ["s = \\frac{n_{good}}{n_{good}+n_{bad}}"], "p": "Plain-words reading of the formula"},
-           {"mock": [{"text": "in   12 posts\n"}, {"text": "out  9 posts", "emphasis": "bold"}], "cap": "A run's input and output", "real": true},
+           {"mock": [{"text": "in   12 orders\n"}, {"text": "out  9 orders", "emphasis": "bold"}], "cap": "A run's input and output", "real": true},
            {"link": ["Live site", "https://example.com"]}
          ]}
       ],
@@ -157,7 +157,7 @@
 ```json
 {
   "_run": {"run_id": "unique UUID for this gather"},
-  "cvs": {
+  "app": {
     "sources": {"linear": {"run_id": "same UUID", "attempted_at": "ISO timestamp with offset",
       "fetched_at": "ISO timestamp with offset", "status": "ok", "complete": true, "error": null}},
     "read": ["linear"],
@@ -226,7 +226,7 @@ A real authorized workspace is still required to verify connector/API behavior.
 ## summaries.json (written by Claude, kept across runs)
 
 ```json
-{"cvs": {"2026-09-28": {"n": 14, "text": "Two or three plain sentences about that week."}}}
+{"app": {"2026-09-28": {"n": 14, "text": "Two or three plain sentences about that week."}}}
 ```
 
 Keys are the Monday of each week. `n` is the number of items the summary was written for;
@@ -268,7 +268,7 @@ collection and build together; fatal failures stop rebuilding and mark last-good
 
 `collect.py` validates inventory and the consumed gathered file before reading sources;
 `build.py` validates inventory and snapshot ticket/PR rows before rendering. Invalid
-input exits 2 with a field path, such as `projects[3].key: duplicate "cvs"`.
+input exits 2 with a field path, such as `projects[3].key: duplicate "app"`.
 The shared `validation.py` uses only Python's standard library.
 
 Project keys are unique and contain only ASCII letters, digits, `_` and `-`.
