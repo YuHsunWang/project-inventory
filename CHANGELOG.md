@@ -2,6 +2,9 @@
 
 ## Unreleased — cold-start fixes (#41–#46)
 
+- #44: refresh CLI credentials with `vercel whoami` before reading auth.json;
+  stop clearly on refresh failure and skip the CLI refresh with VERCEL_TOKEN.
+
 - #43: scroll to the top and wait for layout before every full-page evidence capture.
 
 - #42: preserve mobile project-menu width, truncate long titles and fail page checks

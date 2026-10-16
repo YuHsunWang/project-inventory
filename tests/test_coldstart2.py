@@ -122,6 +122,34 @@ def test_issue43_scroll_before_each_full_page_capture():
         assert len([e for e in events if e[0] == "Page.captureScreenshot"]) == 3
 
 
+@case
+def test_issue44_refresh_cli_token_before_reading_auth():
+    with tempfile.TemporaryDirectory() as td:
+        home = Path(td)
+        auth = home / ".local/share/com.vercel.cli/auth.json"
+        auth.parent.mkdir(parents=True)
+        auth.write_text(json.dumps({"token": "expired"}))
+        def refresh(cmd, **kwargs):
+            assert cmd == ["vercel", "whoami"] and kwargs["timeout"] > 0
+            auth.write_text(json.dumps({"token": "refreshed"}))
+            return SimpleNamespace(returncode=0, stdout="user", stderr="")
+        with patch.dict(os.environ, {}, clear=True), patch.object(publish_vercel.Path, "home", return_value=home), patch.object(publish_vercel.platform, "system", return_value="Linux"):
+            with patch.object(publish_vercel.subprocess, "run", side_effect=refresh) as command:
+                assert publish_vercel.token() == "refreshed", "read auth.json only after whoami refreshes it"
+                assert command.call_count == 1
+            for failure in (SimpleNamespace(returncode=1, stdout="", stderr="expired"), OSError("missing CLI"), subprocess.TimeoutExpired("vercel", 60)):
+                kwargs = {"side_effect": failure} if isinstance(failure, Exception) else {"return_value": failure}
+                with patch.object(publish_vercel.subprocess, "run", **kwargs):
+                    try:
+                        publish_vercel.token()
+                    except SystemExit as exc:
+                        assert "vercel whoami" in str(exc) and "FAILED" in str(exc), str(exc)
+                    else:
+                        raise AssertionError("failed refresh must not read stale credentials")
+            with patch.dict(os.environ, {"VERCEL_TOKEN": "explicit"}), patch.object(publish_vercel.subprocess, "run", side_effect=AssertionError("must skip whoami")):
+                assert publish_vercel.token() == "explicit"
+
+
 if __name__ == "__main__":
     failed = 0
     for name, fn in list(globals().items()):

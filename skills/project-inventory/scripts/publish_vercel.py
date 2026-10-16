@@ -20,6 +20,12 @@ API = "https://api.vercel.com"
 def token():
     if os.environ.get("VERCEL_TOKEN"):
         return os.environ["VERCEL_TOKEN"]
+    try:
+        refreshed = subprocess.run(["vercel", "whoami"], capture_output=True, text=True, timeout=60)
+    except (OSError, subprocess.SubprocessError) as exc:
+        sys.exit(f"FAILED: vercel whoami could not refresh CLI credentials: {exc}. Run `vercel login` or set VERCEL_TOKEN.")
+    if refreshed.returncode:
+        sys.exit("FAILED: vercel whoami failed to refresh CLI credentials. Run `vercel login` or set VERCEL_TOKEN.")
     home = Path.home()
     cands = {"Darwin": [home / "Library/Application Support/com.vercel.cli/auth.json"],
              "Windows": [Path(os.environ.get("APPDATA", home)) / "com.vercel.cli/Data/auth.json"]}.get(platform.system(), [])

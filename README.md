@@ -257,3 +257,5 @@ Full check: `python3 tests/release_gate.py`; GitHub CI runs the same command on 
 License: [MIT](LICENSE).
 
 Captures show their `captured_at` time in the caption. Captions identify the live site or a local build output; capture source URLs stay out of the HTML.
+
+Without `VERCEL_TOKEN`, the publisher runs `vercel whoami` before reading CLI credentials. A failed refresh stops publishing with a login instruction.
