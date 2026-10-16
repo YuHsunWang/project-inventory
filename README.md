@@ -28,7 +28,7 @@ browser check requires the Playwright/Chromium setup listed below.
 For each project the page shows:
 
 - **How it works**: a diagram of the project's steps, each with an icon. Claude drafts it from your code and you confirm it. A step can open to screenshots, formulas or a sketch of its input and output.
-- **Tickets** from Linear and/or Notion: done, waiting for your review, open, canceled.
+- **Tickets** from Linear, Notion and/or explicitly configured GitHub Issues: done, waiting for your review, open, canceled.
 - **Facts**, in two tables. *Local*: checkouts (branch, uncommitted files), data files, Obsidian notes. *Cloud*: each checkout's git remote and unpushed commits, open PRs, the Linear project, the Notion page.
 - **Obsidian**: open note tasks (`- [ ]` lines).
 - **Data freshness**: the newest date read from inside your data files (not file timestamps).
@@ -91,7 +91,7 @@ the operating system scheduler through `schedule.py`. Linear and Notion need tha
 Say "inventory my projects" or run `/project-inventory:project-inventory` with the plugin
 (`/project-inventory` for a standalone skill).
 
-- **First run.** Claude asks which projects to include and where each one lives. It finds data files and asks which ones to watch, then drafts each diagram. For projects with a UI, it finds an existing URL or HTML output, proposes screenshots for the relevant steps, captures them and shows you the images before saving. You can also supply screenshot files. Projects without a UI show no screenshot placeholder. It never starts project servers or runs project/build code. Everything is saved to `~/.project-inventory/inventory.json`.
+- **First run.** Claude asks which projects to include and where each one lives. For each project it asks where tickets live (Linear / Notion / GitHub Issues / none) and saves the chosen source configuration. PR repos never silently enable Issues. It finds data files and asks which ones to watch, then drafts each diagram. For projects with a UI, it finds an existing URL or HTML output, proposes screenshots for the relevant steps, captures them and shows you the images before saving. You can also supply screenshot files. Projects without a UI show no screenshot placeholder. It never starts project servers or runs project/build code. Everything is saved to `~/.project-inventory/inventory.json`.
 - **Later runs.** Claude re-reads every source and rebuilds the page. It also writes the summary for any week that has none yet, or got new work since its summary was written (usually just the current week). On the first run that means every past week, so the first run takes longer.
 
 Week summaries are kept in `~/.project-inventory/summaries.json` and are not rewritten once a week is over.
@@ -103,6 +103,7 @@ Week summaries are kept in `~/.project-inventory/summaries.json` and are not rew
 | everything | Python 3.9+, git |
 | Linear tickets | a Linear MCP connector in Claude, or `LINEAR_API_KEY` in the environment (faster; scripts then read Linear without Claude) |
 | Notion tickets | a Notion MCP connector in Claude |
+| GitHub Issues tickets | `gh` CLI logged in; explicitly confirmed `sources.github_issues` repos |
 | GitHub PRs | `gh` CLI logged in, or a GitHub MCP connector |
 | parquet / duckdb data checks | `pip install duckdb` |
 | UI capture / page check | `pip install playwright && python3 -m playwright install chromium` (optional) |
@@ -153,7 +154,7 @@ The scripts are in `skills/project-inventory/scripts/`. To run them by hand, clo
 
 ```
 S=skills/project-inventory/scripts
-python3 $S/collect.py ~/.project-inventory     # git, gh PRs, Obsidian tasks, data checks -> facts/<date>.json
+python3 $S/collect.py ~/.project-inventory     # git, gh PRs/opted-in Issues, Obsidian tasks, data checks -> facts/<date>.json
 python3 $S/capture_shots.py ~/.project-inventory # existing UI URLs/HTML -> shots/, updates shot paths
 python3 $S/build.py   ~/.project-inventory     # -> out/index.html
 python3 $S/check_page.py ~/.project-inventory  # headless browser check, every tab and step, 390 + 1280 px
@@ -261,3 +262,5 @@ Captures show their `captured_at` time in the caption. Captions identify the liv
 Without `VERCEL_TOKEN`, the publisher runs `vercel whoami` before reading CLI credentials. A failed refresh stops publishing with a login instruction.
 
 Obsidian Setup asks which folders contain real tasks. Each source scans Markdown recursively under its vault `path`; optional `exclude` folders are relative to that path. `.obsidian`, `.trash` and fenced code blocks are always skipped. Counts include all matching tasks; the list shows the first 50 open tasks.
+
+GitHub Issues uses `sources.github_issues: ["owner/repo"]`. It reads all open and closed issues, excludes PRs, and rebuilds ticket trends from creation/closure dates. Closed-as-not-planned is canceled; other closed issues are done. Missing `gh` access or an unread page shows a failed source. Existing configurations remain valid.

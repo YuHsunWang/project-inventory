@@ -2,7 +2,7 @@
 name: project-inventory
 description: >
   Take stock of all the user's projects and build one dashboard page: per project a
-  "how it works" diagram, tickets (Linear / Notion), GitHub PRs, git state, Obsidian
+  "how it works" diagram, tickets (Linear / Notion / GitHub Issues), GitHub PRs, git state, Obsidian
   note tasks, data freshness, recent activity and trends, plus a home list of what
   waits on the user. Use when the user says "inventory my projects", "project status",
   "盤點專案", "專案總覽", "/project-inventory", "/project-inventory:project-inventory", or asks which data is out of date
@@ -46,8 +46,12 @@ Talk to the user in their language and write page text (names, tags, diagram) in
    (`list_projects` if a Linear MCP is connected), Notion databases/pages the user names,
    GitHub repos (`gh repo list` or GitHub MCP), local git checkouts under folders they name,
    Obsidian vault folders. Never include a project the user did not confirm.
-2. **Sources per project.** Fill `sources` (see schema): `linear`, `notion`, `github`, `local`,
-   `obsidian`. Check each one actually answers now (one MCP call / one `git -C <path> status`).
+2. **Sources per project.** Ask where each project's tickets live:
+   **Linear / Notion / GitHub Issues / none**. Save the answer in the matching
+   `sources.linear`, `sources.notion`, or `sources.github_issues` configuration; for none,
+   save no ticket-source keys. Confirm the Issues repos separately from PR repos.
+   Never enable GitHub Issues just because a repo is listed under `sources.github` for PRs.
+   Fill other `sources` (see schema): `github`, `local`, `obsidian`. Check each one actually answers now (one MCP call / one `git -C <path> status`).
    For Linear, confirm and save `sources.linear.project_id` (project UUID) and `project`
    (display name), including archived projects. Same names can span teams: show the candidate
    IDs/team names and let the user choose; never merge them. Legacy name-only settings work
@@ -135,6 +139,11 @@ Talk to the user in their language and write page text (names, tags, diagram) in
      unread page/child make the source partial/failed, never a complete current list.
      This contract has offline mock coverage only; validate it in an authorized workspace
      before claiming a real Notion integration succeeded.
+   - GitHub Issues: only repos explicitly saved in `sources.github_issues` are read by
+     collect.py using the existing `gh` access. It paginates all open and closed Issues
+     (not pull requests). Open → `open`; closed → `done`; `stateReason: NOT_PLANNED` →
+     `dead` (canceled). Creation/closure dates rebuild ticket trends on the first run.
+     Missing/unauthenticated `gh` or a failed page stays visible as a source failure.
    - GitHub PRs: scripts paginate every open PR with `gh api graphql`. If `gh` is missing,
      not logged in (`gh auth status` fails), or cannot read the repo, use GitHub MCP instead.
      Follow every returned cursor, put normalized `number`, `title`, `url`, `createdAt`,
@@ -220,7 +229,7 @@ Never send the page anywhere the user did not choose.
   dates and the commit chart from git history, so both show on the first run.
 - `build.py` prints `WARN` lines (a screenshot not found, a page over 8 MB). Report them.
 - Scheduled entry point: `python3 SCRIPTS/auto_refresh.py HOME`. It probes git local branch
-  heads, live remote refs, dirty/untracked counts, PR number/updatedAt, file statistics for
+  heads, live remote refs, dirty/untracked counts, PR number/updatedAt, opted-in Issues, file statistics for
   data/Obsidian and script-side Linear. Same fingerprints and calendar day skip collection,
   build, model and publishing. Failed script reads always retry and stay visible on the page.
   Saved `capture` sources are re-captured before the unchanged check; identical PNG bytes

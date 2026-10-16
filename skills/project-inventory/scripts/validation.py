@@ -159,9 +159,10 @@ def validate_inventory(inv):
                     url(spec.get("url"), at + ".sources.notion.url")
                     for label, state in typed(spec.get("status_map", {}), dict, at + ".sources.notion.status_map").items():
                         choice(state, STATES, at + ".sources.notion.status_map." + label)
-        for j, repo in enumerate(typed(src.get("github", []), list, at + ".sources.github")):
-            if not isinstance(repo, str) or not re.fullmatch(r"[\w.-]+/[\w.-]+", repo):
-                fail(f"{at}.sources.github[{j}]", "expected owner/repo")
+        for name in ("github", "github_issues"):
+            for j, repo in enumerate(typed(src.get(name, []), list, at + ".sources." + name)):
+                if not isinstance(repo, str) or not re.fullmatch(r"[\w.-]+/[\w.-]+", repo):
+                    fail(f"{at}.sources.{name}[{j}]", "expected owner/repo")
         for name in ("local", "obsidian"):
             for j, spec in enumerate(typed(src.get(name, []), list, at + ".sources." + name)):
                 sp = f"{at}.sources.{name}[{j}]"
@@ -213,7 +214,9 @@ def validate_rows(rows, path, prs=False, node_ids=None):
             optional_date(row.get("createdAt"), at + ".createdAt")
         else:
             choice(row.get("state"), STATES, at + ".state")
-            choice(row.get("source"), ("linear", "notion"), at + ".source")
+            source = string(row.get("source"), at + ".source")
+            if not re.fullmatch(r"github_issues:[\w.-]+/[\w.-]+", source):
+                choice(source, ("linear", "notion"), at + ".source")
             string(row.get("id"), at + ".id")
             # A short Notion display ID is not a unique page identity. Legacy page URLs are.
             source_id = row.get("source_id") or (row.get("url") if row["source"] == "notion" else row["id"])

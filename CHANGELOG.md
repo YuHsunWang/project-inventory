@@ -2,6 +2,10 @@
 
 ## Unreleased — cold-start fixes (#41–#46)
 
+- #46: collect explicitly configured GitHub Issues through paginated `gh` reads,
+  excluding PRs, with per-repo failures, completed/canceled lifecycles and ticket trends.
+  Setup asks and saves each project's ticket source; PR-only inventories remain unchanged.
+
 - #45: add validated per-source Obsidian folder exclusions, shared by collection
   and scheduled change detection; ask for real task folders during Setup.
 

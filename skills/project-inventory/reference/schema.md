@@ -19,6 +19,7 @@
       "sources": {
         "linear":   {"project_id": "confirmed-project-UUID", "project": "CVS Radar"},
         "notion":   {"url": "https://www.notion.so/...", "status_map": {"Done": "done", "In progress": "open"}},
+        "github_issues": ["owner/repo"],                        // explicitly opted-in tickets (gh CLI)
         "github":   ["owner/repo"],                              // open PRs (gh CLI)
         "local":    [{"label": "main checkout", "path": "~/code/cvs-radar"}],
         "obsidian": [{"path": "/vault/Projects/CVS Radar"}]       // counts `- [ ]` / `- [x]` lines
@@ -87,6 +88,23 @@
   matches, including archived projects. Multiple matches require choosing and saving a UUID;
   a renamed or inaccessible legacy project reports a migration/permission error. IDs are unique
   across teams, so no team filter is needed once the UUID is confirmed.
+- `sources.github_issues`: optional list of `owner/repo` strings explicitly confirmed
+  during Setup as ticket repositories. Setup asks **Linear / Notion / GitHub Issues / none**
+  per project, saves the corresponding source configuration, and saves no ticket-source
+  keys for none. `sources.github` continues to mean PRs only; it never enables Issues.
+  Existing inventory files require no migration. The Issues connection excludes PRs.
+  collect.py uses logged-in `gh api graphql`, follows every page of open and closed issues,
+  and records each repo separately under `github_issues:owner/repo` in snapshot `sources`.
+  Tickets use that same `source` value, with `id` and `source_id` = `owner/repo#number`
+  so issue numbers cannot collide across repos. OPEN → `open`; CLOSED → `done`, except
+  `stateReason: NOT_PLANNED` → `dead`. A missing/null reason on a closed issue means done.
+  `createdAt` maps to `created`; `closedAt` to `completed` or `canceled`; `updatedAt` to
+  `updated`. Dates feed the existing ticket trend/history. Full reopen event histories
+  are not fetched. Any failed page marks that repo failed/incomplete and publishes none
+  of its partial ticket list. Other successful repos remain visible; aggregate trends
+  are withheld until all configured ticket sources are current and complete.
+  Missing `gh`, login or repo permissions are visible errors, never a successful empty list.
+  Scheduled refresh probes opted-in Issues and retries failures.
 - `sources.obsidian[]`: `path` is the vault folder to scan recursively for `*.md`.
   Optional `exclude` lists folder paths relative to that configured vault path, using `/`
   (for example `{"path":"/vault", "exclude":["templates","marp",".superpowers"]}`).

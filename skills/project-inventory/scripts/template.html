@@ -385,7 +385,7 @@ const P = D.projects;
 const tkOf = p => p.facts.tickets;
 const ticketComplete = p => !p.ticket_state || ["ready", "empty"].includes(p.ticket_state.status);
 const ticketLabel = p => ({empty:T.tk_empty, not_connected:T.notickets, failed:T.tk_failed, partial:T.tk_partial, stale:T.tk_stale})[p.ticket_state?.status] || "";
-const hasTk = p => tkOf(p).length > 0 || !!((p.sources || {}).linear || (p.sources || {}).notion);
+const hasTk = p => tkOf(p).length > 0 || !!((p.sources || {}).linear || (p.sources || {}).notion || (p.sources || {}).github_issues?.length);
 const imageSrc = s => typeof s === "string" && /^data:image\/(?:png|jpeg|gif|webp);base64,[A-Za-z0-9+/]+={0,2}$/.test(s);
 const httpURL = u => { try { const v = new URL(u); return ["http:", "https:"].includes(v.protocol); } catch { return false; } };
 const mockText = m => Array.isArray(m) ? m.map(s => String(s.text ?? "")).join("") : String(m);
@@ -701,6 +701,7 @@ function renderFacts(p){
   for (const r of p.notes || []) local.push([esc(r[0]), esc(r[1])]);
   if (f.prs.length) cloud.push([T.pr_open, f.prs.map(x => `<div>${ext(x.url, `#${esc(x.number)}`)} ${esc(x.title)}${x.isDraft ? ` <span class="st hist">Draft</span>` : ""} <span class="small">${esc(x.repo || "")} · ${mdOf(x.createdAt)}</span></div>`).join("")]);
   if (src.linear) cloud.push(["Linear", esc(src.linear.project)]);
+  for (const repo of src.github_issues || []) cloud.push(["GitHub Issues", ext(`https://github.com/${repo}/issues`, esc(repo))]);
   if (src.notion) cloud.push(["Notion", ext(src.notion.url, esc(src.notion.url))]);
   const tbl = (head, rows) => rows.length ? `<h3>${head}</h3><div class="facts"><table>${rows.map(([a, b]) => `<tr><th>${a}</th><td>${b}</td></tr>`).join("")}</table></div>` : "";
   for (const [name, state] of Object.entries(f.sources || {})) cloud.push([esc(name),

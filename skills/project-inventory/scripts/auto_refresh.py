@@ -98,6 +98,8 @@ def fingerprints(home, inv):
             probe(f"{key}:git:{path}", git_probe)
         for repo in src.get("github", []):
             probe(f"{key}:github:{repo}", lambda repo=repo: sorted([[p["number"], p["updatedAt"]] for p in collect.gh_prs(repo)]))
+        for repo in src.get("github_issues", []):
+            probe(f"{key}:github_issues:{repo}", lambda repo=repo: digest(sorted(collect.gh_issues(repo), key=lambda ticket: ticket["source_id"])))
         if src.get("linear") and os.environ.get("LINEAR_API_KEY"):
             probe(f"{key}:linear", lambda spec=src["linear"]: digest(sorted(collect.linear_tickets(spec), key=lambda ticket: ticket["source_id"])))
         for obsidian in src.get("obsidian", []):
@@ -208,7 +210,7 @@ def run(home):
         for project in inv["projects"]:
             facts = snapshot["projects"][project["key"]]
             for error in facts.get("errors", []):
-                if error.startswith(("git ", "data ", "obsidian ")) or (error.startswith("linear:") and os.environ.get("LINEAR_API_KEY")) or (error.startswith("github:") and any(state.get("via") == "gh" and state.get("status") != "ok" for name, state in facts.get("sources", {}).items() if name.startswith("github:"))):
+                if error.startswith(("git ", "data ", "obsidian ", "github_issues:")) or (error.startswith("linear:") and os.environ.get("LINEAR_API_KEY")) or (error.startswith("github:") and any(state.get("via") == "gh" and state.get("status") != "ok" for name, state in facts.get("sources", {}).items() if name.startswith("github:"))):
                     script_errors.append(error)
         atomic_json(cache, {"fingerprints": current, "cacheable": not failures and not script_errors and not notes.pending})
         print("REFRESH complete" + (" (partial sources; see page)" if code else ""))

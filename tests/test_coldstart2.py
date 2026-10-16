@@ -182,6 +182,100 @@ def test_issue45_obsidian_excludes_and_refresh_scope():
         assert "which folders hold real tasks" in (S.parent / "SKILL.md").read_text()
 
 
+def issue(number, state="OPEN", reason=None):
+    return {"__typename": "Issue", "number": number, "title": "Issue " + str(number),
+            "url": "https://github.com/o/r/issues/" + str(number), "state": state,
+            "stateReason": reason, "createdAt": "2026-01-01T00:00:00Z",
+            "closedAt": "2026-02-01T00:00:00Z" if state == "CLOSED" else None,
+            "updatedAt": "2026-02-01T00:00:00Z"}
+
+
+def issue_api(cmd, **kwargs):
+    query = next(x for x in cmd if x.startswith("query="))
+    assert "issues(first:" in query and "pullRequests" not in query, "PRs must not enter the ticket connection"
+    second = "after=next" in cmd
+    nodes = [issue(1), issue(2, "CLOSED", "COMPLETED")] if not second else [issue(3, "CLOSED", "NOT_PLANNED"), issue(4, "CLOSED")]
+    return json.dumps({"data": {"repository": {"issues": {"nodes": nodes,
+        "pageInfo": {"hasNextPage": not second, "endCursor": None if second else "next"}}}}})
+
+
+@case
+def test_issue46_github_tickets_counts_trend_and_opt_in():
+    import auto_refresh
+    with tempfile.TemporaryDirectory() as td:
+        home = Path(td)
+        inv = inventory(home, {"github_issues": ["o/r", "o/other"]})
+        with patch.object(collect, "run", side_effect=issue_api), patch.object(collect.shutil, "which", return_value="gh"):
+            code, f = collect_build(home)
+            assert code == 0 and len(f["tickets"]) == 8, "explicit GitHub Issues repos must supply all pages of tickets"
+            assert not f["prs"]
+            assert len({t["source_id"] for t in f["tickets"]}) == 8, "issue numbers collide across repos"
+            assert {t["state"] for t in f["tickets"]} == {"open", "done", "dead"}
+            canceled = next(t for t in f["tickets"] if t["state"] == "dead")
+            assert canceled["canceled"] and not canceled.get("completed")
+            page = (home / "out/index.html").read_text()
+            import re
+            p = json.loads(re.search(r"const D = (.*?);\n", page).group(1))["projects"][0]
+            assert p["ticket_state"]["status"] == "ready" and p["counts"] == {"open":2,"done":4,"dead":2,"wait":0}, p["counts"]
+            trend = p["trend_tickets"]
+            assert trend["open"][-1] == 2 and trend["done"][-1] == 4 and trend["canceled"][-1] == 2
+            assert trend["coverage"]["known"] == 8
+            rendered = subprocess.run(["node", str(ROOT / "tests/html_collection.js")], input=page, text=True, capture_output=True, check=True)
+            assert "Issue 1" in json.loads(rendered.stdout)[0]["tickets"]
+            before, failures = auto_refresh.fingerprints(home, inv)
+            assert not failures and any("github_issues:" in key for key in before["sources"])
+        result = browser_check(home)
+        assert result.returncode == 0, result.stdout + result.stderr
+        # PR repo configuration must never opt in to tickets.
+        inventory(home, {"github": ["o/r"]})
+        with patch.object(collect, "gh_prs", return_value=[]), patch.object(collect.shutil, "which", return_value="gh"), patch.object(collect, "run", side_effect=AssertionError("unexpected issue access")):
+            code, f = collect_build(home)
+        assert code == 0 and not f["tickets"] and "github_issues:o/r" not in f["sources"]
+        for value in ("o/r", ["invalid"], [4]):
+            inv = inventory(home, {"github_issues": value})
+            try:
+                validation.validate_inventory(inv)
+            except ValueError as exc:
+                assert "github_issues" in str(exc)
+            else:
+                raise AssertionError("invalid GitHub Issues repos accepted")
+        skill = (S.parent / "SKILL.md").read_text()
+        assert "Linear / Notion / GitHub Issues / none" in skill and "github_issues" in skill
+
+
+@case
+def test_issue46_failed_page_empty_repo_and_missing_gh():
+    with tempfile.TemporaryDirectory() as td:
+        home = Path(td)
+        inventory(home, {"github_issues": ["o/r"]})
+        def denied(cmd, **kwargs):
+            if "after=next" in cmd:
+                raise RuntimeError("second page denied")
+            return issue_api(cmd, **kwargs)
+        with patch.object(collect, "run", side_effect=denied), patch.object(collect.shutil, "which", return_value="gh"):
+            code, f = collect_build(home)
+        assert code == 1 and not f["tickets"], "failed later page must not publish an incomplete current list"
+        state = f["sources"]["github_issues:o/r"]
+        assert state["status"] == "failed" and not state["complete"] and "second page denied" in state["error"]
+        assert "failed" in (home / "out/index.html").read_text()
+        empty = json.dumps({"data":{"repository":{"issues":{"nodes":[],"pageInfo":{"hasNextPage":False,"endCursor":None}}}}})
+        with patch.object(collect, "run", return_value=empty), patch.object(collect.shutil, "which", return_value="gh"):
+            code, f = collect_build(home)
+        assert code == 0 and not f["tickets"] and f["sources"]["github_issues:o/r"]["complete"]
+        with patch.object(collect.shutil, "which", return_value=None):
+            code, f = collect_build(home)
+        assert code == 1 and "gh" in f["sources"]["github_issues:o/r"]["error"]
+        stuck = json.dumps({"data":{"repository":{"issues":{"nodes":[],"pageInfo":{"hasNextPage":True,"endCursor":"same"}}}}})
+        for response in (stuck, '{"errors":[{"message":"denied"}]}'):
+            with patch.object(collect, "run", return_value=response):
+                try:
+                    collect.gh_issues("o/r")
+                except RuntimeError:
+                    pass
+                else:
+                    raise AssertionError("invalid or non-advancing issue pages accepted")
+
+
 if __name__ == "__main__":
     failed = 0
     for name, fn in list(globals().items()):
