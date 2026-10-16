@@ -77,8 +77,10 @@ def fingerprints(home, inv):
         key, src = project["key"], project.get("sources", {})
         for checkout in src.get("local", []):
             path = checkout["path"]
-            def git_probe(path=path):
+            def git_probe(path=path, fetch=checkout.get("fetch", True)):
                 result = local_git(path)
+                if not fetch:  # fetch:false never contacts the remote; local refs above are the fingerprint
+                    return result
                 remotes = collect.run(["git", "remote"], cwd=Path(path).expanduser()).splitlines()
                 result["remote_refs"] = {remote: collect.run(["git", "ls-remote", remote], cwd=Path(path).expanduser()) for remote in remotes if remote == "origin"}
                 return result

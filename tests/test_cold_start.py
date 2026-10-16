@@ -86,6 +86,17 @@ def test_issue34_fetch_opt_out():
             state = collect.git_state(empty, dt.date.today(), fetch=False, history=scope)
             assert state['head'] is None and state['last_commit'] is None and not state['_commits']
             assert state['fetch_performed'] is False
+        # The scheduler's change check must not contact the remote either (PR #38 review).
+        import auto_refresh
+        for opt, expect in ((None, True), (False, False)):
+            remote_calls = []
+            def run(cmd, **kwargs):
+                remote_calls.append(cmd)
+                return 'origin\n' if cmd[1] == 'remote' else ''
+            local = {**spec} if opt is None else {**spec, 'fetch': opt}
+            with patch.object(auto_refresh, 'local_git', lambda path: {}), patch.object(collect, 'run', run):
+                _, failed = auto_refresh.fingerprints(home, inventory([local]))
+            assert not failed and any(c[1] == 'ls-remote' for c in remote_calls) == expect, (opt, remote_calls)
 
 
 @case
