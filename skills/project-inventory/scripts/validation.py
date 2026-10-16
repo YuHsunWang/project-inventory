@@ -153,6 +153,9 @@ def validate_inventory(inv):
                 string(spec.get("path"), sp + ".path")
                 if name == "local":
                     string(spec.get("label"), sp + ".label")
+                    if "fetch" in spec and not isinstance(spec["fetch"], bool):
+                        fail(sp + ".fetch", "expected bool")
+                    choice(spec.get("history", "all"), ("all", "head"), sp + ".history")
         for j, spec in enumerate(typed(p.get("data", []), list, at + ".data")):
             dp = f"{at}.data[{j}]"
             typed(spec, dict, dp)

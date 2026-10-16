@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased — cold-start fixes (#34–#37)
+
+- #34: allow per-checkout `fetch: false`; preserve local Git facts and mark remote
+  comparisons unknown. Document the default fetch and its checkout writes.
+- #35: keep all-ref history by default, add `history: "head"`, and label each
+  checkout's history scope on the Progress tab.
+- #36: show unread/disconnected Git history with reasons on cards and the home
+  list; keep collected history visible when only some checkouts fail.
+- #37: explain diagram auto-refresh limits during Setup and show a manual new-step
+  example. No automatic step discovery is added.
+
 ## Unreleased — unattended refresh (PR 1)
 
 - Add opt-in cron / Windows schedules, source fingerprints with day rollover,

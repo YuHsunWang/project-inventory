@@ -32,7 +32,7 @@ def todos(p, f):
             parts.append([r["dirty"], "dirty"])
         if r["ahead"]:
             parts.append([r["ahead"], "unpushed"])
-        if r["has_origin"] and not r["upstream"] and r["branch"] != "(detached)":
+        if r["has_origin"] and r.get("fetch_enabled") is not False and not r.get("fetch_error") and not r["upstream"] and r["branch"] != "(detached)":
             parts.append([None, "no_upstream"])
         if parts:
             out.append({"kind": "git", "n": None, "where": r["label"], "parts": parts, "go": f"#{k}/facts"})
@@ -46,6 +46,21 @@ def todos(p, f):
         out.append({"kind": "err", "n": len(f["errors"]), "t": "errors", "go": f"#{k}/facts"})
     priority = {"err": 0, "data": 1, "review": 2, "pr": 3, "notes": 4, "git": 5}
     return sorted(out, key=lambda t: priority[t["kind"]])
+
+
+def git_availability(p, f):
+    """Local history can be available even when the remote refresh failed."""
+    sources = p.get("sources", {}).get("local", [])
+    if not sources:
+        return {"status": "not_connected", "errors": []}
+    paths = {r.get("path") for r in f["repos"]}
+    errors = []
+    for source in sources:
+        if source["path"] not in paths:
+            state = f.get("sources", {}).get("git:" + source["path"], {})
+            error = state.get("error") or next((e for e in f["errors"] if e.startswith(f"git {source['path']}:")), "Git facts were not collected; run collect.py again")
+            errors.append(f"{source['label']}: {error}")
+    return {"status": ("partial" if paths else "failed") if errors else "ready", "errors": errors}
 
 
 def ticket_series(tickets, today, days=90, zone="UTC"):
@@ -290,7 +305,8 @@ def build_page(home, snapshot=None, run_id=None):
         on_node = {t: n["id"] for n in p.get("nodes", []) for t in n.get("tickets", [])}  # ticket id -> step
         f["tickets"] = [{**t, "node": t.get("node", on_node.get(t.get("id")))} for t in f["tickets"]]
         embed_media(p.get("nodes", []), home, lambda s, k=p["key"]: warnings.append(f"{k}: {s}"))
-        projects.append({**p, "facts": f, "ticket_state": availability, "counts": {s: sum(t.get("state") == s for t in f["tickets"]) for s in STATES},
+        git_status = git_availability(p, f)
+        projects.append({**p, "git_state": git_status, "facts": f, "ticket_state": availability, "counts": {s: sum(t.get("state") == s for t in f["tickets"]) for s in STATES},
                          "todo": todos(p, f), "now": now(f, today), "history": history(f, sums.get(p["key"], {})),
                          "weekly": f.get("weekly") if f["repos"] else None,
                          "trend_tickets": ticket_series(f["tickets"], today, zone=zone) if availability["status"] in ("ready", "empty") else None})

@@ -66,6 +66,18 @@
   matches, including archived projects. Multiple matches require choosing and saving a UUID;
   a renamed or inaccessible legacy project reports a migration/permission error. IDs are unique
   across teams, so no team filter is needed once the UUID is confirmed.
+- `sources.local[]` supports two optional Git settings. Existing entries need no changes:
+  - `"fetch": true` (default): collect runs `git fetch -q origin` when origin exists.
+    This writes remote refs and `.git/FETCH_HEAD` in that checkout. `"fetch": false`
+    skips fetch and still reads HEAD, branch, dirty files and history. Ahead/behind and
+    unpushed comparisons against the remote are unknown (`null`), even if cached refs exist;
+    the page labels that uncertainty. The previous successful fetch time is retained.
+  - `"history": "all"` (default): `git log --all`, across every local ref, including other
+    branches and cached remote refs. `"history": "head"`: commits reachable from HEAD only
+    (including merged ancestry). Both recent activity and weekly/history counts use this
+    scope; the page labels it per checkout as All branches / Current branch (HEAD).
+    Mixed scopes across checkouts are allowed; project aggregates deduplicate full hashes.
+  Example: `{"label": "read-only checkout", "path": "~/code/app", "fetch": false, "history": "head"}`.
 - Every `sources` key is optional. A project with none of them still shows its diagram.
 - `data[].kind` and what `column` means:
 
@@ -178,14 +190,22 @@ Top level: `date`, `generated_at`, `run_id`, and `gathered_run_id` (the offered 
 retained even when stale so later collects cannot make it fresh again).
 
 Per project: `sources` (source-level provenance/state), `tickets` (fresh rows only),
-`stale_tickets` (previous or incomplete rows, excluded from current metrics), `repos` (branch, upstream, remote URL, ahead,
+`stale_tickets` (previous or incomplete rows, excluded from current metrics), `repos` (head SHA, history scope, fetch_enabled, fetch_performed, branch, upstream, remote URL, ahead,
 behind, dirty, last_commit, weekly commit counts for 12 weeks, recent commits for 14 days),
 `weekly` (the project's commits per week across all its checkouts, each commit counted once),
-`commits` (the whole history, newest 3000 per checkout, deduped), `prs`,
+`commits` (history in each checkout's selected scope, newest 3000 per checkout, deduped), `prs`,
 `obsidian` (open/done counts, `total` open tasks, `shown` items, first 50 open items with
 relative `file` and 1-based `line`; fenced code is skipped, nested lists are included), `data` (newest, age_days, stale, or error),
 `errors`.
 
+
+`fetch_performed` records whether a fetch was attempted this run (errors stay in
+`fetch_error`); it is false with `fetch: false` or no origin. Git source read failures
+are recorded as `failed` under `sources["git:<path>"]`. Missing/failed Git history is
+labelled as not collected on project cards and the home list, including the source error;
+no connected Git source is a separate not-connected reason. A failed remote fetch alone
+still leaves local history available. With multiple checkouts, missing ones are labelled
+while collected history remains visible.
 
 `build.py` shows tickets as empty, not connected, failed, partial, stale, or ready.
 A complete read must belong to this run and be at most 24 hours old to feed current metrics.
