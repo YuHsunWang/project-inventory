@@ -64,6 +64,7 @@ def screenshot(url):
                 if status >= 400:
                     raise RuntimeError(f"HTTP {status}")
                 c.assets()
+                time.sleep(2)  # ponytail: fixed settle for script-drawn pages (canvas, fetched data); poll for idle if 2s proves short
                 raw = base64.b64decode(c.call("Page.captureScreenshot", format="png")["data"], validate=True)
                 if not raw.startswith(b"\x89PNG\r\n\x1a\n"):
                     raise ValueError("Chromium returned no PNG")
