@@ -391,6 +391,34 @@ def test_screenshot_changes_invalidate_and_missing_is_cacheable():
 
 
 @case
+def test_capture_runs_before_unchanged_probe_and_build():
+    import capture_shots as shots
+    with tempfile.TemporaryDirectory() as td:
+        home = fixture(Path(td))
+        inv = pw.read_json(home / "inventory.json")
+        inv["projects"][0]["nodes"] = [{"id": 1, "media": [{"capture": "https://example.com/"}]}]
+        save(home / "inventory.json", inv)
+        image = b"first capture"
+        def render(current_home):
+            assert (current_home / "shots/p-1.png").read_bytes() == image, "build must see the new capture"
+            assert pw.read_json(current_home / "inventory.json")["projects"][0]["nodes"][0]["media"][0]["shot"] == "shots/p-1.png"
+        with patch.object(shots, "screenshot", side_effect=lambda url: image) as capture, patch.object(collect, "refresh", side_effect=fake_refresh) as refresh, patch.object(build, "build_page", side_effect=render), patch.object(ar, "publish"):
+            assert ar.run(home) == 0
+            assert ar.run(home) == 0
+            assert capture.call_count == 2 and refresh.call_count == 1, "same pixels can skip build, never capture"
+            image = b"new capture"
+            assert ar.run(home) == 0
+            assert capture.call_count == 3 and refresh.call_count == 2, "new pixels must invalidate the screenshot fingerprint"
+        output = io.StringIO()
+        with patch.object(shots, "screenshot", side_effect=RuntimeError("offline")) as capture, patch.object(collect, "refresh") as refresh, redirect_stdout(output):
+            assert ar.run(home) == ar.run(home) == 0
+            assert capture.call_count == 2, "capture must retry even after an unchanged/failing run"
+            refresh.assert_not_called()
+        assert "WARN p step 1: capture failed: offline" in output.getvalue()
+        assert (home / "shots/p-1.png").read_bytes() == image
+
+
+@case
 def test_unfinished_model_outputs_retry_until_complete():
     for invalid_kind in ("commit", "week"):
         with tempfile.TemporaryDirectory() as td:

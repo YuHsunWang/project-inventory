@@ -91,7 +91,7 @@ the operating system scheduler through `schedule.py`. Linear and Notion need tha
 Say "inventory my projects" or run `/project-inventory:project-inventory` with the plugin
 (`/project-inventory` for a standalone skill).
 
-- **First run.** Claude asks which projects to include and where each one lives. It finds data files and asks which ones to watch, then drafts each diagram. Everything is saved to `~/.project-inventory/inventory.json`.
+- **First run.** Claude asks which projects to include and where each one lives. It finds data files and asks which ones to watch, then drafts each diagram. For projects with a UI, it finds an existing URL or HTML output, proposes screenshots for the relevant steps, captures them and shows you the images before saving. You can also supply screenshot files. Projects without a UI show no screenshot placeholder. It never starts project servers or runs project/build code. Everything is saved to `~/.project-inventory/inventory.json`.
 - **Later runs.** Claude re-reads every source and rebuilds the page. It also writes the summary for any week that has none yet, or got new work since its summary was written (usually just the current week). On the first run that means every past week, so the first run takes longer.
 
 Week summaries are kept in `~/.project-inventory/summaries.json` and are not rewritten once a week is over.
@@ -105,7 +105,7 @@ Week summaries are kept in `~/.project-inventory/summaries.json` and are not rew
 | Notion tickets | a Notion MCP connector in Claude |
 | GitHub PRs | `gh` CLI logged in, or a GitHub MCP connector |
 | parquet / duckdb data checks | `pip install duckdb` |
-| page check | `pip install playwright && python3 -m playwright install chromium` (optional) |
+| UI capture / page check | `pip install playwright && python3 -m playwright install chromium` (optional) |
 | Vercel publishing | Vercel CLI logged in (`vercel login`) |
 
 ## Where the page goes
@@ -154,6 +154,7 @@ The scripts are in `skills/project-inventory/scripts/`. To run them by hand, clo
 ```
 S=skills/project-inventory/scripts
 python3 $S/collect.py ~/.project-inventory     # git, gh PRs, Obsidian tasks, data checks -> facts/<date>.json
+python3 $S/capture_shots.py ~/.project-inventory # existing UI URLs/HTML -> shots/, updates shot paths
 python3 $S/build.py   ~/.project-inventory     # -> out/index.html
 python3 $S/check_page.py ~/.project-inventory  # headless browser check, every tab and step, 390 + 1280 px
 python3 $S/publish_vercel.py ~/.project-inventory <vercel-project-name>
@@ -193,6 +194,8 @@ replaces this home's marked entry; PATH is captured for git/gh/codex/claude/verc
 Keep `LINEAR_API_KEY` in the scheduler environment, not the printed command.
 Reinstall after moving the skill or changing CLI locations. No chat session is scheduled.
 
+Saved `media.capture` URLs/HTML files are re-captured before checking fingerprints.
+Failures print `WARN`, keep the previous image and retry next run; identical images stay untouched.
 Same source fingerprints and calendar day skip collect/build/model/publish. Failed
 script reads always run and show errors. Data freshness still reads dates inside data.
 An enabled text CLI batches missing week summaries and uncached commit/PR notes once
