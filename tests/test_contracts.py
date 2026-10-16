@@ -21,7 +21,7 @@ def expect_error(fn, text):
 
 @case
 def test_inventory_contract_paths():
-    inv = {'projects': [{'key': 'cvs', 'name': 'CVS', 'nodes': [{'id': 1}, {'id': 2, 'on': 1}]}]}
+    inv = {'projects': [{'key': 'app', 'name': 'My App','nodes': [{'id': 1}, {'id': 2, 'on': 1}]}]}
     cases = [({'key': 'home'}, 'projects[0].key: reserved'),
              ({'key': 'team/app'}, 'projects[0].key: use only'),
              ({'key': 'x y'}, 'projects[0].key: use only'),
@@ -36,7 +36,7 @@ def test_inventory_contract_paths():
         bad = copy.deepcopy(inv); bad['projects'][0].update(changes)
         expect_error(lambda: v.validate_inventory(bad), message)
     duplicate = {'projects': [*inv['projects']] * 4}
-    expect_error(lambda: v.validate_inventory(duplicate), 'projects[1].key: duplicate "cvs"')
+    expect_error(lambda: v.validate_inventory(duplicate), 'projects[1].key: duplicate "app"')
     expect_error(lambda: v.validate_inventory({'projects': 'bad'}), 'projects: expected list')
     assert v.validate_inventory(inv) == inv
     # The user fixture must remain valid without migration or writes to its source.

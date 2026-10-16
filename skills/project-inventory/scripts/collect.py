@@ -6,7 +6,7 @@ Reads   <home>/inventory.json               projects and their sources
         <home>/gathered/<today>.json        tickets/PRs Claude fetched through MCP (optional)
 Writes  <home>/facts/<today>.json           one snapshot; build.py reads every snapshot for trends
 
-Script-side sources: local git checkouts, GitHub PRs via `gh`, Obsidian task lines, data freshness,
+Script-side sources: local git checkouts, GitHub PRs and opted-in Issues via `gh`, Obsidian task lines, data freshness,
 and Linear when $LINEAR_API_KEY is set (then Claude does not need to gather Linear).
 Nothing here needs a package outside the standard library except parquet/duckdb checks (duckdb).
 Exit 1 when any source failed; the failure is also written into the snapshot, so the page shows it.
@@ -120,6 +120,46 @@ def gh_prs(repo):
         after = cursor
 
 
+GH_ISSUES_Q = """query($owner:String!, $repo:String!, $after:String){
+  repository(owner:$owner, name:$repo){ issues(first:100, after:$after, states:[OPEN,CLOSED]){
+    nodes{ number title url state stateReason createdAt closedAt updatedAt }
+    pageInfo{ hasNextPage endCursor } } } }"""
+
+
+def gh_issues(repo):
+    """The repository Issues connection excludes pull requests; read every open/closed page."""
+    owner, name = repo.split("/", 1)
+    tickets, after, cursors = [], None, set()
+    while True:
+        cmd = ["gh", "api", "graphql", "-f", f"query={GH_ISSUES_Q}",
+               "-f", f"owner={owner}", "-f", f"repo={name}"]
+        if after:
+            cmd += ["-f", f"after={after}"]
+        try:
+            res = json.loads(run(cmd))
+            if res.get("errors"):
+                raise RuntimeError(res["errors"][0].get("message"))
+            page = res["data"]["repository"]["issues"]
+            for issue in page["nodes"]:
+                state = "open" if issue["state"] == "OPEN" else "dead" if issue.get("stateReason") == "NOT_PLANNED" else "done"
+                identity = f"{repo}#{issue['number']}"
+                tickets.append({"source": f"github_issues:{repo}", "source_id": identity, "id": identity,
+                                "repo": repo, "title": issue["title"], "url": issue["url"], "state": state,
+                                "created": issue["createdAt"], "updated": issue["updatedAt"],
+                                "completed": issue.get("closedAt") if state == "done" else None,
+                                "canceled": issue.get("closedAt") if state == "dead" else None})
+            info = page["pageInfo"]
+            if not info["hasNextPage"]:
+                return tickets
+            cursor = info["endCursor"]
+            if not cursor or cursor in cursors:
+                raise RuntimeError("Issue pagination did not advance")
+            cursors.add(cursor)
+            after = cursor
+        except Exception as exc:
+            raise RuntimeError(f"Issues page {len(cursors) + 1}: {exc}") from exc
+
+
 LINEAR_PROJECT_Q = """query($id:String!){ project(id:$id){ id name archivedAt } }"""
 LINEAR_NAME_Q = """query($name:String!){
   projects(first:2, includeArchived:true, filter:{name:{eq:$name}}){ nodes{ id name archivedAt } } }"""
@@ -181,14 +221,20 @@ def linear_tickets(project):
         after = cursor
 
 
-def obsidian_tasks(folder):
-    """Markdown task lines `- [ ]` / `- [x]` under a vault folder (skips .obsidian and .trash)."""
+def obsidian_excluded(file, root, exclude=()):
+    relative = file.relative_to(root)
+    return any(part in (".obsidian", ".trash") for part in file.parts) or any(
+        relative == Path(folder) or Path(folder) in relative.parents for folder in exclude)
+
+
+def obsidian_tasks(folder, exclude=()):
+    """Recursively scan Markdown tasks, skipping internal and configured vault folders."""
     items, open_, done = [], 0, 0
     root = Path(folder).expanduser()
     if not root.is_dir():
         raise RuntimeError(f"folder not found: {root}")
     for f in sorted(root.rglob("*.md")):
-        if any(part in (".obsidian", ".trash") for part in f.parts):
+        if obsidian_excluded(f, root, exclude):
             continue
         fence = None
         for number, line in enumerate(f.read_text(encoding="utf-8", errors="replace").splitlines(), 1):
@@ -405,9 +451,22 @@ def collect_snapshot(home, requested_run=None, script_only=False):
                 f["prs"] += prs
             else:
                 f["errors"].append(f"{name}: {state['error']}; install gh or gather PRs again")
+        for repo in src.get("github_issues", []):
+            name = f"github_issues:{repo}"
+            try:
+                if not have_gh:
+                    raise RuntimeError("GitHub Issues requires gh; install it and run `gh auth login`")
+                tickets = gh_issues(repo)
+                state = source_state(run_id, attempted_at, dt.datetime.now().astimezone().isoformat(timespec="seconds"), "ok", True)
+                f["tickets"] += tickets
+            except Exception as exc:
+                state = source_state(run_id, attempted_at, old.get(name, {}).get("fetched_at"), "failed", False, str(exc))
+                f["errors"].append(f"{name}: {exc}")
+            state["via"] = "gh"
+            f["sources"][name] = state
         for o in src.get("obsidian", []):
             try:
-                f["obsidian"].append(obsidian_tasks(o["path"]))
+                f["obsidian"].append(obsidian_tasks(o["path"], o.get("exclude", [])))
             except Exception as e:
                 f["errors"].append(f'obsidian {o["path"]}: {e}')
         for d in p.get("data", []):

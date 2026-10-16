@@ -397,6 +397,7 @@ def mark_failed_page(home, manifest):
 def ticket_state(p, f, snap):
     """Only complete, recent reads of this run can produce current ticket metrics."""
     names = [name for name in ("linear", "notion") if (p.get("sources") or {}).get(name)]
+    names += [f"github_issues:{repo}" for repo in (p.get("sources") or {}).get("github_issues", [])]
     states, good = {}, []
     for name in names:
         state = dict(f.get("sources", {}).get(name, {}))

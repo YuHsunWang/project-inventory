@@ -1,5 +1,25 @@
 # Changelog
 
+## Unreleased — cold-start fixes (#41–#46)
+
+- #46: collect explicitly configured GitHub Issues through paginated `gh` reads,
+  excluding PRs, with per-repo failures, completed/canceled lifecycles and ticket trends.
+  Setup asks and saves each project's ticket source; PR-only inventories remain unchanged.
+
+- #45: add validated per-source Obsidian folder exclusions, shared by collection
+  and scheduled change detection; ask for real task folders during Setup.
+
+- #44: refresh CLI credentials with `vercel whoami` before reading auth.json;
+  stop clearly on refresh failure and skip the CLI refresh with VERCEL_TOKEN.
+
+- #43: scroll to the top and wait for layout before every full-page evidence capture.
+
+- #42: preserve mobile project-menu width, truncate long titles and fail page checks
+  when menu control text is clipped.
+
+- #41: label capture provenance in captions and show successful capture timestamps,
+  retaining last-good metadata on failure and omitting source URLs from HTML.
+
 ## Unreleased — project screenshots (#39)
 
 - PR #40: omit capture source URLs and paths from both HTML outputs; preserve

@@ -22,7 +22,17 @@ def digest(value):
     return hashlib.sha256(json.dumps(value, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
 
 
-def file_fingerprint(path, pattern=None):
+def inventory_fingerprint(inv):
+    # Capture time alone does not change the pixels or require rebuilding an unchanged page.
+    config = json.loads(json.dumps(inv))
+    for project in config["projects"]:
+        for node in project.get("nodes", []):
+            for media in node.get("media", []):
+                media.pop("captured_at", None)
+    return digest(config)
+
+
+def file_fingerprint(path, pattern=None, exclude=()):
     path = Path(path).expanduser()
     if path.is_dir():
         def included(candidate):
@@ -30,7 +40,7 @@ def file_fingerprint(path, pattern=None):
             if pattern == "*.parquet":
                 return not any(part.startswith((".", "_")) for part in parts)
             if pattern == "*.md":
-                return not any(part in (".obsidian", ".trash") for part in parts)
+                return not collect.obsidian_excluded(candidate, path, exclude)
             return True
         files = sorted(p for p in path.rglob(pattern or "*") if p.is_file() and included(p))
     else:
@@ -88,10 +98,12 @@ def fingerprints(home, inv):
             probe(f"{key}:git:{path}", git_probe)
         for repo in src.get("github", []):
             probe(f"{key}:github:{repo}", lambda repo=repo: sorted([[p["number"], p["updatedAt"]] for p in collect.gh_prs(repo)]))
+        for repo in src.get("github_issues", []):
+            probe(f"{key}:github_issues:{repo}", lambda repo=repo: digest(sorted(collect.gh_issues(repo), key=lambda ticket: ticket["source_id"])))
         if src.get("linear") and os.environ.get("LINEAR_API_KEY"):
             probe(f"{key}:linear", lambda spec=src["linear"]: digest(sorted(collect.linear_tickets(spec), key=lambda ticket: ticket["source_id"])))
         for obsidian in src.get("obsidian", []):
-            probe(f"{key}:obsidian:{obsidian['path']}", lambda o=obsidian: file_fingerprint(o["path"], "*.md"))
+            probe(f"{key}:obsidian:{obsidian['path']}", lambda o=obsidian: file_fingerprint(o["path"], "*.md", o.get("exclude", [])))
         for node in project.get("nodes", []):
             for media in node.get("media", []):
                 if "shot" in media:
@@ -100,8 +112,9 @@ def fingerprints(home, inv):
                     probe(f"{key}:shot:{path}", lambda path=path: screenshot_fingerprint(path))
         for i, spec in enumerate(project.get("data", [])):
             probe(f"{key}:data:{i}", lambda spec=spec: file_fingerprint(spec["path"], "*.parquet" if spec["kind"] == "parquet" else None))
+    probe("input:inventory.json", lambda: inventory_fingerprint(inv))
     # User edits and new MCP gathers must not be hidden behind an unchanged source cache.
-    inputs = [home / "inventory.json", home / "summaries.json", home / "state" / "notes.json", home / "state" / "steps.json", home / "step_history.json"]
+    inputs = [home / "summaries.json", home / "state" / "notes.json", home / "state" / "steps.json", home / "step_history.json"]
     inputs += sorted((home / "gathered").glob("*.json"))
     for path in inputs:
         if path.exists():
@@ -189,14 +202,15 @@ def run(home):
                 key = f"{project['key']}:git:{checkout['path']}"
                 if key not in failures:
                     current["sources"][key].update(local_git(checkout["path"]))
-        for path in [home / "inventory.json", home / "summaries.json", home / "state" / "notes.json", home / "state" / "steps.json", home / "step_history.json"]:
+        current["sources"]["input:inventory.json"] = inventory_fingerprint(read_json(home / "inventory.json"))
+        for path in [home / "summaries.json", home / "state" / "notes.json", home / "state" / "steps.json", home / "step_history.json"]:
             if path.exists():
                 current["sources"][f"input:{path.relative_to(home)}"] = hashlib.sha256(path.read_bytes()).hexdigest()
         script_errors = []
         for project in inv["projects"]:
             facts = snapshot["projects"][project["key"]]
             for error in facts.get("errors", []):
-                if error.startswith(("git ", "data ", "obsidian ")) or (error.startswith("linear:") and os.environ.get("LINEAR_API_KEY")) or (error.startswith("github:") and any(state.get("via") == "gh" and state.get("status") != "ok" for name, state in facts.get("sources", {}).items() if name.startswith("github:"))):
+                if error.startswith(("git ", "data ", "obsidian ", "github_issues:")) or (error.startswith("linear:") and os.environ.get("LINEAR_API_KEY")) or (error.startswith("github:") and any(state.get("via") == "gh" and state.get("status") != "ok" for name, state in facts.get("sources", {}).items() if name.startswith("github:"))):
                     script_errors.append(error)
         atomic_json(cache, {"fingerprints": current, "cacheable": not failures and not script_errors and not notes.pending})
         print("REFRESH complete" + (" (partial sources; see page)" if code else ""))

@@ -11,29 +11,30 @@
   "auto_refresh": {"model": "none"}, // optional; no schedule unless explicitly installed
   "projects": [
     {
-      "key": "cvs",                       // short id, used in page URLs (#cvs)
-      "name": "CVS Radar",
+      "key": "app",                       // short id, used in page URLs (#app)
+      "name": "My App",
       "color": "#C4452C",
       "tag": "One sentence: what this project is for.",
       "links": [["Live site", "https://example.com"]],
       "sources": {
-        "linear":   {"project_id": "confirmed-project-UUID", "project": "CVS Radar"},
+        "linear":   {"project_id": "confirmed-project-UUID", "project": "My App"},
         "notion":   {"url": "https://www.notion.so/...", "status_map": {"Done": "done", "In progress": "open"}},
+        "github_issues": ["owner/repo"],                        // explicitly opted-in tickets (gh CLI)
         "github":   ["owner/repo"],                              // open PRs (gh CLI)
-        "local":    [{"label": "main checkout", "path": "~/code/cvs-radar"}],
-        "obsidian": [{"path": "/vault/Projects/CVS Radar"}]       // counts `- [ ]` / `- [x]` lines
+        "local":    [{"label": "main checkout", "path": "~/code/my-app"}],
+        "obsidian": [{"path": "/vault/Projects/My App"}]          // counts `- [ ]` / `- [x]` lines
       },
       "data": [
-        {"label": "posts", "path": "~/code/cvs-radar/data/posts.jsonl", "kind": "jsonl", "column": "posted_at", "max_age_days": 2}
+        {"label": "orders", "path": "~/code/my-app/data/orders.jsonl", "kind": "jsonl", "column": "created_at", "max_age_days": 2}
       ],
       "nodes": [
-        {"id": 1, "zone": "Every hour", "title": "Crawl", "sub": "PTT board → posts.jsonl",
-         "detail": "Longer text shown when the step is opened.", "paths": ["crawler.py"], "tickets": ["DEV-12"]},
-        {"id": 2, "on": 1, "side": "r", "title": "Dedupe", "sub": "drops reposts", "icon": "check",
+        {"id": 1, "zone": "Every hour", "title": "Fetch", "sub": "API → orders.jsonl",
+         "detail": "Longer text shown when the step is opened.", "paths": ["fetch.py"], "tickets": ["DEV-12"]},
+        {"id": 2, "on": 1, "side": "r", "title": "Dedupe", "sub": "drops repeated orders", "icon": "check",
          "media": [
-           {"shot": "shots/dedupe.png", "caption": "What a duplicate looks like", "phone": false},
+           {"shot": "shots/dedupe.png", "caption": "What a duplicate order looks like", "phone": false},
            {"math": ["s = \\frac{n_{good}}{n_{good}+n_{bad}}"], "p": "Plain-words reading of the formula"},
-           {"mock": [{"text": "in   12 posts\n"}, {"text": "out  9 posts", "emphasis": "bold"}], "cap": "A run's input and output", "real": true},
+           {"mock": [{"text": "in   12 orders\n"}, {"text": "out  9 orders", "emphasis": "bold"}], "cap": "A run's input and output", "real": true},
            {"link": ["Live site", "https://example.com"]}
          ]}
       ],
@@ -65,6 +66,11 @@
     the run; on first failure no `shot` is added. No `capture` means existing `shot` files
     remain user-managed. Projects without a UI omit both fields: no screenshot placeholder
     or "no screenshot" text is rendered. Chromium is optional unless capturing/checking.
+  - `captured_at`: UTC ISO timestamp written after each successful capture and shown in the
+    caption. Failures keep the previous timestamp. Capture times alone do not trigger an
+    automatic rebuild when the pixels are unchanged; the page retains its last rendered time.
+    Captions must say whether the image shows the live site or a local build output.
+    The capture source URL/path is omitted from both HTML outputs.
   - `shot`: a PNG, WebP or JPEG file (maximum 8 MiB and 16 million pixels) (absolute, `~/…`, or relative to HOME). `build.py` embeds it in the page;
     invalid or missing files show as missing and print a `WARN`; other formats (SVG, GIF, …) must be exported first.
     Only paths explicitly listed in `shot` are read (including approved external absolute paths);
@@ -82,6 +88,32 @@
   matches, including archived projects. Multiple matches require choosing and saving a UUID;
   a renamed or inaccessible legacy project reports a migration/permission error. IDs are unique
   across teams, so no team filter is needed once the UUID is confirmed.
+- `sources.github_issues`: optional list of `owner/repo` strings explicitly confirmed
+  during Setup as ticket repositories. Setup asks **Linear / Notion / GitHub Issues / none**
+  per project, saves the corresponding source configuration, and saves no ticket-source
+  keys for none. `sources.github` continues to mean PRs only; it never enables Issues.
+  Existing inventory files require no migration. The Issues connection excludes PRs.
+  collect.py uses logged-in `gh api graphql`, follows every page of open and closed issues,
+  and records each repo separately under `github_issues:owner/repo` in snapshot `sources`.
+  Tickets use that same `source` value, with `id` and `source_id` = `owner/repo#number`
+  so issue numbers cannot collide across repos. OPEN → `open`; CLOSED → `done`, except
+  `stateReason: NOT_PLANNED` → `dead`. A missing/null reason on a closed issue means done.
+  `createdAt` maps to `created`; `closedAt` to `completed` or `canceled`; `updatedAt` to
+  `updated`. Dates feed the existing ticket trend/history. Full reopen event histories
+  are not fetched. Any failed page marks that repo failed/incomplete and publishes none
+  of its partial ticket list. Other successful repos remain visible; aggregate trends
+  are withheld until all configured ticket sources are current and complete.
+  Missing `gh`, login or repo permissions are visible errors, never a successful empty list.
+  Scheduled refresh probes opted-in Issues and retries failures.
+- `sources.obsidian[]`: `path` is the vault folder to scan recursively for `*.md`.
+  Optional `exclude` lists folder paths relative to that configured vault path, using `/`
+  (for example `{"path":"/vault", "exclude":["templates","marp",".superpowers"]}`).
+  An excluded folder and all descendants are skipped, but similarly prefixed names are not.
+  `.obsidian` and `.trash` are always excluded. Without `exclude`, existing scans are unchanged.
+  Task lines use `-`, `*`, `+` or numbered lists with `[ ]` / `[x]` / `[X]`; fenced code
+  blocks are ignored. All matching tasks are counted; only the first 50 open tasks are listed.
+  Choose task folders during Setup; template/article checkboxes otherwise count too.
+  Scheduled change detection uses the same exclusions.
 - `sources.local[]` supports two optional Git settings. Existing entries need no changes:
   - `"fetch": true` (default): collect runs `git fetch -q origin` when origin exists.
     This writes remote refs and `.git/FETCH_HEAD` in that checkout. `"fetch": false`
@@ -125,7 +157,7 @@
 ```json
 {
   "_run": {"run_id": "unique UUID for this gather"},
-  "cvs": {
+  "app": {
     "sources": {"linear": {"run_id": "same UUID", "attempted_at": "ISO timestamp with offset",
       "fetched_at": "ISO timestamp with offset", "status": "ok", "complete": true, "error": null}},
     "read": ["linear"],
@@ -194,7 +226,7 @@ A real authorized workspace is still required to verify connector/API behavior.
 ## summaries.json (written by Claude, kept across runs)
 
 ```json
-{"cvs": {"2026-09-28": {"n": 14, "text": "Two or three plain sentences about that week."}}}
+{"app": {"2026-09-28": {"n": 14, "text": "Two or three plain sentences about that week."}}}
 ```
 
 Keys are the Monday of each week. `n` is the number of items the summary was written for;
@@ -236,7 +268,7 @@ collection and build together; fatal failures stop rebuilding and mark last-good
 
 `collect.py` validates inventory and the consumed gathered file before reading sources;
 `build.py` validates inventory and snapshot ticket/PR rows before rendering. Invalid
-input exits 2 with a field path, such as `projects[3].key: duplicate "cvs"`.
+input exits 2 with a field path, such as `projects[3].key: duplicate "app"`.
 The shared `validation.py` uses only Python's standard library.
 
 Project keys are unique and contain only ASCII letters, digits, `_` and `-`.

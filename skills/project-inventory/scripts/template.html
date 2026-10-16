@@ -54,14 +54,15 @@ code{font-family:var(--mono);font-size:.86em}
 /* top bar + project menu */
 .bar{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;margin-inline:-16px;padding:10px 16px;background:color-mix(in srgb,var(--ground) 72%,transparent);backdrop-filter:blur(20px) saturate(180%);-webkit-backdrop-filter:blur(20px) saturate(180%);border-bottom:.5px solid color-mix(in srgb,var(--line) 70%,transparent)}
 .bar .wrap{display:flex;gap:10px 14px;align-items:center;flex-wrap:nowrap}
-.brand{font-family:var(--display);font-size:18px;font-weight:700;letter-spacing:-.01em;text-decoration:none;white-space:nowrap}
+.brand{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;font-family:var(--display);font-size:18px;font-weight:700;letter-spacing:-.01em;text-decoration:none;white-space:nowrap}
 .stamp{margin-left:auto;color:var(--muted);font-size:12.5px;white-space:nowrap}
-.menubtn{font:inherit;font-size:14px;padding:6px 14px;border-radius:999px;border:1px solid var(--line);background:var(--paper);color:var(--ink);cursor:pointer;max-width:52vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;box-shadow:var(--shadow)}
+.menubtn{display:inline-flex;align-items:center;gap:4px;flex-shrink:0;min-width:94px;font:inherit;font-size:14px;padding:6px 14px;border-radius:999px;border:1px solid var(--line);background:var(--paper);color:var(--ink);cursor:pointer;max-width:52vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;box-shadow:var(--shadow)}
+#menulabel{min-width:0;overflow:hidden;text-overflow:ellipsis}
 .menubtn[aria-expanded="true"]{background:var(--ink);color:var(--paper)}
 .menu{margin:10px -16px -10px;padding:6px 16px 14px;border-top:1px solid var(--line);max-height:calc(100dvh - 70px);overflow-y:auto}
 .menu[hidden]{display:none}
 .menu .wrap{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,210px),1fr));gap:6px}
-@media (max-width:560px){.menu .wrap{grid-template-columns:1fr 1fr}}
+@media (max-width:560px){.bar .wrap{flex-wrap:wrap}.stamp{flex-basis:100%;text-align:right}.menu .wrap{grid-template-columns:1fr 1fr}}
 .menu a{display:grid;grid-template-columns:10px 1fr;gap:2px 8px;align-items:center;padding:9px 10px;border-radius:8px;text-decoration:none;font-size:14px;line-height:1.35}
 .menu a:hover,.menu a[aria-current="page"]{background:var(--paper)}
 .menu a[aria-current="page"]{font-weight:700;box-shadow:inset 0 0 0 1px var(--ink)}
@@ -384,7 +385,7 @@ const P = D.projects;
 const tkOf = p => p.facts.tickets;
 const ticketComplete = p => !p.ticket_state || ["ready", "empty"].includes(p.ticket_state.status);
 const ticketLabel = p => ({empty:T.tk_empty, not_connected:T.notickets, failed:T.tk_failed, partial:T.tk_partial, stale:T.tk_stale})[p.ticket_state?.status] || "";
-const hasTk = p => tkOf(p).length > 0 || !!((p.sources || {}).linear || (p.sources || {}).notion);
+const hasTk = p => tkOf(p).length > 0 || !!((p.sources || {}).linear || (p.sources || {}).notion || (p.sources || {}).github_issues?.length);
 const imageSrc = s => typeof s === "string" && /^data:image\/(?:png|jpeg|gif|webp);base64,[A-Za-z0-9+/]+={0,2}$/.test(s);
 const httpURL = u => { try { const v = new URL(u); return ["http:", "https:"].includes(v.protocol); } catch { return false; } };
 const mockText = m => Array.isArray(m) ? m.map(s => String(s.text ?? "")).join("") : String(m);
@@ -433,8 +434,8 @@ function mediaKinds(list){
 }
 function renderMedia(list){  // All content is text; emphasis has a fixed tag/class allowlist.
   return (list||[]).map(m => {
-    if (m.missing) return `<figure><figcaption><span class="tagx bad">${T.m_missing}</span><code>${esc(m.missing)}</code> ${esc(m.caption||"")}</figcaption></figure>`;
-    if (m.src && imageSrc(m.src)) return `<figure><img src="${esc(m.src)}" alt="${esc(m.caption||"")}" loading="lazy" class="${m.phone?"phone":""}"><figcaption><span class="tagx shot">${T.m_shot}</span>${esc(m.caption||"")}</figcaption></figure>`;
+    if (m.missing) return `<figure><figcaption><span class="tagx bad">${T.m_missing}</span><code>${esc(m.missing)}</code> ${esc(m.caption||"")}${m.captured_at ? ` <time datetime="${esc(m.captured_at)}">${esc(m.captured_at)}</time>` : ""}</figcaption></figure>`;
+    if (m.src && imageSrc(m.src)) return `<figure><img src="${esc(m.src)}" alt="${esc(m.caption||"")}" loading="lazy" class="${m.phone?"phone":""}"><figcaption><span class="tagx shot">${T.m_shot}</span>${esc(m.caption||"")}${m.captured_at ? ` <time datetime="${esc(m.captured_at)}">${esc(m.captured_at)}</time>` : ""}</figcaption></figure>`;
     if (m.math) return `<figure><div class="mathbox">${m.math.map(t=>`<div class="eq">\\[${esc(t)}\\]</div>`).join("")}${m.p?`<p>${esc(m.p)}</p>`:""}</div><figcaption><span class="tagx math">${T.m_math}</span>${T.math_cap}</figcaption></figure>`;
     if (m.mock) return `<figure><pre class="mock${mockText(m.mock).split("\n").filter(x => /\S {2,}\S/.test(x)).length >= 2 ? " cols" : ""}">${mockHTML(m.mock)}</pre><figcaption><span class="tagx ${m.real?"real":"mock"}">${m.real?T.m_real:T.m_mock}</span>${esc(m.cap||"")}</figcaption></figure>`;
     if (m.link) return `<figure>${ext(m.link[1], esc(m.link[0]), "golink")}</figure>`;
@@ -700,6 +701,7 @@ function renderFacts(p){
   for (const r of p.notes || []) local.push([esc(r[0]), esc(r[1])]);
   if (f.prs.length) cloud.push([T.pr_open, f.prs.map(x => `<div>${ext(x.url, `#${esc(x.number)}`)} ${esc(x.title)}${x.isDraft ? ` <span class="st hist">Draft</span>` : ""} <span class="small">${esc(x.repo || "")} · ${mdOf(x.createdAt)}</span></div>`).join("")]);
   if (src.linear) cloud.push(["Linear", esc(src.linear.project)]);
+  for (const repo of src.github_issues || []) cloud.push(["GitHub Issues", ext(`https://github.com/${repo}/issues`, esc(repo))]);
   if (src.notion) cloud.push(["Notion", ext(src.notion.url, esc(src.notion.url))]);
   const tbl = (head, rows) => rows.length ? `<h3>${head}</h3><div class="facts"><table>${rows.map(([a, b]) => `<tr><th>${a}</th><td>${b}</td></tr>`).join("")}</table></div>` : "";
   for (const [name, state] of Object.entries(f.sources || {})) cloud.push([esc(name),

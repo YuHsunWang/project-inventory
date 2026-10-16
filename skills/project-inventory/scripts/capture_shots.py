@@ -5,6 +5,7 @@ Python stdlib only; Chromium discovery and CDP are shared with check_page.py.
 """
 import argparse
 import base64
+import datetime as dt
 import json
 from pathlib import Path
 import shutil
@@ -126,6 +127,8 @@ def capture_shots(home, inv):
                     if media.get("shot") != relative:
                         media["shot"] = relative
                         changed = True
+                    media["captured_at"] = dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
+                    changed = True
                     print(f"CAPTURE {project['key']} step {node['id']}: {path} ({len(raw)} bytes)")
                 except (OSError, ValueError, RuntimeError, KeyError, subprocess.SubprocessError) as exc:
                     print(f"WARN {project['key']} step {node['id']}: capture failed: {exc}")
