@@ -24,6 +24,7 @@ HOME/inventory.json          projects, sources, data checks, diagram   (you writ
 HOME/gathered/<date>.json    tickets/PRs you fetched through MCP tools  (you write it each run)
 HOME/facts/<date>.json       one snapshot per run                       (collect.py)
 HOME/summaries.json          one plain-words summary per project-week   (you write it)
+HOME/shots/<project>-<step>.png captured project UIs                     (capture_shots.py)
 HOME/out/index.html          the page                                   (build.py)
 HOME/out/artifact.html       HTML fragment for manual host import          (build.py)
 ```
@@ -68,9 +69,22 @@ Talk to the user in their language and write page text (names, tags, diagram) in
    Give every step an `icon` from this list: spider brain box gear shield clock truck globe eye flame check dice table hand cards play coin quiz scale pipe lake flask chart book plug.
    Then offer what a step can open to (`media`, see schema): a `mock` (a few lines showing what
    goes in and out, copied from real code/output; mark `real: true` only when it is real output),
-   a `math` formula the code actually computes, a `link`, or a `shot` screenshot — ask the user
-   for screenshot files; never invent one. Skip media the user does not want.
-5. Save `HOME/inventory.json`. Pick distinct `color`s that read in light and dark mode.
+   a `math` formula the code actually computes, a `link`, or a screenshot. For projects with a UI,
+   find an existing URL in README links, package.json `homepage`, Vercel or GitHub Pages,
+   or an HTML file the project ships or has already produced. Propose which steps get a
+   screenshot and show their exact `capture` URL/path. Never start project servers, install
+   dependencies or run project/build code; only open existing URLs/files in Chromium.
+   User-supplied screenshot files still work via `shot`. Projects without a UI get no `shot`
+   or `capture`; the page shows no placeholder or "no screenshot" text. Skip unwanted media.
+   To preview captures before saving the final configuration, write the draft inventory
+   into a temporary home, run
+   `python3 SCRIPTS/capture_shots.py TEMP_HOME`, and show the resulting images to the user.
+   Resolve relative HTML paths against the intended HOME before putting them in the temporary
+   draft. Capture failures print `WARN`, retain any previous image and do not fail the run.
+   Report warnings to the user.
+5. After review, copy approved images to `HOME/shots/` and save `HOME/inventory.json`
+   with the reviewed `capture` sources and HOME-relative `shot` paths. Pick distinct `color`s
+   that read in light and dark mode.
 6. **Optional plain words.** Ask which CLI may write summaries and commit/PR notes:
    `claude` (Haiku), `codex` (gpt-6-luna), or `none` (default; nothing sent).
    Save `auto_refresh.model`. Explain that notes receive listed work, while diagram step
@@ -127,7 +141,8 @@ Talk to the user in their language and write page text (names, tags, diagram) in
      (see schema). Track MCP PRs per `github:<owner/repo>`. Never reuse a gather run.
    - List every source you read in `read`. If a source fails, write the error into `errors`
      (start the text with the source name) — never drop it silently.
-2. `python3 SCRIPTS/collect.py HOME --refresh` — collect and build this run's exact snapshot.
+2. `python3 SCRIPTS/capture_shots.py HOME` re-captures the saved UI sources first.
+   Then `python3 SCRIPTS/collect.py HOME --refresh` — collect and build this run's exact snapshot.
    A `BUSY:` message means another refresh owns the lock: stop this manual run and let it finish.
    Exit 0 = success; 1 = partial, with visible errors; 2 = fatal, retaining last-good data/time
    with a failure summary. On exit 2 fix the input or permissions and rerun; do not publish.
@@ -202,6 +217,8 @@ Never send the page anywhere the user did not choose.
   heads, live remote refs, dirty/untracked counts, PR number/updatedAt, file statistics for
   data/Obsidian and script-side Linear. Same fingerprints and calendar day skip collection,
   build, model and publishing. Failed script reads always retry and stay visible on the page.
+  Saved `capture` sources are re-captured before the unchanged check; identical PNG bytes
+  keep their fingerprint. Failures warn, retain the previous shot and retry on the next run.
   File mtimes only decide whether to read again; freshness values still come from the data.
 - Both scheduled refresh and manual `collect.py` / standalone `build.py` use `HOME/state/refresh.lock`. OS locks
   release immediately when a process dies (no 30-minute stale-file delay). Busy runs exit 0.

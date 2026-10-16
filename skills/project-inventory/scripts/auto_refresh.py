@@ -9,6 +9,7 @@ from pathlib import Path
 import subprocess
 import sys
 import collect
+from capture_shots import capture_shots
 from plain_words import read_json, write_notes
 from refresh_lock import refresh_lock, RefreshBusy
 from validation import validate_inventory, timezone
@@ -162,6 +163,7 @@ def build_page_or_fail(home, manifest):
 def run(home):
     with refresh_lock(home):
         inv = validate_inventory(read_json(home / "inventory.json"))
+        capture_shots(home, inv)
         current, failures = fingerprints(home, inv)
         cache = home / "state" / "fingerprints.json"
         previous = read_json(cache)

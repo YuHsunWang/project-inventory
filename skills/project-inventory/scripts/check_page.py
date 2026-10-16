@@ -15,6 +15,7 @@ import shutil
 import socket
 import struct
 import subprocess
+import sys
 import tempfile
 import time
 from urllib.parse import urlsplit
@@ -28,12 +29,20 @@ def chromium():
         found = shutil.which(name)
         if found:
             return found
-    cache = Path(os.environ.get("PLAYWRIGHT_BROWSERS_PATH", Path.home() / ".cache/ms-playwright"))
-    found = sorted(cache.glob("chromium_headless_shell-*/chrome-headless-shell-linux*/chrome-headless-shell"))
-    if not found:
-        found = sorted(cache.glob("chromium-*/chrome-linux*/chrome"))
-    if found:
-        return str(found[-1])
+    if sys.platform == "darwin":
+        default = Path.home() / "Library/Caches/ms-playwright"
+        shell, browser = "chrome-headless-shell-mac*/chrome-headless-shell", "chrome-mac*/Chromium.app/Contents/MacOS/Chromium"
+    elif sys.platform == "win32":
+        default = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData/Local")) / "ms-playwright"
+        shell, browser = "chrome-headless-shell-win*/chrome-headless-shell.exe", "chrome-win*/chrome.exe"
+    else:
+        default = Path.home() / ".cache/ms-playwright"
+        shell, browser = "chrome-headless-shell-linux*/chrome-headless-shell", "chrome-linux*/chrome"
+    cache = Path(os.environ.get("PLAYWRIGHT_BROWSERS_PATH", default))
+    for pattern in ("chromium_headless_shell-*/" + shell, "chromium-*/" + browser):
+        found = sorted(path for path in cache.glob(pattern) if path.is_file())
+        if found:
+            return str(found[-1])
     raise RuntimeError("Chromium not found; install it or set CHROMIUM_BIN")
 
 

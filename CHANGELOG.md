@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased — project screenshots (#39)
+
+- PR #40: omit capture source URLs and paths from both HTML outputs; preserve
+  local HTML query strings and fragments when resolving file URIs.
+- PR #40: discover Playwright Chromium in macOS and Windows caches. Wait for
+  resource/DOM activity to settle before screenshots, with a 2s minimum and 15s limit.
+
+- Capture existing UI URLs or local HTML files with shared Chromium discovery and
+  stdlib CDP; save HOME-relative screenshots atomically and validate `media.capture`.
+- Setup proposes sources and previews captured images before saving; supplied shots
+  still work. No UI means no screenshot placeholder. No project servers/builds run.
+- Manual and automatic refresh re-capture sources; failures warn and keep previous
+  images. Automatic capture precedes fingerprints so changed images rebuild the page.
+
 ## Unreleased — cold-start fixes (#34–#37)
 
 - #34: allow per-checkout `fetch: false`; preserve local Git facts and mark remote

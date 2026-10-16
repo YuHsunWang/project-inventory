@@ -123,6 +123,22 @@ def validate_inventory(inv):
             for m, media in enumerate(typed(n.get("media", []), list, np + ".media")):
                 mp = f"{np}.media[{m}]"
                 typed(media, dict, mp)
+                if "capture" in media:
+                    value = string(media["capture"], mp + ".capture")
+                    # Only existing web UIs or HTML files; never an executable/build command.
+                    try:
+                        parsed = urlsplit(value)
+                    except ValueError:
+                        fail(mp + ".capture", "expected HTTP/HTTPS URL or local HTML path")
+                    if parsed.scheme in ("http", "https"):
+                        url(value, mp + ".capture")
+                    else:
+                        local = parsed.scheme == "file" and parsed.netloc in ("", "localhost")
+                        windows = bool(re.match(r"^[A-Za-z]:[\\/]", value))
+                        if ((parsed.scheme and not local and not windows) or
+                                not parsed.path.lower().endswith((".html", ".htm")) or
+                                "\x00" in value):
+                            fail(mp + ".capture", "expected HTTP/HTTPS URL or local HTML path")
                 if "link" in media:
                     links([media["link"]], mp + ".link")
             for field in ("paths", "tickets"):

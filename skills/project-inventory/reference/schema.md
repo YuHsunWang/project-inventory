@@ -49,6 +49,22 @@
 - `icon` (optional; missing or unknown values render a gear): spider, brain, box, gear, shield, clock, truck, globe, eye, flame, check, dice,
   table, hand, cards, play, coin, quiz, scale, pipe, lake, flask, chart, book, plug.
 - `media` (optional): what opens when a step is clicked, in order.
+  - `capture`: a nonempty absolute HTTP/HTTPS URL (no credentials), or a local `.html`/`.htm`
+    path (absolute, `~/…`, relative to HOME, or a local `file://` URI). Query strings and
+    fragments are preserved when opening local files. This is source-only metadata;
+    `build.py` omits it from both HTML outputs. Only configure this
+    for a project UI that already exists; never start a server or run project/build code.
+    `python3 SCRIPTS/capture_shots.py HOME` opens it in headless Chromium at 1280×800,
+    saves `HOME/shots/<project>-<step>.png`, and sets `shot` to that HOME-relative path.
+    After loading assets, capture waits at least 2 seconds, then for resource count and
+    DOM size to stay unchanged for 1 second. It captures after 15 seconds even if still busy.
+    Further captures on the same step use `-media2`, `-media3`, etc. in media order. Images are replaced
+    atomically; identical PNG bytes are left untouched. Auto-refresh captures before its
+    fingerprint/unchanged check, and manual Refresh does so before collect/build.
+    A failed capture prints `WARN`, retains the previous image and `shot`, and never fails
+    the run; on first failure no `shot` is added. No `capture` means existing `shot` files
+    remain user-managed. Projects without a UI omit both fields: no screenshot placeholder
+    or "no screenshot" text is rendered. Chromium is optional unless capturing/checking.
   - `shot`: a PNG, WebP or JPEG file (maximum 8 MiB and 16 million pixels) (absolute, `~/…`, or relative to HOME). `build.py` embeds it in the page;
     invalid or missing files show as missing and print a `WARN`; other formats (SVG, GIF, …) must be exported first.
     Only paths explicitly listed in `shot` are read (including approved external absolute paths);
