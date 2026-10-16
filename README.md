@@ -34,7 +34,9 @@ For each project the page shows:
 - **Data freshness**: the newest date read from inside your data files (not file timestamps).
 - **Progress**: commits per week and open/done tickets over the last 90 days (rebuilt where ticket dates are known; unknown periods and incomplete coverage are labelled). Below that, the whole history week by week: each week has a 2–3 sentence plain-words summary, and opens to every commit, finished ticket and new PR. Four weeks show at first; a button loads four more.
 
-The home page lists everything that waits on you, across all projects.
+The home page lists everything that waits on you, across all projects. The footer names only
+configured ticket providers; projects without one say "No ticket source set." Empty progress
+charts are hidden when no ticket source or local Git history is configured.
 
 中文說明書：[說明書.md](說明書.md)
 
@@ -261,6 +263,6 @@ Captures show their `captured_at` time in the caption. Captions identify the liv
 
 Without `VERCEL_TOKEN`, the publisher runs `vercel whoami` before reading CLI credentials. A failed refresh stops publishing with a login instruction.
 
-Obsidian Setup asks which folders contain real tasks. Each source scans Markdown recursively under its vault `path`; optional `exclude` folders are relative to that path. `.obsidian`, `.trash` and fenced code blocks are always skipped. Counts include all matching tasks; the list shows the first 50 open tasks.
+Obsidian Setup asks which folders contain real tasks. Each source scans Markdown recursively under its vault `path`; optional `exclude` folders are relative to that path. `.obsidian`, `.trash` and fenced code blocks are always skipped. Checkboxes with blank text are ignored. Counts include all matching nonempty tasks; the list shows the first 50 open tasks.
 
 GitHub Issues uses `sources.github_issues: ["owner/repo"]`. It reads all open and closed issues, excludes PRs, and rebuilds ticket trends from creation/closure dates. Closed-as-not-planned is canceled; other closed issues are done. Missing `gh` access or an unread page shows a failed source. Existing configurations remain valid.

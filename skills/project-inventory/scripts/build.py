@@ -317,7 +317,10 @@ def build_page(home, snapshot=None, run_id=None):
         if weeks:
             need[p["key"]] = weeks
     page = {"title": inv.get("title", "Projects"), "lang": inv.get("lang", "en"),
-            "date": snap["date"], "generated_at": snap["generated_at"], "projects": projects}
+            "date": snap["date"], "generated_at": snap["generated_at"], "projects": projects,
+            "ticket_source_labels": {key: label for key, label in
+                (("linear", "Linear"), ("notion", "Notion"), ("github_issues", "GitHub Issues"))
+                if any(p.get("sources", {}).get(key) for p in inv["projects"])}}
     banner = needs_claude(inv, snap, need)
     has_math = any("math" in m for p in projects for n in p.get("nodes", []) for m in n.get("media", []))
     html = (HERE / "template.html").read_text(encoding="utf-8")

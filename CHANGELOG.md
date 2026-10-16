@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased — cold-start fixes (#48–#49)
+
+- #49: name only configured ticket providers in the bilingual footer and Facts hint,
+  including GitHub Issues; show a neutral no-source message and hide empty progress scaffolding.
+
+- #48: skip Obsidian checkboxes with blank text without counting them as open or done;
+  retain strict validation of collected task text.
+
 ## Unreleased — cold-start fixes (#41–#46)
 
 - #46: collect explicitly configured GitHub Issues through paginated `gh` reads,

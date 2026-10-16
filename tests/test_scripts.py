@@ -632,7 +632,7 @@ def test_refresh_manifest_and_partial():
 
 @case
 def test_five_ticket_states():
-    labels = {"empty": "Read successfully, 0 tickets.", "not_connected": "No Linear or Notion source.",
+    labels = {"empty": "Read successfully, 0 tickets.", "not_connected": "No ticket source set.",
               "failed": "Ticket read failed", "partial": "Ticket read partly failed", "stale": "Ticket data is stale"}
     for status in labels:
         root = fixture("state-" + status, {} if status == "not_connected" else {"notion": {"url": "https://notion.so/fixture"}})
@@ -671,7 +671,7 @@ def test_five_ticket_states():
         inv = json.loads((root / "inventory.json").read_text()); inv["lang"] = "zh-TW"
         (root / "inventory.json").write_text(json.dumps(inv))
         page_data(root)
-        zh = {"empty": "已讀取，0 張待辦", "not_connected": "沒有接 Linear 或 Notion",
+        zh = {"empty": "已讀取，0 張待辦", "not_connected": "未設定待辦來源",
               "failed": "待辦讀取失敗", "partial": "待辦部分讀取失敗", "stale": "待辦資料已過期"}
         assert zh[status] in rendered(root)[0]["tickets"]
 

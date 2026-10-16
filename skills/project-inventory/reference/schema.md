@@ -111,7 +111,7 @@
   An excluded folder and all descendants are skipped, but similarly prefixed names are not.
   `.obsidian` and `.trash` are always excluded. Without `exclude`, existing scans are unchanged.
   Task lines use `-`, `*`, `+` or numbered lists with `[ ]` / `[x]` / `[X]`; fenced code
-  blocks are ignored. All matching tasks are counted; only the first 50 open tasks are listed.
+  blocks and checkboxes with blank text are ignored. All matching nonempty tasks are counted; only the first 50 open tasks are listed.
   Choose task folders during Setup; template/article checkboxes otherwise count too.
   Scheduled change detection uses the same exclusions.
 - `sources.local[]` supports two optional Git settings. Existing entries need no changes:
