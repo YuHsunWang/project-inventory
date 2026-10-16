@@ -113,6 +113,11 @@ def validate_inventory(inv):
             ids.add(node_id)
             if "on" not in n:
                 spine.add(node_id)
+            if "auto_updated" in n:
+                value = n["auto_updated"]
+                parsed = parse_date(value, np + ".auto_updated")
+                if isinstance(parsed, dt.datetime) or parsed.isoformat() != value:
+                    fail(np + ".auto_updated", "expected YYYY-MM-DD calendar date")
             if "side" in n:
                 choice(n["side"], ("l", "r"), np + ".side")
             for m, media in enumerate(typed(n.get("media", []), list, np + ".media")):

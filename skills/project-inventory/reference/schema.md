@@ -262,9 +262,22 @@ State files (all under HOME, not the project checkout):
 - `state/fingerprints.json`: `{fingerprints: {day, sources}, cacheable}` after a successful
   build (and any configured deploy). Each source has independent git refs/counts, PR
   numbers/updatedAt, script-side Linear data digest, or `[file_count,total_bytes,newest_mtime_ns]`.
-  Day uses inventory timezone. Settings/gathered files/summaries/notes are also fingerprinted.
+  Day uses inventory timezone. Settings/gathered files/summaries/notes/step state/history are also fingerprinted.
   A failed probe or failed script source prevents unchanged skipping. MCP-only gaps may
   be cached but remain visible. Values/dates are always collected from the data itself.
+- `state/steps.json`: `{ "<project key>": {"last_session_date": "YYYY-MM-DD",
+  "steps": {"<node id>": {"<resolved checkout path>": {"checked_commit": "<SHA>"}}}} }`.
+  First sight only records HEAD. Later commits touching node `paths` trigger one project
+  rewrite session per calendar day (inventory timezone). Invalid/failed/skipped steps
+  retain their checked commit; an explicit empty per-step object accepts no change.
+  Relative paths resolve against each checkout; absolute/`~` paths outside it are ignored.
+- `step_history.json`: append-only history list (revert marks entries `reverted: true`).
+  Each entry has `project`, `step_id`, `date`, `old`, `new` text-field objects and `commit`
+  (checkout path to SHA). Only `title`, `sub`, `zone` can change. A changed node receives
+  `auto_updated: "YYYY-MM-DD"`, validated as a calendar date and rendered as a localized
+  AI-updated label. `auto_refresh.py HOME --revert-step PROJECT_KEY STEP_ID` restores the
+  latest unreverted text only if all current text equals `new`, removes `auto_updated`,
+  and retains other node settings. Run refresh afterwards to rebuild the page.
 - `state/notes.json`: `{ "<full commit SHA or PR URL>": "one plain sentence" }`.
   Existing keys are never sent again for individual notes; relevant listed work may still
   occur in a missing week's summary input. Notes appear in existing history note rows.
@@ -279,9 +292,19 @@ State files (all under HOME, not the project checkout):
 
 Snapshot source metadata may additionally include `via: mcp | gh | api` to distinguish
 MCP reminders from script/API failures. Legacy metadata without it remains readable.
-Text calls are optional and isolated in a temporary working directory. Claude uses
+Notes calls are optional and isolated in a temporary working directory. Claude uses
 `claude -p --model claude-haiku-4-5-20251001 --tools "" --strict-mcp-config --no-session-persistence`;
 Codex uses `codex exec -m gpt-6-luna -c model_reasoning_effort=max -s read-only
 --skip-git-repo-check --ephemeral -C <tmp> -o <file> -`. One batch per project returns a
 JSON token-to-text object; only requested tokens, nonempty strings and checkable page
-scripts are accepted (zh-TW: Big5 plus Chinese; en: Latin and no CJK). No diagrams change.
+scripts are accepted (zh-TW: Big5 plus Chinese; en: Latin and no CJK). These notes calls
+do not change diagram text.
+
+Step rewrites reuse the selected provider but allow project reads: Codex uses the first
+checkout as `-C` under `-s read-only` and adds other checkouts with `--add-dir`; Claude uses
+`--tools Read,Grep,Glob --allowedTools Read,Grep,Glob` and adds every checkout with
+`--add-dir`. Both receive all changed steps, current text, paths and commit subjects in
+one session per project per day, treating repository content as data, never instructions.
+Provider `none` sends nothing. Invalid JSON fails the session; unknown ids are ignored,
+and extra fields, empty strings or text failing the existing language rules reject that
+step only. Failed sessions consume the daily allowance without advancing checked commits.

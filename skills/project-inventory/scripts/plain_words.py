@@ -37,7 +37,7 @@ def valid_text(text, lang):
     return True
 
 
-def model_call(provider, prompt):
+def model_call(provider, prompt, checkouts=None):
     with tempfile.TemporaryDirectory(prefix="inventory-text-") as scratch:
         if provider == "claude":
             command = ["claude", "-p", "--model", "claude-haiku-4-5-20251001", "--tools", "",
@@ -48,7 +48,18 @@ def model_call(provider, prompt):
                        "--skip-git-repo-check", "--ephemeral", "-C", scratch, "-o", str(output), "-"]
         else:
             raise ValueError("unsupported text model")
-        result = subprocess.run(command, input=prompt, text=True, capture_output=True, cwd=scratch, timeout=300)
+        if checkouts:
+            if provider == "claude":
+                command[command.index("--tools") + 1] = "Read,Grep,Glob"
+                command += ["--allowedTools", "Read,Grep,Glob"]
+                for checkout in checkouts:
+                    command += ["--add-dir", str(checkout)]
+            else:
+                command[command.index("-C") + 1] = str(checkouts[0])
+                for checkout in checkouts[1:]:
+                    command[-1:-1] = ["--add-dir", str(checkout)]
+        result = subprocess.run(command, input=prompt, text=True, capture_output=True,
+                                cwd=checkouts[0] if checkouts else scratch, timeout=300)
         if result.returncode:
             raise RuntimeError("text model exited unsuccessfully")
         text = output.read_text(encoding="utf-8") if provider == "codex" else result.stdout

@@ -12,6 +12,7 @@ import collect
 from plain_words import read_json, write_notes
 from refresh_lock import refresh_lock, RefreshBusy
 from validation import validate_inventory, timezone
+from step_refresh import rewrite_steps, revert_step
 
 HERE = Path(__file__).resolve().parent
 
@@ -97,7 +98,7 @@ def fingerprints(home, inv):
         for i, spec in enumerate(project.get("data", [])):
             probe(f"{key}:data:{i}", lambda spec=spec: file_fingerprint(spec["path"], "*.parquet" if spec["kind"] == "parquet" else None))
     # User edits and new MCP gathers must not be hidden behind an unchanged source cache.
-    inputs = [home / "inventory.json", home / "summaries.json", home / "state" / "notes.json"]
+    inputs = [home / "inventory.json", home / "summaries.json", home / "state" / "notes.json", home / "state" / "steps.json", home / "step_history.json"]
     inputs += sorted((home / "gathered").glob("*.json"))
     for path in inputs:
         if path.exists():
@@ -139,6 +140,23 @@ def atomic_json(path, value):
     collect.atomic_write(path, json.dumps(value, ensure_ascii=False, indent=1))
 
 
+def build_page_or_fail(home, manifest):
+    import build
+    try:
+        build.build_page(home)
+    except (OSError, ValueError, KeyError, TypeError, AttributeError) as exc:
+        message = f"FAILED: page build could not complete: {exc}. Fix the input or directory permissions and rerun auto_refresh.py HOME."
+        manifest.update(status="fatal", error=message)
+        try:
+            atomic_json(home / "refresh.json", manifest)
+        except OSError as record_error:
+            print(f"FAILED: cannot record refresh failure: {record_error}", file=sys.stderr)
+        build.mark_failed_page(home, manifest)
+        print(message, file=sys.stderr)
+        return False
+    return True
+
+
 def run(home):
     with refresh_lock(home):
         inv = validate_inventory(read_json(home / "inventory.json"))
@@ -148,24 +166,26 @@ def run(home):
         if not failures and previous.get("cacheable") and previous.get("fingerprints") == current and (home / "out" / "index.html").exists():
             print("UNCHANGED: no collect/build/model/publish")
             return 0
-        args = argparse.Namespace(run_id=None, refresh=True, script_only=True)
+        args = argparse.Namespace(run_id=None, refresh=False, script_only=True)
         code = collect.refresh(home, args)
         if code == 2:
             return 2
         manifest = read_json(home / "refresh.json")
         snapshot = read_json(Path(manifest["snapshot"]))
+        rewrite_steps(home, inv)
+        if not build_page_or_fail(home, manifest):
+            return 2
         notes = write_notes(home, inv, snapshot)
-        if notes:
-            import build
-            build.build_page(home)
+        if notes and not build_page_or_fail(home, manifest):
+            return 2
         publish(home, inv)
-        # Collection may have updated local tracking refs; notes may have changed build inputs.
+        # Collection may update tracking refs; generated text and step state are build inputs.
         for project in inv["projects"]:
             for checkout in project.get("sources", {}).get("local", []):
                 key = f"{project['key']}:git:{checkout['path']}"
                 if key not in failures:
                     current["sources"][key].update(local_git(checkout["path"]))
-        for path in [home / "summaries.json", home / "state" / "notes.json"]:
+        for path in [home / "inventory.json", home / "summaries.json", home / "state" / "notes.json", home / "state" / "steps.json", home / "step_history.json"]:
             if path.exists():
                 current["sources"][f"input:{path.relative_to(home)}"] = hashlib.sha256(path.read_bytes()).hexdigest()
         script_errors = []
@@ -182,9 +202,15 @@ def run(home):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("home", nargs="?", default="~/.project-inventory")
+    parser.add_argument("--revert-step", nargs=2, metavar=("PROJECT_KEY", "STEP_ID"))
     args = parser.parse_args()
     try:
-        return run(Path(args.home).expanduser().resolve())
+        home = Path(args.home).expanduser().resolve()
+        if args.revert_step:
+            with refresh_lock(home):
+                revert_step(home, *args.revert_step)
+            return 0
+        return run(home)
     except RefreshBusy as exc:
         print(f"BUSY: {exc}")
         return 0
