@@ -72,7 +72,9 @@ Talk to the user in their language and write page text (names, tags, diagram) in
    a `math` formula the code actually computes, a `link`, or a screenshot. For projects with a UI,
    find an existing URL in README links, package.json `homepage`, Vercel or GitHub Pages,
    or an HTML file the project ships or has already produced. Propose which steps get a
-   screenshot and show their exact `capture` URL/path. Never start project servers, install
+   screenshot and show their exact `capture` URL/path. In each caption, say whether
+   it shows the live site or a local build output; a live site may differ from the checkout.
+   `capture_shots.py` records `captured_at`, which the page shows beside the caption. Never start project servers, install
    dependencies or run project/build code; only open existing URLs/files in Chromium.
    User-supplied screenshot files still work via `shot`. Projects without a UI get no `shot`
    or `capture`; the page shows no placeholder or "no screenshot" text. Skip unwanted media.

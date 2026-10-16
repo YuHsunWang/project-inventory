@@ -65,6 +65,11 @@
     the run; on first failure no `shot` is added. No `capture` means existing `shot` files
     remain user-managed. Projects without a UI omit both fields: no screenshot placeholder
     or "no screenshot" text is rendered. Chromium is optional unless capturing/checking.
+  - `captured_at`: UTC ISO timestamp written after each successful capture and shown in the
+    caption. Failures keep the previous timestamp. Capture times alone do not trigger an
+    automatic rebuild when the pixels are unchanged; the page retains its last rendered time.
+    Captions must say whether the image shows the live site or a local build output.
+    The capture source URL/path is omitted from both HTML outputs.
   - `shot`: a PNG, WebP or JPEG file (maximum 8 MiB and 16 million pixels) (absolute, `~/…`, or relative to HOME). `build.py` embeds it in the page;
     invalid or missing files show as missing and print a `WARN`; other formats (SVG, GIF, …) must be exported first.
     Only paths explicitly listed in `shot` are read (including approved external absolute paths);

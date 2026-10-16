@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased — cold-start fixes (#41–#46)
+
+- #41: label capture provenance in captions and show successful capture timestamps,
+  retaining last-good metadata on failure and omitting source URLs from HTML.
+
 ## Unreleased — project screenshots (#39)
 
 - PR #40: omit capture source URLs and paths from both HTML outputs; preserve

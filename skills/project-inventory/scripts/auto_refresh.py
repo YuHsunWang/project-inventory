@@ -22,6 +22,16 @@ def digest(value):
     return hashlib.sha256(json.dumps(value, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
 
 
+def inventory_fingerprint(inv):
+    # Capture time alone does not change the pixels or require rebuilding an unchanged page.
+    config = json.loads(json.dumps(inv))
+    for project in config["projects"]:
+        for node in project.get("nodes", []):
+            for media in node.get("media", []):
+                media.pop("captured_at", None)
+    return digest(config)
+
+
 def file_fingerprint(path, pattern=None):
     path = Path(path).expanduser()
     if path.is_dir():
@@ -100,8 +110,9 @@ def fingerprints(home, inv):
                     probe(f"{key}:shot:{path}", lambda path=path: screenshot_fingerprint(path))
         for i, spec in enumerate(project.get("data", [])):
             probe(f"{key}:data:{i}", lambda spec=spec: file_fingerprint(spec["path"], "*.parquet" if spec["kind"] == "parquet" else None))
+    probe("input:inventory.json", lambda: inventory_fingerprint(inv))
     # User edits and new MCP gathers must not be hidden behind an unchanged source cache.
-    inputs = [home / "inventory.json", home / "summaries.json", home / "state" / "notes.json", home / "state" / "steps.json", home / "step_history.json"]
+    inputs = [home / "summaries.json", home / "state" / "notes.json", home / "state" / "steps.json", home / "step_history.json"]
     inputs += sorted((home / "gathered").glob("*.json"))
     for path in inputs:
         if path.exists():
@@ -189,7 +200,8 @@ def run(home):
                 key = f"{project['key']}:git:{checkout['path']}"
                 if key not in failures:
                     current["sources"][key].update(local_git(checkout["path"]))
-        for path in [home / "inventory.json", home / "summaries.json", home / "state" / "notes.json", home / "state" / "steps.json", home / "step_history.json"]:
+        current["sources"]["input:inventory.json"] = inventory_fingerprint(read_json(home / "inventory.json"))
+        for path in [home / "summaries.json", home / "state" / "notes.json", home / "state" / "steps.json", home / "step_history.json"]:
             if path.exists():
                 current["sources"][f"input:{path.relative_to(home)}"] = hashlib.sha256(path.read_bytes()).hexdigest()
         script_errors = []

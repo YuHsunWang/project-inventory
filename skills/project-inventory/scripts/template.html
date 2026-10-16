@@ -433,8 +433,8 @@ function mediaKinds(list){
 }
 function renderMedia(list){  // All content is text; emphasis has a fixed tag/class allowlist.
   return (list||[]).map(m => {
-    if (m.missing) return `<figure><figcaption><span class="tagx bad">${T.m_missing}</span><code>${esc(m.missing)}</code> ${esc(m.caption||"")}</figcaption></figure>`;
-    if (m.src && imageSrc(m.src)) return `<figure><img src="${esc(m.src)}" alt="${esc(m.caption||"")}" loading="lazy" class="${m.phone?"phone":""}"><figcaption><span class="tagx shot">${T.m_shot}</span>${esc(m.caption||"")}</figcaption></figure>`;
+    if (m.missing) return `<figure><figcaption><span class="tagx bad">${T.m_missing}</span><code>${esc(m.missing)}</code> ${esc(m.caption||"")}${m.captured_at ? ` <time datetime="${esc(m.captured_at)}">${esc(m.captured_at)}</time>` : ""}</figcaption></figure>`;
+    if (m.src && imageSrc(m.src)) return `<figure><img src="${esc(m.src)}" alt="${esc(m.caption||"")}" loading="lazy" class="${m.phone?"phone":""}"><figcaption><span class="tagx shot">${T.m_shot}</span>${esc(m.caption||"")}${m.captured_at ? ` <time datetime="${esc(m.captured_at)}">${esc(m.captured_at)}</time>` : ""}</figcaption></figure>`;
     if (m.math) return `<figure><div class="mathbox">${m.math.map(t=>`<div class="eq">\\[${esc(t)}\\]</div>`).join("")}${m.p?`<p>${esc(m.p)}</p>`:""}</div><figcaption><span class="tagx math">${T.m_math}</span>${T.math_cap}</figcaption></figure>`;
     if (m.mock) return `<figure><pre class="mock${mockText(m.mock).split("\n").filter(x => /\S {2,}\S/.test(x)).length >= 2 ? " cols" : ""}">${mockHTML(m.mock)}</pre><figcaption><span class="tagx ${m.real?"real":"mock"}">${m.real?T.m_real:T.m_mock}</span>${esc(m.cap||"")}</figcaption></figure>`;
     if (m.link) return `<figure>${ext(m.link[1], esc(m.link[0]), "golink")}</figure>`;

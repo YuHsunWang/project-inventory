@@ -255,3 +255,5 @@ Development and reporting: [CONTRIBUTING.md](CONTRIBUTING.md).
 Branch fixes: [CHANGELOG.md](CHANGELOG.md).
 Full check: `python3 tests/release_gate.py`; GitHub CI runs the same command on pushes and PRs to main.
 License: [MIT](LICENSE).
+
+Captures show their `captured_at` time in the caption. Captions identify the live site or a local build output; capture source URLs stay out of the HTML.
