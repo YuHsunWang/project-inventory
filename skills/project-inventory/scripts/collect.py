@@ -34,11 +34,11 @@ def run(cmd, cwd=None, timeout=60):
     return r.stdout
 
 
-def git_state(path, today):
+def git_state(path, today, fetch=True, history="all"):
     g = lambda *a: run(["git", *a], cwd=path).strip()
     has_origin = "origin" in g("remote").split()
     fetch_error = None
-    if has_origin:
+    if has_origin and fetch:
         try:
             run(["git", "fetch", "-q", "origin"], cwd=path, timeout=60)
         except Exception as e:  # retain local facts, but the remote comparison is unavailable
@@ -49,20 +49,27 @@ def git_state(path, today):
     if has_origin:
         try:
             upstream = g("rev-parse", "--abbrev-ref", "@{upstream}")
-            behind, ahead = map(int, g("rev-list", "--left-right", "--count", f"{upstream}...HEAD").split())
+            if fetch and not fetch_error:
+                behind, ahead = map(int, g("rev-list", "--left-right", "--count", f"{upstream}...HEAD").split())
         except Exception:
             upstream = None
     if fetch_error:
         ahead = behind = None
-    log = g("log", "--all", "--format=%H%x09%cs%x09%s")
+    try:
+        head = g("rev-parse", "--verify", "HEAD")
+    except RuntimeError:
+        head = None  # unborn branches have no HEAD commit yet
+    log = g("log", "--all" if history == "all" else "HEAD", "--format=%H%x09%cs%x09%s") if history == "all" or head else ""
     commits = [dict(zip(("hash", "date", "subject"), l.split("\t", 2))) for l in log.splitlines() if l]
     recent_since = (today - dt.timedelta(days=RECENT_DAYS)).isoformat()
     return {
+        "head": head, "history": history,
+        "fetch_enabled": fetch, "fetch_performed": bool(has_origin and fetch),
         "branch": branch, "upstream": upstream, "has_origin": has_origin, "fetch_error": fetch_error,
         "remote": clean_url(g("remote", "get-url", "origin")) if has_origin else None,
         "ahead": ahead, "behind": behind,
         "dirty": len([l for l in g("status", "--porcelain").splitlines() if l]),
-        "last_commit": g("log", "-1", "--format=%cs %s") if g("rev-list", "-n1", "--all") else None,
+        "last_commit": g("log", "-1", "--format=%cs %s") if head else None,
         "weekly": weekly([c["date"] for c in commits], today),
         "recent": [c for c in commits if c["date"] >= recent_since][:40],
         "_recent_hashes": [c["hash"] for c in commits if c["date"] >= recent_since],
@@ -360,14 +367,14 @@ def collect_snapshot(home, requested_run=None, script_only=False):
                 f["errors"].append(f"{name}: {state['error']}{other}")
         for r in src.get("local", []):
             try:
-                st = git_state(Path(r["path"]).expanduser(), today)
+                st = git_state(Path(r["path"]).expanduser(), today, r.get("fetch", True), r.get("history", "all"))
                 # A full SHA is one event per project, even across worktrees, clones or forks.
                 recent_hashes.update(st.pop("_recent_hashes"))
                 for c in st.pop("_commits"):
                     commits.setdefault(c["hash"], {**c, "where": r["label"]})
                 name = f"git:{r['path']}"
                 last_fetch = old.get(name, {}).get("fetched_at")
-                if st["has_origin"] and not st["fetch_error"]:
+                if st["fetch_performed"] and not st["fetch_error"]:
                     last_fetch = dt.datetime.now().astimezone().isoformat(timespec="seconds")
                 f["sources"][name] = source_state(run_id, attempted_at, last_fetch,
                     "partial" if st["fetch_error"] else "ok", not bool(st["fetch_error"]), st["fetch_error"])
@@ -375,6 +382,8 @@ def collect_snapshot(home, requested_run=None, script_only=False):
                     f["errors"].append(f"git {r['path']}: remote refresh failed: {st['fetch_error']}")
                 f["repos"].append({"label": r["label"], "path": r["path"], "last_fetched_at": last_fetch, **st})
             except Exception as e:
+                name = f"git:{r['path']}"
+                f["sources"][name] = source_state(run_id, attempted_at, old.get(name, {}).get("fetched_at"), "failed", False, str(e))
                 f["errors"].append(f'git {r["path"]}: {e}')
         f["commit_count_14"] = len(recent_hashes)
         f["weekly"] = weekly([c["date"] for c in commits.values()], today)

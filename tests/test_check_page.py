@@ -140,6 +140,28 @@ def test_browser_states_long_paths_and_images(home):
     assert result.returncode == 0, result.stdout + result.stderr
 
 
+@case
+def test_browser_git_history_failures(parent):
+    """Unread Git errors must remain readable on cards and narrow home lists."""
+    home = parent / 'git-history'
+    home.mkdir()
+    blocked = str(home / ('missing-checkout-' + 'x' * 200))
+    inventory = {'lang':'zh-TW', 'projects':[
+        {'key':'blocked', 'name':'Blocked', 'sources':{'local':[
+            {'label':'checkout', 'path':blocked, 'fetch':False}]}},
+        {'key':'disconnected', 'name':'Disconnected', 'sources':{}}]}
+    (home / 'inventory.json').write_text(json.dumps(inventory))
+    result = run(S / 'collect.py', home)
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert run(S / 'build.py', home).returncode == 0
+    offline_fonts(home)
+    result = check(home)
+    assert result.returncode == 0, result.stdout + result.stderr
+    import re
+    data = json.loads(re.search(r'const D = (.*?);\n', (home / 'out/index.html').read_text()).group(1))
+    assert [p['git_state']['status'] for p in data['projects']] == ['failed', 'not_connected']
+
+
 PNG = base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR4nGP4DwQACfsD/fteaysAAAAASUVORK5CYII=')
 
 
@@ -166,6 +188,7 @@ def main():
                    test_browser_rejects_hidden_panels, test_browser_rejects_unloaded_assets):
             fn(home, original)
         test_browser_states_long_paths_and_images(home)
+        test_browser_git_history_failures(home.parent)
     print('OK: ' + summary())
 
 

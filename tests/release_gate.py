@@ -18,6 +18,7 @@ def main():
     passed = skipped = failed = 0
     with tempfile.TemporaryDirectory(prefix='release-') as td:
         commands = [
+            ('cold-start regressions', [sys.executable, str(ROOT / 'tests/test_cold_start.py')]),
             ('unit, contracts and JS render', [sys.executable, str(ROOT / 'tests/test_scripts.py')]),
             ('unattended refresh regressions', [sys.executable, str(ROOT / 'tests/test_auto_refresh.py')]),
             ('browser regressions', [sys.executable, str(ROOT / 'tests/test_check_page.py')]),

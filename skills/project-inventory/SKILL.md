@@ -52,6 +52,10 @@ Talk to the user in their language and write page text (names, tags, diagram) in
    IDs/team names and let the user choose; never merge them. Legacy name-only settings work
    only with one match; migrate by saving its confirmed UUID, especially before a rename.
    A source with no connector: tell the user which connector to add, leave it out for now.
+   Collection runs `git fetch -q origin` by default, writing remote refs and `.git/FETCH_HEAD`.
+   For a checkout that must not be fetched, save `"fetch": false` on that `sources.local[]`
+   entry. HEAD, branch, dirty files and history are still read; remote comparisons are unknown.
+   History defaults to all refs (`git log --all`); `"history": "head"` limits it to HEAD.
 3. **Data to watch.** Look for data the project produces (data/, *.csv, *.parquet, *.sqlite,
    *.jsonl, generated JSON). Show the candidates; for each one the user keeps, find the
    **date column inside the data** (never use file modification times — they lie after copies
@@ -72,6 +76,17 @@ Talk to the user in their language and write page text (names, tags, diagram) in
    Save `auto_refresh.model`. Explain that notes receive listed work, while diagram step
    rewrites may read the project through read-only tools. Successful notes are cached by
    full commit hash / PR URL.
+   Auto-refresh can rewrite only the wording of existing steps (`title`, `sub`, `zone`);
+   it never adds steps, paths, detail or media. With `none`, even wording stays unchanged.
+   For example, after a new `report.py` appears, read it and confirm its place in the flow
+   with the user, then append a step by hand to that project's `nodes` in inventory.json
+   (choose an unused id and adjust the text to match the code):
+
+   ```json
+   {"id": 3, "title": "Write report", "sub": "Save the processed results", "icon": "book", "paths": ["report.py"]}
+   ```
+
+   Run collect/build again to show the new step. Add any detail or media explicitly.
 7. **Optional schedule, ask once.** Ask whether to install unattended refresh; default is no.
    Only on yes: offer every 2 hours, 08:00–22:00 inclusive in this computer's local time;
    let the user change the hours/cadence. Save `auto_refresh.schedule` (see schema).

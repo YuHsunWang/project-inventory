@@ -159,6 +159,13 @@ python3 $S/check_page.py ~/.project-inventory  # headless browser check, every t
 python3 $S/publish_vercel.py ~/.project-inventory <vercel-project-name>
 ```
 
+Local Git collection fetches `origin` by default, updating refs and `.git/FETCH_HEAD`.
+Set `"fetch": false` on a `sources.local[]` entry to keep reading HEAD, branch, dirty files
+and history without fetching; ahead/behind and remote unpushed counts then remain unknown.
+History defaults to `git log --all`; set `"history": "head"` for commits reachable from HEAD.
+The Progress tab labels each checkout's scope. Unread or disconnected Git history is
+shown as not collected, with source errors, on project cards and the home list.
+
 Run without Claude, the scripts do not refresh Notion, or Linear unless `LINEAR_API_KEY` is set,
 and without an optional text CLI they write no week summaries: new weeks show "no summary yet" until the next Claude run
 (`build.py` lists them in `out/summaries-needed.json`).
@@ -195,8 +202,9 @@ exact `/project-inventory` command. Manual and automatic collection share an OS 
 a crashed process releases it immediately. A live run is never evicted by age.
 
 With a text CLI enabled, commits touching a diagram step's `paths` can also update its
-`title`, `sub` and `zone` directly in `inventory.json`. The first run only records each
-checkout's HEAD. Later runs send all changed steps of a project in one read-only session,
+`title`, `sub` and `zone` directly in `inventory.json`. It never adds steps, paths,
+details or media; add new steps by hand after reviewing new files (see Setup in SKILL.md).
+The first run only records each checkout's HEAD. Later runs send all changed steps of a project in one read-only session,
 at most once per calendar day in the inventory timezone. The model may read the project;
 repository content is treated as data. Relative paths resolve against each local checkout;
 absolute and `~` paths inside it count too, while paths outside all checkouts are ignored.
