@@ -2,6 +2,9 @@
 
 ## Unreleased — cold-start fixes (#41–#46)
 
+- #42: preserve mobile project-menu width, truncate long titles and fail page checks
+  when menu control text is clipped.
+
 - #41: label capture provenance in captions and show successful capture timestamps,
   retaining last-good metadata on failure and omitting source URLs from HTML.
 

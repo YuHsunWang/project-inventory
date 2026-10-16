@@ -171,6 +171,9 @@ class CDP:
         if self.evaluate("document.documentElement.scrollWidth > innerWidth"):
             raise RuntimeError(where + ": horizontal overflow")
 
+        if self.evaluate("document.querySelector('#menubtn').scrollWidth > document.querySelector('#menubtn').clientWidth"):
+            raise RuntimeError(where + ": clipped control text: #menubtn")
+
     def shot(self, directory, name):
         if directory:
             data = self.call("Page.captureScreenshot", captureBeyondViewport=True)["data"]

@@ -71,6 +71,38 @@ def test_issue41_capture_timestamp_and_caption():
         assert "caption" in skill and "live site or a local build output" in skill
 
 
+def browser_check(home):
+    from demo_fixture import offline_fonts
+    offline_fonts(home)
+    return subprocess.run([sys.executable, str(S / "check_page.py"), str(home)],
+                          capture_output=True, text=True, timeout=180)
+
+
+@case
+def test_issue42_long_title_menu_and_clipped_control():
+    with tempfile.TemporaryDirectory() as td:
+        home = Path(td)
+        inv = inventory(home, title="A very long inventory title with three real projects")
+        inv["projects"][0]["name"] = "A very long project name that should wrap or truncate"
+        (home / "inventory.json").write_text(json.dumps(inv))
+        collect_build(home)
+        original = check_page.CDP.overflow
+        def inspect(c, where):
+            original(c, where)
+            assert not c.evaluate("document.querySelector('#menubtn').scrollWidth > document.querySelector('#menubtn').clientWidth"), "menu text is clipped"
+            assert c.evaluate("document.querySelector('#menubtn').getBoundingClientRect().width >= 90"), "menu must remain usable"
+        from demo_fixture import offline_fonts
+        offline_fonts(home)
+        output = io.StringIO()
+        with patch.object(check_page.CDP, "overflow", inspect), patch.object(sys, "argv", ["check_page.py", str(home)]), redirect_stdout(output):
+            code = check_page.main()
+        assert code == 0, output.getvalue()
+        page = home / "out/index.html"
+        page.write_text(page.read_text().replace("</style>", "#menubtn{width:30px!important;min-width:0!important;max-width:30px!important;overflow:hidden;display:block}</style>"))
+        result = browser_check(home)
+        assert result.returncode != 0 and "clipped control text: #menubtn" in result.stdout, result.stdout
+
+
 if __name__ == "__main__":
     failed = 0
     for name, fn in list(globals().items()):
