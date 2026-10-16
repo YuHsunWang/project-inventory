@@ -60,7 +60,12 @@ Talk to the user in their language and write page text (names, tags, diagram) in
    For Obsidian, ask which folders hold real tasks. Save the vault folder to scan in
    each `sources.obsidian[].path` and optional `exclude` folders relative to that vault
    path (for example `templates`, `marp`, `.superpowers`). The scan reads Markdown
-   recursively, always skips `.obsidian` and `.trash`, and ignores fenced code blocks.
+   recursively, always skips `.obsidian` and `.trash`, and ignores fenced code blocks
+   and blank checkboxes. Within each source, identical full task text after `strip()`
+   counts once (exact matching only); any checked copy makes it done, otherwise open.
+   Listed items point to the newest file holding an open copy, using the existing
+   lexicographic path order, not parsed dates or modification times. Counts include all
+   unique tasks; only the first 50 open tasks are listed. No new configuration is needed.
    Collection runs `git fetch -q origin` by default, writing remote refs and `.git/FETCH_HEAD`.
    For a checkout that must not be fetched, save `"fetch": false` on that `sources.local[]`
    entry. HEAD, branch, dirty files and history are still read; remote comparisons are unknown.
