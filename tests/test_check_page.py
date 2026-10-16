@@ -2,10 +2,12 @@
 import base64
 import importlib.util
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
 import tempfile
+from unittest.mock import patch
 from test_support import case, summary
 from demo_fixture import add_history, offline_fonts
 
@@ -23,6 +25,39 @@ def run(script, *args):
 
 def check(home):
     return run(S / 'check_page.py', home)
+
+
+@case
+def test_chromium_platform_cache_layouts():
+    layouts = {
+        "darwin": ("chrome-mac", "chrome-mac-arm64", "chrome-headless-shell-mac", "chrome-headless-shell-mac-arm64"),
+        "win32": ("chrome-win", "chrome-win64", "chrome-headless-shell-win", "chrome-headless-shell-win64"),
+        "linux": ("chrome-linux", "chrome-linux64", "chrome-headless-shell-linux", "chrome-headless-shell-linux64"),
+    }
+    with tempfile.TemporaryDirectory() as td:
+        home = Path(td)
+        for platform, directories in layouts.items():
+            default = home / {"darwin": "Library/Caches/ms-playwright", "win32": "LocalAppData/ms-playwright",
+                              "linux": ".cache/ms-playwright"}[platform]
+            for override in (False, True):
+                cache = home / "custom-cache" if override else default
+                env = {"LOCALAPPDATA": str(home / "LocalAppData")}
+                if override:
+                    env["PLAYWRIGHT_BROWSERS_PATH"] = str(cache)
+                for directory in directories:
+                    shell = "headless-shell" in directory
+                    executable = ("chrome-headless-shell" if shell else "chrome")
+                    if platform == "win32":
+                        executable += ".exe"
+                    elif platform == "darwin" and not shell:
+                        executable = "Chromium.app/Contents/MacOS/Chromium"
+                    browser = cache / ("chromium_headless_shell-1234" if shell else "chromium-1234") / directory / executable
+                    browser.parent.mkdir(parents=True, exist_ok=True)
+                    browser.touch()
+                    with patch.dict(os.environ, env, clear=True), patch.object(sys, "platform", platform), \
+                            patch.object(checker.Path, "home", return_value=home), patch.object(checker.shutil, "which", return_value=None):
+                        assert checker.chromium() == str(browser), (platform, override, directory)
+                    browser.unlink()
 
 
 @case
@@ -167,6 +202,7 @@ PNG = base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR4
 
 def main():
     # Browser availability is mandatory for the release gate.
+    test_chromium_platform_cache_layouts()
     checker.chromium()
     with tempfile.TemporaryDirectory(prefix='browser-cases-') as td:
         home = Path(td) / 'demo'

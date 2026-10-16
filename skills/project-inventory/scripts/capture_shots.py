@@ -24,14 +24,34 @@ def capture_url(value, home):
     parsed = urlsplit(value)
     if parsed.scheme in ("http", "https"):
         return value
-    if parsed.scheme == "file":
-        path = Path(url2pathname(parsed.path))
-    else:
-        path = Path(value).expanduser()
+    local = parsed.path
+    if len(parsed.scheme) == 1:  # urlsplit treats a Windows drive letter as a scheme
+        local = parsed.scheme + ":" + local
+    path = Path(url2pathname(local)).expanduser()
     path = path if path.is_absolute() else home / path
     if not path.is_file():
         raise FileNotFoundError(f"HTML file not found: {path}")
-    return path.resolve().as_uri()
+    return urlsplit(path.resolve().as_uri())._replace(query=parsed.query, fragment=parsed.fragment).geturl()
+
+
+def settle(c):
+    """Wait at least 2s, then for 1s of stable resources/DOM; capture after 15s anyway."""
+    deadline = time.monotonic() + 15
+    time.sleep(2)
+    expression = "[performance.getEntriesByType('resource').length, document.documentElement.outerHTML.length]"
+    previous = c.evaluate(expression)
+    quiet_since = time.monotonic()
+    while True:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            return
+        time.sleep(min(.25, remaining))
+        current = c.evaluate(expression)
+        now = time.monotonic()
+        if current != previous:
+            previous, quiet_since = current, now
+        elif now - quiet_since >= 1:
+            return
 
 
 def screenshot(url):
@@ -64,7 +84,7 @@ def screenshot(url):
                 if status >= 400:
                     raise RuntimeError(f"HTTP {status}")
                 c.assets()
-                time.sleep(2)  # ponytail: fixed settle for script-drawn pages (canvas, fetched data); poll for idle if 2s proves short
+                settle(c)
                 raw = base64.b64decode(c.call("Page.captureScreenshot", format="png")["data"], validate=True)
                 if not raw.startswith(b"\x89PNG\r\n\x1a\n"):
                     raise ValueError("Chromium returned no PNG")

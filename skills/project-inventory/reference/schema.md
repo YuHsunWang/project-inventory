@@ -50,10 +50,14 @@
   table, hand, cards, play, coin, quiz, scale, pipe, lake, flask, chart, book, plug.
 - `media` (optional): what opens when a step is clicked, in order.
   - `capture`: a nonempty absolute HTTP/HTTPS URL (no credentials), or a local `.html`/`.htm`
-    path (absolute, `~/…`, relative to HOME, or a local `file://` URI). Only configure this
+    path (absolute, `~/…`, relative to HOME, or a local `file://` URI). Query strings and
+    fragments are preserved when opening local files. This is source-only metadata;
+    `build.py` omits it from both HTML outputs. Only configure this
     for a project UI that already exists; never start a server or run project/build code.
     `python3 SCRIPTS/capture_shots.py HOME` opens it in headless Chromium at 1280×800,
     saves `HOME/shots/<project>-<step>.png`, and sets `shot` to that HOME-relative path.
+    After loading assets, capture waits at least 2 seconds, then for resource count and
+    DOM size to stay unchanged for 1 second. It captures after 15 seconds even if still busy.
     Further captures on the same step use `-media2`, `-media3`, etc. in media order. Images are replaced
     atomically; identical PNG bytes are left untouched. Auto-refresh captures before its
     fingerprint/unchanged check, and manual Refresh does so before collect/build.

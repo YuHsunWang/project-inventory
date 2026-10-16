@@ -229,6 +229,7 @@ def embed_media(nodes, home, warn):
     """Screenshots -> data: URIs inside the page. A missing file is shown as missing, never dropped."""
     for n in nodes:
         for m in n.get("media", []):
+            m.pop("capture", None)  # source-only metadata may contain private URLs or paths
             if "src" in m and not re.fullmatch(r"data:image/(?:png|jpeg|gif|webp);base64,[A-Za-z0-9+/]+={0,2}", str(m["src"])):
                 m.pop("src")
                 m["missing"] = "rejected unsafe image source"
