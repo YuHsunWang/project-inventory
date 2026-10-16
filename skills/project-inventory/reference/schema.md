@@ -87,6 +87,15 @@
   matches, including archived projects. Multiple matches require choosing and saving a UUID;
   a renamed or inaccessible legacy project reports a migration/permission error. IDs are unique
   across teams, so no team filter is needed once the UUID is confirmed.
+- `sources.obsidian[]`: `path` is the vault folder to scan recursively for `*.md`.
+  Optional `exclude` lists folder paths relative to that configured vault path, using `/`
+  (for example `{"path":"/vault", "exclude":["templates","marp",".superpowers"]}`).
+  An excluded folder and all descendants are skipped, but similarly prefixed names are not.
+  `.obsidian` and `.trash` are always excluded. Without `exclude`, existing scans are unchanged.
+  Task lines use `-`, `*`, `+` or numbered lists with `[ ]` / `[x]` / `[X]`; fenced code
+  blocks are ignored. All matching tasks are counted; only the first 50 open tasks are listed.
+  Choose task folders during Setup; template/article checkboxes otherwise count too.
+  Scheduled change detection uses the same exclusions.
 - `sources.local[]` supports two optional Git settings. Existing entries need no changes:
   - `"fetch": true` (default): collect runs `git fetch -q origin` when origin exists.
     This writes remote refs and `.git/FETCH_HEAD` in that checkout. `"fetch": false`

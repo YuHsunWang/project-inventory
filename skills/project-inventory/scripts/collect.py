@@ -181,14 +181,20 @@ def linear_tickets(project):
         after = cursor
 
 
-def obsidian_tasks(folder):
-    """Markdown task lines `- [ ]` / `- [x]` under a vault folder (skips .obsidian and .trash)."""
+def obsidian_excluded(file, root, exclude=()):
+    relative = file.relative_to(root)
+    return any(part in (".obsidian", ".trash") for part in file.parts) or any(
+        relative == Path(folder) or Path(folder) in relative.parents for folder in exclude)
+
+
+def obsidian_tasks(folder, exclude=()):
+    """Recursively scan Markdown tasks, skipping internal and configured vault folders."""
     items, open_, done = [], 0, 0
     root = Path(folder).expanduser()
     if not root.is_dir():
         raise RuntimeError(f"folder not found: {root}")
     for f in sorted(root.rglob("*.md")):
-        if any(part in (".obsidian", ".trash") for part in f.parts):
+        if obsidian_excluded(f, root, exclude):
             continue
         fence = None
         for number, line in enumerate(f.read_text(encoding="utf-8", errors="replace").splitlines(), 1):
@@ -407,7 +413,7 @@ def collect_snapshot(home, requested_run=None, script_only=False):
                 f["errors"].append(f"{name}: {state['error']}; install gh or gather PRs again")
         for o in src.get("obsidian", []):
             try:
-                f["obsidian"].append(obsidian_tasks(o["path"]))
+                f["obsidian"].append(obsidian_tasks(o["path"], o.get("exclude", [])))
             except Exception as e:
                 f["errors"].append(f'obsidian {o["path"]}: {e}')
         for d in p.get("data", []):

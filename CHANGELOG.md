@@ -2,6 +2,9 @@
 
 ## Unreleased — cold-start fixes (#41–#46)
 
+- #45: add validated per-source Obsidian folder exclusions, shared by collection
+  and scheduled change detection; ask for real task folders during Setup.
+
 - #44: refresh CLI credentials with `vercel whoami` before reading auth.json;
   stop clearly on refresh failure and skip the CLI refresh with VERCEL_TOKEN.
 

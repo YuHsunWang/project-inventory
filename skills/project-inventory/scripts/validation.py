@@ -167,6 +167,15 @@ def validate_inventory(inv):
                 sp = f"{at}.sources.{name}[{j}]"
                 typed(spec, dict, sp)
                 string(spec.get("path"), sp + ".path")
+                if name == "obsidian":
+                    for k, folder in enumerate(typed(spec.get("exclude", []), list, sp + ".exclude")):
+                        ep = f"{sp}.exclude[{k}]"
+                        string(folder, ep)
+                        parts = folder.replace("\\", "/").split("/")
+                        if folder.startswith(("/", "\\")) or re.match(r"^[A-Za-z]:", folder) or any(part in (".", "..", "") for part in parts):
+                            fail(ep, "expected a relative vault folder without dot segments")
+                        if "\\" in folder:
+                            fail(ep, "use / between vault folders")
                 if name == "local":
                     string(spec.get("label"), sp + ".label")
                     if "fetch" in spec and not isinstance(spec["fetch"], bool):

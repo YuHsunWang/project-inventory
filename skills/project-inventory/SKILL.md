@@ -53,6 +53,10 @@ Talk to the user in their language and write page text (names, tags, diagram) in
    IDs/team names and let the user choose; never merge them. Legacy name-only settings work
    only with one match; migrate by saving its confirmed UUID, especially before a rename.
    A source with no connector: tell the user which connector to add, leave it out for now.
+   For Obsidian, ask which folders hold real tasks. Save the vault folder to scan in
+   each `sources.obsidian[].path` and optional `exclude` folders relative to that vault
+   path (for example `templates`, `marp`, `.superpowers`). The scan reads Markdown
+   recursively, always skips `.obsidian` and `.trash`, and ignores fenced code blocks.
    Collection runs `git fetch -q origin` by default, writing remote refs and `.git/FETCH_HEAD`.
    For a checkout that must not be fetched, save `"fetch": false` on that `sources.local[]`
    entry. HEAD, branch, dirty files and history are still read; remote comparisons are unknown.

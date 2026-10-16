@@ -32,7 +32,7 @@ def inventory_fingerprint(inv):
     return digest(config)
 
 
-def file_fingerprint(path, pattern=None):
+def file_fingerprint(path, pattern=None, exclude=()):
     path = Path(path).expanduser()
     if path.is_dir():
         def included(candidate):
@@ -40,7 +40,7 @@ def file_fingerprint(path, pattern=None):
             if pattern == "*.parquet":
                 return not any(part.startswith((".", "_")) for part in parts)
             if pattern == "*.md":
-                return not any(part in (".obsidian", ".trash") for part in parts)
+                return not collect.obsidian_excluded(candidate, path, exclude)
             return True
         files = sorted(p for p in path.rglob(pattern or "*") if p.is_file() and included(p))
     else:
@@ -101,7 +101,7 @@ def fingerprints(home, inv):
         if src.get("linear") and os.environ.get("LINEAR_API_KEY"):
             probe(f"{key}:linear", lambda spec=src["linear"]: digest(sorted(collect.linear_tickets(spec), key=lambda ticket: ticket["source_id"])))
         for obsidian in src.get("obsidian", []):
-            probe(f"{key}:obsidian:{obsidian['path']}", lambda o=obsidian: file_fingerprint(o["path"], "*.md"))
+            probe(f"{key}:obsidian:{obsidian['path']}", lambda o=obsidian: file_fingerprint(o["path"], "*.md", o.get("exclude", [])))
         for node in project.get("nodes", []):
             for media in node.get("media", []):
                 if "shot" in media:

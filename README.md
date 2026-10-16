@@ -259,3 +259,5 @@ License: [MIT](LICENSE).
 Captures show their `captured_at` time in the caption. Captions identify the live site or a local build output; capture source URLs stay out of the HTML.
 
 Without `VERCEL_TOKEN`, the publisher runs `vercel whoami` before reading CLI credentials. A failed refresh stops publishing with a login instruction.
+
+Obsidian Setup asks which folders contain real tasks. Each source scans Markdown recursively under its vault `path`; optional `exclude` folders are relative to that path. `.obsidian`, `.trash` and fenced code blocks are always skipped. Counts include all matching tasks; the list shows the first 50 open tasks.
