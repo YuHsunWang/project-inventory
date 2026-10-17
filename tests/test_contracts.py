@@ -45,6 +45,30 @@ def test_inventory_contract_paths():
         v.validate_inventory(json.loads(real.read_text()))
 
 
+@case
+def test_writing_skill_names():
+    for name in ('sepia', 'sepia:sepia', 'Plain-language_2'):
+        inv = {'writing_skill': name, 'projects': [{'key': 'app', 'name': 'My App'}]}
+        before = copy.deepcopy(inv)
+        assert v.validate_inventory(inv) == before, 'keep the installed skill name unchanged'
+
+
+@case
+def test_writing_skill_invalid_values():
+    for value in (123, '', '  ', 'a b', '../x', 'rm -rf', None, True, [], {},
+                  'sepia\n', ' sepia', 'sepia.sh', '寫作'):
+        inv = {'writing_skill': value, 'projects': []}
+        expect_error(lambda: v.validate_inventory(inv), 'writing_skill:')
+
+
+@case
+def test_writing_skill_absent():
+    inv = {'title': 'Existing inventory', 'projects': [{'key': 'app', 'name': 'My App'}]}
+    before = copy.deepcopy(inv)
+    assert v.validate_inventory(inv) == before, 'existing inventories need no migration'
+    assert 'writing_skill' not in inv, 'absence must keep polishing disabled'
+
+
 def ticket(**fields):
     return {'id': 'N-1', 'source_id': 'full-page-1', 'source': 'notion', 'title': 'one',
             'state': 'open', 'created': '2026-10-01', 'url': 'https://notion.so/full-page-1', **fields}
@@ -105,6 +129,9 @@ def test_contract_cli_failures(root, run):
 
 def run_validation_tests(tmp, run):
     test_inventory_contract_paths()
+    test_writing_skill_names()
+    test_writing_skill_invalid_values()
+    test_writing_skill_absent()
     test_gathered_contract_and_dedupe()
     test_contract_cli_failures(tmp / 'contracts', run)
     test_timezone_normalization_and_boundary(tmp)
