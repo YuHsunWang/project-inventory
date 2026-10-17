@@ -1,13 +1,16 @@
 """Real Chromium regressions for the release checker; no external services."""
 import base64
+from contextlib import redirect_stdout
 import importlib.util
+import io
 import json
 import os
 from pathlib import Path
 import subprocess
 import sys
 import tempfile
-from unittest.mock import patch
+from types import SimpleNamespace
+from unittest.mock import Mock, patch
 from test_support import case, summary
 from demo_fixture import offline_fonts
 
@@ -58,6 +61,76 @@ def test_chromium_platform_cache_layouts():
                             patch.object(checker.Path, "home", return_value=home), patch.object(checker.shutil, "which", return_value=None):
                         assert checker.chromium() == str(browser), (platform, override, directory)
                     browser.unlink()
+
+
+@case
+def test_browser_waits_for_complete_devtools_endpoint():
+    """File creation precedes endpoint publication; only both lines mean ready."""
+    endpoint = "9222\n/devtools/browser/fixture"
+    cases = (
+        ("ready", [endpoint], None, 0),
+        ("delayed", ["", "9222\n", "9222\n\n", endpoint], None, 0),
+        ("absent", [None], None, 1),
+        ("empty", [""], None, 1),
+        ("port only", ["9222\n"], None, 1),
+        ("blank route", ["9222\n\n"], None, 1),
+        ("browser exited", [""], 7, 1),
+    )
+    for name, contents, exit_code, expected in cases:
+        with tempfile.TemporaryDirectory(prefix="devtools-case-") as td:
+            home = Path(td)
+            (home / "inventory.json").write_text(json.dumps({"projects": [{"key": "sample"}]}))
+            (home / "out").mkdir()
+            (home / "out/index.html").write_text("<html></html>")
+            clock = SimpleNamespace(now=0)
+            portfile = None
+            sleeps = []
+            browser = Mock()
+            browser.poll.return_value = exit_code
+
+            def publish(index):
+                value = contents[min(index, len(contents) - 1)]
+                if value is not None:
+                    portfile.write_text(value)
+
+            def launch(args, **kwargs):
+                nonlocal portfile
+                profile = Path(next(arg.split("=", 1)[1] for arg in args if arg.startswith("--user-data-dir=")))
+                portfile = profile / "DevToolsActivePort"
+                publish(0)
+                kwargs["stderr"].write("startup-log-sentinel")
+                return browser
+
+            def sleep(seconds):
+                sleeps.append(seconds)
+                clock.now += 1
+                assert clock.now <= 61, "startup wait exceeded its deadline"
+                publish(len(sleeps))
+
+            clock.monotonic = lambda: clock.now
+            clock.sleep = sleep
+            output = io.StringIO()
+            with patch.object(sys, "argv", ["check_page.py", str(home)]), \
+                    patch.object(checker, "time", clock), \
+                    patch.object(checker, "chromium", return_value="fake-browser"), \
+                    patch.object(checker.subprocess, "Popen", side_effect=launch), \
+                    patch.object(checker, "CDP") as connect, \
+                    patch.object(checker, "check") as check_page, redirect_stdout(output):
+                result = checker.main()
+            assert result == expected, (name, output.getvalue())
+            if expected == 0:
+                assert len(sleeps) == len(contents) - 1, sleeps
+                connect.assert_called_once_with("ws://127.0.0.1:9222/devtools/browser/fixture")
+                assert check_page.call_count == 4
+                connect.return_value.sock.close.assert_called_once()
+            else:
+                assert "DevToolsActivePort missing or incomplete" in output.getvalue(), (name, output.getvalue())
+                assert "startup-log-sentinel" in output.getvalue(), output.getvalue()
+                connect.assert_not_called()
+                check_page.assert_not_called()
+                assert clock.now == (0 if exit_code is not None else 61), clock.now
+            browser.terminate.assert_called_once()
+            browser.wait.assert_called_once_with(timeout=10)
 
 
 @case
@@ -203,6 +276,7 @@ PNG = base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR4
 def main():
     # Browser availability is mandatory for the release gate.
     test_chromium_platform_cache_layouts()
+    test_browser_waits_for_complete_devtools_endpoint()
     checker.chromium()
     with tempfile.TemporaryDirectory(prefix='browser-cases-') as td:
         home = Path(td) / 'demo'
