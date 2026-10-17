@@ -15,7 +15,7 @@ import time
 from urllib.parse import urlsplit
 from urllib.request import url2pathname
 
-from check_page import CDP, chromium
+from check_page import CDP, chromium, wait_devtools_endpoint
 from collect import atomic_write
 from refresh_lock import refresh_lock, RefreshBusy
 from validation import validate_inventory
@@ -63,14 +63,7 @@ def screenshot(url):
                 "--remote-debugging-port=0", "--user-data-dir=" + profile, "about:blank"], stdout=log, stderr=log)
             c = None
             try:
-                portfile = Path(profile) / "DevToolsActivePort"
-                deadline = time.monotonic() + 60
-                while not portfile.exists():
-                    if browser.poll() is not None or time.monotonic() > deadline:
-                        log.flush(); log.seek(0)
-                        raise RuntimeError("Chromium could not start: " + log.read()[-1500:])
-                    time.sleep(.05)
-                port, route = portfile.read_text().splitlines()[:2]
+                port, route = wait_devtools_endpoint(profile, browser, log)
                 c = CDP(f"ws://127.0.0.1:{port}{route}")
                 target = c.call("Target.createTarget", url="about:blank")["targetId"]
                 c.session = c.call("Target.attachToTarget", targetId=target, flatten=True)["sessionId"]

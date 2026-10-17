@@ -46,6 +46,21 @@ def chromium():
     raise RuntimeError("Chromium not found; install it or set CHROMIUM_BIN")
 
 
+def wait_devtools_endpoint(profile, browser, log, timeout=60):
+    """Wait for Chromium to publish both non-empty debugging endpoint lines."""
+    portfile = Path(profile) / "DevToolsActivePort"
+    deadline = time.monotonic() + timeout  # shared CI runners can take >15s to boot Chromium
+    # File creation can precede publication of the endpoint lines.
+    while True:
+        endpoint = portfile.read_text().splitlines()[:2] if portfile.exists() else []
+        if len(endpoint) == 2 and all(endpoint):
+            return endpoint[0], endpoint[1]
+        if browser.poll() is not None or time.monotonic() > deadline:
+            log.flush(); log.seek(0)
+            raise RuntimeError("Chromium could not start (DevToolsActivePort missing or incomplete): " + log.read()[-1500:])
+        time.sleep(.05)
+
+
 class CDP:
     """Small synchronous RFC6455 client for Chromium's local debugging socket."""
     def __init__(self, url):
@@ -282,18 +297,7 @@ def main():
                     "--remote-debugging-port=0", "--user-data-dir=" + profile, "about:blank"], stdout=log, stderr=log)
                 c = None
                 try:
-                    portfile = Path(profile) / "DevToolsActivePort"
-                    deadline = time.monotonic() + 60  # shared CI runners can take >15s to boot Chromium
-                    # File creation can precede publication of the endpoint lines.
-                    while True:
-                        endpoint = portfile.read_text().splitlines()[:2] if portfile.exists() else []
-                        if len(endpoint) == 2 and all(endpoint):
-                            port, route = endpoint
-                            break
-                        if browser.poll() is not None or time.monotonic() > deadline:
-                            log.flush(); log.seek(0)
-                            raise RuntimeError("Chromium could not start (DevToolsActivePort missing or incomplete): " + log.read()[-1500:])
-                        time.sleep(.05)
+                    port, route = wait_devtools_endpoint(profile, browser, log)
                     c = CDP(f"ws://127.0.0.1:{port}{route}")
                     for width in (390, 1280):
                         for theme in ("light", "dark"):
