@@ -13,7 +13,7 @@ Install in Claude Code:
 /plugin install project-inventory@project-inventory
 ```
 
-Then type `/project-inventory` (installed plugin: `/project-inventory:project-inventory`).
+Then type `/project-inventory:project-inventory`, or just ask Claude to "inventory my projects".
 The first run asks a few setup questions about your projects and data sources.
 
 [Desktop PNG](skills/project-inventory/reference/demo-desktop.png) ·
