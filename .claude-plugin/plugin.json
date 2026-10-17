@@ -2,5 +2,9 @@
   "name": "project-inventory",
   "version": "0.1.0",
   "description": "Take stock of all your projects (Linear, Notion, GitHub, local git, Obsidian, data freshness) and build one dashboard page.",
-  "author": {"name": "YuHsunWang", "url": "https://github.com/YuHsunWang"}
+  "author": {"name": "YuHsunWang", "url": "https://github.com/YuHsunWang"},
+  "homepage": "https://yuhsunwang.github.io/project-inventory/",
+  "repository": "https://github.com/YuHsunWang/project-inventory",
+  "license": "MIT",
+  "keywords": ["dashboard", "project-management", "inventory", "linear", "github", "obsidian"]
 }
