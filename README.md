@@ -214,7 +214,7 @@ For other agents:
 npx skills add Nanako0129/sepia -g
 ```
 
-To enable it, answer the optional setup question or add `"writing_skill": "sepia"` to `inventory.json`. Any rewriting or plain-language skill you already have works the same way: give its installed name, such as `sepia:sepia` for a namespaced skill. The field accepts only ASCII letters, digits, `-`, `_` and `:`. Omit it for no polishing, the default. The agent never installs skills for you.
+To enable it, answer the optional setup question or add it to `inventory.json`: `"writing_skill": "sepia:sepia"` for the Claude Code plugin install (plugin skills are namespaced), or `"writing_skill": "sepia"` for the Skills CLI install. Any rewriting or plain-language skill you already have works the same way: give its installed name. The field accepts only ASCII letters, digits, `-`, `_` and `:`. Omit it for no polishing, the default. The agent never installs skills for you.
 
 > **Notice:** Only conversation runs use the writing skill. Scheduled unattended refresh (`auto_refresh.py` / `step_refresh.py` through the `claude` / `codex` CLI) does not use it. Polishing changes wording only: facts, numbers, dates, names, links and JSON structure are checked to stay identical; a pass that changes any of them is discarded. If the skill is unavailable in the session, the agent reports it once and continues without it.
 

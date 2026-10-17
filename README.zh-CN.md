@@ -214,7 +214,7 @@ claude plugin install sepia@sepia --scope user
 npx skills add Nanako0129/sepia -g
 ```
 
-启用方式：回答配置时的可选问题，或在 `inventory.json` 中加入 `"writing_skill": "sepia"`。你已安装的任何改写或通俗表达技能都能用同样方式搭配，只需提供安装名称；有命名空间时可填 `sepia:sepia`。字段只接受 ASCII 英文字母、数字、`-`、`_`、`:`。省略即不润色，也是默认值。智能体不会替你安装技能。
+启用方式：回答配置时的可选问题，或在 `inventory.json` 中加入：用 Claude Code 插件安装时填 `"writing_skill": "sepia:sepia"`（插件的技能名称带命名空间），用 Skills CLI 安装时填 `"writing_skill": "sepia"`。你已安装的任何改写或通俗表达技能都能用同样方式搭配，只需提供安装名称。字段只接受 ASCII 英文字母、数字、`-`、`_`、`:`。省略即不润色，也是默认值。智能体不会替你安装技能。
 
 > **注意：** 只有对话中的运行会使用写作技能。无人值守的定时刷新（通过 `claude`／`codex` CLI 运行 `auto_refresh.py`／`step_refresh.py`）不使用。润色只改措辞；事实、数字、日期、名称、链接和 JSON 结构都会核对，必须保持相同，任何一项改变就丢弃本次润色。如果当前会话无法使用该技能，智能体会在报告中说明一次，继续完成盘点。
 

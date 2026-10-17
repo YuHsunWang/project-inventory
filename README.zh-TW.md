@@ -214,7 +214,7 @@ claude plugin install sepia@sepia --scope user
 npx skills add Nanako0129/sepia -g
 ```
 
-啟用方式：回答設定時的選填問題，或在 `inventory.json` 加入 `"writing_skill": "sepia"`。你已安裝的任何改寫或白話文 skill 都能用同樣方式搭配，只要提供安裝名稱；有命名空間時可填 `sepia:sepia`。欄位只接受 ASCII 英文字母、數字、`-`、`_`、`:`。省略即不潤稿，也是預設值。agent 不會替你安裝 skill。
+啟用方式：回答設定時的選填問題，或在 `inventory.json` 加入：用 Claude Code plugin 安裝時填 `"writing_skill": "sepia:sepia"`（plugin 的 skill 名稱有命名空間），用 Skills CLI 安裝時填 `"writing_skill": "sepia"`。你已安裝的任何改寫或白話文 skill 都能用同樣方式搭配，只要提供安裝名稱。欄位只接受 ASCII 英文字母、數字、`-`、`_`、`:`。省略即不潤稿，也是預設值。agent 不會替你安裝 skill。
 
 > **注意：** 只有對話中的執行會使用寫作 skill。無人值守的排程更新（透過 `claude`／`codex` CLI 執行 `auto_refresh.py`／`step_refresh.py`）不使用。潤稿只改措辭；事實、數字、日期、名稱、連結與 JSON 結構都會核對，必須保持相同，任何一項改變就捨棄這次潤稿。若目前工作階段無法使用該 skill，agent 會在報告中說明一次，繼續完成盤點。
 

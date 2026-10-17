@@ -77,7 +77,8 @@ Talk to the user in their language and write page text (names, tags, diagram) in
    check reads.
 4. **Optional writing skill.** Ask whether the user wants an installed writing skill
    (for example sepia, or any rewriting/plain-language skill they already have) to polish
-   summaries and diagram step text. Save its name in top-level `writing_skill`; default
+   summaries and diagram step `title`/`sub`/`zone`. Save its name (plugin skills are namespaced,
+   e.g. `sepia:sepia` for the Claude Code plugin; `sepia` for a standalone install) in top-level `writing_skill`; default
    none (omit the field). Never install skills for the user.
 5. **Diagram.** Read each project's README and entry points, draft `nodes` (5–10 steps: the
    real order of work as the spine, inputs/alternatives on the left, checks/helpers on the
@@ -178,7 +179,8 @@ Talk to the user in their language and write page text (names, tags, diagram) in
    language: what changed that week and why it matters, from the listed commits/tickets/PRs
    only — no guesses. Before saving, if `writing_skill` is set, pass the drafts through
    that installed skill once as a wording-only edit. Apply this rule whenever you write or
-   rewrite diagram step text in a conversation too. Facts, numbers, dates, names, links and
+   rewrite diagram step `title`/`sub`/`zone` in a conversation too; never pass `detail`, `paths`
+   or `media` (mocks marked `real: true` must stay copied output). Facts, numbers, dates, names, links and
    JSON structure must stay identical: compare with the originals after the pass and discard
    the pass if any changed. If the skill is unavailable in this session, say so once in the
    report and continue without it. Absent `writing_skill` means no polishing.
