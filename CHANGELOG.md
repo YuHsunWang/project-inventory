@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.1.0
+
+- Build a local dashboard with project diagrams, expandable steps, tickets, Git facts,
+  note tasks and data freshness read from file contents.
+- Read Linear, Notion and explicitly opted-in GitHub Issues; show source failures and
+  incomplete history instead of presenting stale reads as current (#5, #16–#18, #46).
+- Show weekly activity summaries, commit and ticket trends, and a cross-project action list.
+- Support multiple checkouts, configurable Git fetching and history scope, and Obsidian
+  folder exclusions with blank-task filtering and per-source deduplication (#34–#36, #45, #48, #51).
+- Capture existing project UIs for diagram steps, with source labels, timestamps and
+  last-good images on failure (#39–#43).
+- Add opt-in scheduled refresh, source change detection, optional AI summaries and
+  guarded diagram text updates with undo (PRs #32–#33).
+- Generate local HTML and an Artifact fragment; offer protected Vercel publishing and
+  manual GitHub Pages publishing (#10, #22–#24).
+- Package the skill as a Claude Code plugin and document standalone installation for
+  other coding tools (#12).
+- Add a sample-only Pages workflow, animated preview and bilingual quick-start links;
+  add English and Traditional Chinese trigger and near-miss eval cases.
+- Provide an offline release gate with source regressions and desktop/mobile Chromium
+  checks (#26, #28, #42).
+
 ## Unreleased — cold-start fixes (#48–#49)
 
 - #49: name only configured ticket providers in the bilingual footer and Facts hint,

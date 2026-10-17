@@ -1,0 +1,50 @@
+name: Sample demo on GitHub Pages
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Build sample-only demo
+        env:
+          TZ: UTC
+          TMPDIR: ${{ runner.temp }}
+        run: |
+          demo_home="$(mktemp -d "$TMPDIR/project-inventory-demo.XXXXXX")"
+          python3 skills/project-inventory/reference/demo.py "$demo_home"
+          python3 skills/project-inventory/scripts/collect.py "$demo_home"
+          python3 skills/project-inventory/scripts/build.py "$demo_home"
+          cp -R "$demo_home/out" ./out
+          test -s out/index.html
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: out
+
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy sample demo
+        id: deployment
+        uses: actions/deploy-pages@v4
