@@ -74,6 +74,10 @@ def links(value, path):
 def validate_inventory(inv):
     typed(inv, dict, "inventory")
     timezone(inv.get("timezone", "UTC"))
+    if "writing_skill" in inv:
+        name = string(inv["writing_skill"], "writing_skill")
+        if not re.fullmatch(r"[A-Za-z0-9_:-]+", name):
+            fail("writing_skill", "use only ASCII letters, digits, hyphens, underscores and colons")
     if "auto_refresh" in inv:
         config = typed(inv["auto_refresh"], dict, "auto_refresh")
         choice(config.get("model", "none"), ("none", "claude", "codex"), "auto_refresh.model")

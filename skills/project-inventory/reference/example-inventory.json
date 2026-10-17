@@ -2,6 +2,7 @@
   "title": "Sample project studio",
   "lang": "en",
   "timezone": "UTC",
+  "writing_skill": "sepia",
   "publish": {
     "to": "local"
   },

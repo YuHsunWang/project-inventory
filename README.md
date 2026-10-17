@@ -23,6 +23,7 @@ Detailed Traditional Chinese manual: [說明書.md](說明書.md).
 - [Install](#install)
 - [Uninstall](#uninstall)
 - [Use](#use)
+- [My workflow and companion skills](#my-workflow-and-companion-skills)
 - [Try it locally without accounts](#try-it-locally-without-accounts)
 - [Requirements](#requirements)
 - [Publishing and privacy](#publishing-and-privacy)
@@ -189,6 +190,33 @@ Configuration is saved to `~/.project-inventory/inventory.json`. Weekly summarie
 | Local Git | Fetches `origin` by default, updating refs and `.git/FETCH_HEAD`. Set `"fetch": false` on a `sources.local[]` entry to read HEAD, branch, dirty files and history without fetching; ahead/behind and remote unpushed counts remain unknown. History defaults to `git log --all`; `"history": "head"` limits it to commits reachable from HEAD. Progress labels each checkout's scope. Unread or disconnected history appears as not collected, with source errors, on project cards and the home list. |
 | GitHub Issues | Explicitly set `sources.github_issues: ["owner/repo"]`. Collection reads all open and closed issues, excludes PRs and rebuilds trends from creation/closure dates. Closed-as-not-planned is canceled; other closed issues are done. Missing `gh` access or an unread page shows a failed source. Existing configurations remain valid. |
 | Obsidian | Setup asks which folders contain real tasks. Each source scans Markdown recursively under its vault `path`; optional `exclude` folders are relative to that path. `.obsidian`, `.trash`, fenced code blocks and blank checkboxes are skipped. Within each source, identical full text after `strip()` counts once, with exact matching only. Any checked copy makes the task done; otherwise it is open. Each listed item points to the newest file holding an open copy, using lexicographic path order, not parsed dates or modification times. Counts include all unique tasks; the list shows the first 50 open tasks. No new configuration is needed. |
+
+## My workflow and companion skills
+
+1. Set up the projects, sources and diagrams with the agent.
+2. Refresh the project data.
+3. Have the agent write weekly summaries and diagram step text from those facts.
+4. Optionally pass the drafts through your chosen writing skill once.
+5. Build the page with the finished text.
+6. Check the page.
+7. Publish where you choose.
+
+I recommend [sepia](https://github.com/Nanako0129/sepia) to remove AI-sounding patterns from prose. Install it in Claude Code:
+
+```sh
+claude plugin marketplace add Nanako0129/sepia
+claude plugin install sepia@sepia --scope user
+```
+
+For other agents:
+
+```sh
+npx skills add Nanako0129/sepia -g
+```
+
+To enable it, answer the optional setup question or add `"writing_skill": "sepia"` to `inventory.json`. Any rewriting or plain-language skill you already have works the same way: give its installed name, such as `sepia:sepia` for a namespaced skill. The field accepts only ASCII letters, digits, `-`, `_` and `:`. Omit it for no polishing, the default. The agent never installs skills for you.
+
+> **Notice:** Only conversation runs use the writing skill. Scheduled unattended refresh (`auto_refresh.py` / `step_refresh.py` through the `claude` / `codex` CLI) does not use it. Polishing changes wording only: facts, numbers, dates, names, links and JSON structure are checked to stay identical; a pass that changes any of them is discarded. If the skill is unavailable in the session, the agent reports it once and continues without it.
 
 ## Try it locally without accounts
 

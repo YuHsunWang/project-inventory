@@ -75,10 +75,15 @@ Talk to the user in their language and write page text (names, tags, diagram) in
    **date column inside the data** (never use file modification times — they lie after copies
    and rebuilds) and ask how many days old counts as stale. Run `collect.py` once to prove each
    check reads.
-4. **Diagram.** Read each project's README and entry points, draft `nodes` (5–10 steps: the
+4. **Optional writing skill.** Ask whether the user wants an installed writing skill
+   (for example sepia, or any rewriting/plain-language skill they already have) to polish
+   summaries and diagram step text. Save its name in top-level `writing_skill`; default
+   none (omit the field). Never install skills for the user.
+5. **Diagram.** Read each project's README and entry points, draft `nodes` (5–10 steps: the
    real order of work as the spine, inputs/alternatives on the left, checks/helpers on the
    right), with `paths` to the code for each step. Show the draft as a short list; fix what the
    user corrects. Facts in `detail` must come from code or docs, not guesses.
+   Apply the writing-skill rule in Refresh step 3 to these drafts too.
    Give every step an `icon` from this list: spider brain box gear shield clock truck globe eye flame check dice table hand cards play coin quiz scale pipe lake flask chart book plug.
    Then offer what a step can open to (`media`, see schema): a `mock` (a few lines showing what
    goes in and out, copied from real code/output; mark `real: true` only when it is real output),
@@ -97,10 +102,10 @@ Talk to the user in their language and write page text (names, tags, diagram) in
    Resolve relative HTML paths against the intended HOME before putting them in the temporary
    draft. Capture failures print `WARN`, retain any previous image and do not fail the run.
    Report warnings to the user.
-5. After review, copy approved images to `HOME/shots/` and save `HOME/inventory.json`
+6. After review, copy approved images to `HOME/shots/` and save `HOME/inventory.json`
    with the reviewed `capture` sources and HOME-relative `shot` paths. Pick distinct `color`s
    that read in light and dark mode.
-6. **Optional plain words.** Ask which CLI may write summaries and commit/PR notes:
+7. **Optional plain words.** Ask which CLI may write summaries and commit/PR notes:
    `claude` (Haiku), `codex` (gpt-6-luna), or `none` (default; nothing sent).
    Save `auto_refresh.model`. Explain that notes receive listed work, while diagram step
    rewrites may read the project through read-only tools. Successful notes are cached by
@@ -116,7 +121,7 @@ Talk to the user in their language and write page text (names, tags, diagram) in
    ```
 
    Run collect/build again to show the new step. Add any detail or media explicitly.
-7. **Optional schedule, ask once.** Ask whether to install unattended refresh; default is no.
+8. **Optional schedule, ask once.** Ask whether to install unattended refresh; default is no.
    Only on yes: offer every 2 hours, 08:00–22:00 inclusive in this computer's local time;
    let the user change the hours/cadence. Save `auto_refresh.schedule` (see schema).
    Run `python3 SCRIPTS/schedule.py print HOME` and show the exact cron line / schtasks
@@ -171,7 +176,13 @@ Talk to the user in their language and write page text (names, tags, diagram) in
    no summary yet or got new work since its summary was written (the current week, usually; on
    the first run, every past week). For each listed week write 2–3 short sentences in the page
    language: what changed that week and why it matters, from the listed commits/tickets/PRs
-   only — no guesses. Save them in `HOME/summaries.json` as
+   only — no guesses. Before saving, if `writing_skill` is set, pass the drafts through
+   that installed skill once as a wording-only edit. Apply this rule whenever you write or
+   rewrite diagram step text in a conversation too. Facts, numbers, dates, names, links and
+   JSON structure must stay identical: compare with the originals after the pass and discard
+   the pass if any changed. If the skill is unavailable in this session, say so once in the
+   report and continue without it. Absent `writing_skill` means no polishing.
+   Save summaries in `HOME/summaries.json` as
    `{"<key>": {"<week>": {"n": <n from the list>, "text": "…"}}}` (keep the other weeks), then
    run build.py again. Many weeks on a first run: do them in batches; weeks not yet written
    show "no summary" on the page.
@@ -233,6 +244,8 @@ Never send the page anywhere the user did not choose.
 - Re-runs on the same day overwrite that day's snapshot. The ticket chart is rebuilt from ticket
   dates and the commit chart from git history, so both show on the first run.
 - `build.py` prints `WARN` lines (a screenshot not found, a page over 8 MB). Report them.
+- Unattended scheduled refresh (`auto_refresh.py` / `step_refresh.py` via the
+  `claude` / `codex` CLI) does not use `writing_skill`; only conversation runs do.
 - Scheduled entry point: `python3 SCRIPTS/auto_refresh.py HOME`. It probes git local branch
   heads, live remote refs, dirty/untracked counts, PR number/updatedAt, opted-in Issues, file statistics for
   data/Obsidian and script-side Linear. Same fingerprints and calendar day skip collection,

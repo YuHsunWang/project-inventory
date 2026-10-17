@@ -9,6 +9,7 @@
   "timezone": "Asia/Taipei",          // optional IANA timezone; default UTC
   "publish": {"to": "local"},
   "auto_refresh": {"model": "none"}, // optional; no schedule unless explicitly installed
+  "writing_skill": "sepia",          // optional installed skill; absent = no polishing
   "projects": [
     {
       "key": "app",                       // short id, used in page URLs (#app)
@@ -44,6 +45,14 @@
 }
 ```
 
+- `writing_skill` (optional): name of an installed writing/rewriting skill, such as
+  `sepia` or `sepia:sepia`. A nonempty string matching `[A-Za-z0-9_:-]+`: ASCII letters,
+  digits, hyphens, underscores and colons only; no spaces, paths or commands. Omit it to
+  disable polishing (default); existing inventories need no changes. In conversation runs,
+  the agent passes weekly summary and diagram step drafts through it once, verifies facts,
+  numbers, dates, names, links and JSON structure are identical, and discards the pass if any
+  changed. An unavailable skill is reported once and skipped; skills are never installed
+  automatically. Unattended `auto_refresh.py` / `step_refresh.py` CLI runs do not use it.
 - `nodes` without `on` form the spine, top to bottom, in list order. A node with `on: <spine id>`
   hangs off that spine step, `side` `l` or `r` (default `r`). `zone` on a spine node starts a new
   labelled section. `tickets` ties ticket ids to a step (shown on the step and in its panel).
