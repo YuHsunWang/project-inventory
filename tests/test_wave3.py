@@ -128,7 +128,7 @@ def test_ui_copy_defaults():
                             input=(S / "template.html").read_text(), capture_output=True, text=True)
     assert result.returncode == 0, result.stdout + result.stderr
     example = json.loads((S.parent / "reference/example-inventory.json").read_text())
-    assert [n["icon"] for n in example["projects"][0]["nodes"]] == ["globe", "chart"]
+    assert [n["icon"] for n in example["projects"][0]["nodes"]] == ["globe", "cards", "check", "eye"]
 
 
 @case
@@ -139,12 +139,40 @@ def test_zero_service_demo():
         result = subprocess.run([sys.executable, str(script), str(home)], capture_output=True, text=True)
         assert result.returncode == 0, result.stderr
         inv = json.loads((home / "inventory.json").read_text())
-        assert inv["projects"][0]["sources"] == {}
+        assert [p["key"] for p in inv["projects"]] == ["myapp", "copper-stream", "paper-grove"]
+        for project in inv["projects"]:
+            assert 3 <= len(project["nodes"]) <= 5
+            assert set(project["sources"]) == {"local", "obsidian"}
+            repo = Path(project["sources"]["local"][0]["path"])
+            assert repo.is_relative_to(home)
+            assert project["sources"]["local"][0]["fetch"] is False
+            assert subprocess.check_output(["git", "remote"], cwd=repo) == b""
+            assert subprocess.check_output(["git", "status", "--porcelain"], cwd=repo) == b""
+            history = subprocess.check_output(["git", "log", "--format=%aI %cI %an <%ae>"], cwd=repo, text=True).splitlines()
+            assert len(history) == 3
+            assert all("Sample Author <sample@example.invalid>" in line for line in history)
+            assert all(line.split()[0] == line.split()[1] for line in history)
+            assert [line.split()[0].replace("Z", "+00:00") for line in history] == ["2026-10-15T10:00:00+00:00", "2026-10-08T10:00:00+00:00", "2026-10-01T10:00:00+00:00"]
         for name in ("collect.py", "build.py"):
             result = subprocess.run([sys.executable, str(S / name), str(home)], capture_output=True, text=True)
             assert result.returncode == 0, result.stdout + result.stderr
-        facts = json.loads(next((home / "facts").glob("*.json")).read_text())["projects"]["myapp"]
-        assert not facts["errors"] and not facts["data"][0]["stale"]
+        assert not (home / "out/summaries-needed.json").exists()
+        assert "data-needs-claude" not in (home / "out/index.html").read_text()
+        facts = json.loads(next((home / "facts").glob("*.json")).read_text())["projects"]
+        for key, project in facts.items():
+            assert not project["errors"], project["errors"]
+            assert len(project["commits"]) == 3
+            assert sum(o["open"] for o in project["obsidian"]) >= 2
+            assert project["data"][0]["stale"] is (key == "copper-stream")
+        # Independent homes must have identical history despite different absolute paths.
+        other = Path(td) / "other"
+        result = subprocess.run([sys.executable, str(script), str(other)], capture_output=True, text=True)
+        assert result.returncode == 0, result.stderr
+        for project in inv["projects"]:
+            relative = Path("sample") / project["key"]
+            hashes = [subprocess.check_output(["git", "log", "--format=%H"], cwd=root / relative)
+                      for root in (home, other)]
+            assert hashes[0] == hashes[1]
         original = (home / "inventory.json").read_bytes()
         result = subprocess.run([sys.executable, str(script), str(home)], capture_output=True, text=True)
         assert result.returncode != 0 and "Refusing to overwrite" in result.stderr

@@ -1,0 +1,27 @@
+{
+  "myapp": {
+    "open": [
+      "Review the empty-state copy",
+      "Choose the next calendar layout"
+    ],
+    "done": "Add keyboard navigation",
+    "stale": false
+  },
+  "copper-stream": {
+    "open": [
+      "Refresh the stale order sample",
+      "Approve the duplicate-order rule"
+    ],
+    "done": "Document the order columns",
+    "stale": true
+  },
+  "paper-grove": {
+    "open": [
+      "Choose the opening paragraph",
+      "Review the final illustration captions",
+      "Trim the closing section"
+    ],
+    "done": "Collect the outline notes",
+    "stale": false
+  }
+}

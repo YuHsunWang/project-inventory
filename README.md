@@ -104,13 +104,18 @@ export TMPDIR="$PWD/.tmp"
 python3 skills/project-inventory/reference/demo.py .tmp/demo
 python3 skills/project-inventory/scripts/collect.py .tmp/demo
 python3 skills/project-inventory/scripts/build.py .tmp/demo
+python3 tests/demo_fixture.py .tmp/demo --offline-fonts
 python3 skills/project-inventory/scripts/check_page.py .tmp/demo --shots .tmp/demo-shots
 ```
 
 Open `.tmp/demo/out/index.html`. The helper derives its configuration from
-`example-inventory.json`, replaces external sources with a local sample CSV and refuses
-to overwrite an existing inventory. Python/git suffice for collect/build; the optional
-browser check requires the Playwright/Chromium setup listed below.
+`example-inventory.json` and creates three fictional projects: a web app, a data
+pipeline and a writing project. Each has local Git history, Markdown review tasks
+and sample CSV data; one dataset is deliberately stale. No accounts, tokens or
+network access are needed. The helper refuses to overwrite an existing inventory.
+Python/git suffice for collect/build; the optional browser check requires the
+Playwright/Chromium setup listed below. The offline-fonts helper selects fallback
+fonts for that check, avoiding font CDN requests.
 
 Regenerate the animated preview from a fresh sample-only build (requires Playwright,
 Chromium and Pillow):

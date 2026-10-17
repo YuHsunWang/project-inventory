@@ -9,7 +9,7 @@ import sys
 import tempfile
 from unittest.mock import patch
 from test_support import case, summary
-from demo_fixture import add_history, offline_fonts
+from demo_fixture import offline_fonts
 
 ROOT = Path(__file__).resolve().parent.parent
 S = ROOT / 'skills/project-inventory/scripts'
@@ -208,7 +208,6 @@ def main():
         home = Path(td) / 'demo'
         result = run(S.parent / 'reference/demo.py', home)
         assert result.returncode == 0, result.stderr
-        add_history(home)
         for script in (S / 'collect.py', S / 'build.py'):
             result = run(script, home)
             assert result.returncode == 0, result.stdout + result.stderr

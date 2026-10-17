@@ -26,7 +26,6 @@ def main():
             ('unattended refresh regressions', [sys.executable, str(ROOT / 'tests/test_auto_refresh.py')]),
             ('browser regressions', [sys.executable, str(ROOT / 'tests/test_check_page.py')]),
             ('create zero-service demo', [sys.executable, str(S.parent / 'reference/demo.py'), td + '/demo']),
-            ('add local demo history', [sys.executable, str(ROOT / 'tests/demo_fixture.py'), td + '/demo']),
             ('collect zero-service demo', [sys.executable, str(S / 'collect.py'), td + '/demo']),
             ('build zero-service demo', [sys.executable, str(S / 'build.py'), td + '/demo']),
             ('prepare offline demo fonts', [sys.executable, str(ROOT / 'tests/demo_fixture.py'), td + '/demo', '--offline-fonts']),

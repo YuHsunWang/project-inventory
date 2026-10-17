@@ -1,23 +1,233 @@
 {
-  "title": "Projects",
+  "title": "Sample project studio",
   "lang": "en",
-  "publish": {"to": "local"},
+  "timezone": "UTC",
+  "publish": {
+    "to": "local"
+  },
   "projects": [
     {
       "key": "myapp",
       "name": "My App",
       "color": "#2C6FC4",
-      "tag": "One sentence: what this project is for.",
+      "tag": "A small web app for planning a calmer week.",
       "sources": {
-        "github": ["owner/myapp"],
-        "local": [{"label": "main checkout", "path": "~/code/myapp"}]
+        "local": [
+          {
+            "label": "Sample checkout",
+            "path": "sample/myapp",
+            "fetch": false,
+            "history": "head"
+          }
+        ],
+        "obsidian": [
+          {
+            "path": "sample/myapp/notes"
+          }
+        ]
       },
       "data": [
-        {"label": "orders", "path": "~/code/myapp/data/orders.csv", "kind": "csv", "column": "created_at", "max_age_days": 2}
+        {
+          "label": "UI sample sessions",
+          "path": "sample/myapp/data/sessions.csv",
+          "kind": "csv",
+          "column": "created_at",
+          "max_age_days": 2
+        }
       ],
       "nodes": [
-        {"id": 1, "title": "Fetch", "icon": "globe", "sub": "API → orders.csv", "paths": ["fetch.py"]},
-        {"id": 2, "title": "Report", "icon": "chart", "sub": "orders.csv → report.html", "paths": ["report.py"]}
+        {
+          "id": 1,
+          "title": "Load",
+          "icon": "globe",
+          "sub": "Read local sample sessions",
+          "detail": "Load a small CSV of fictional planning sessions. No account or service is required.",
+          "paths": [
+            "data/sessions.csv"
+          ]
+        },
+        {
+          "id": 2,
+          "title": "Plan",
+          "icon": "cards",
+          "sub": "Sessions \u2192 weekly board",
+          "detail": "Group the sessions into a weekly board, keeping unscheduled ideas in a separate tray.",
+          "paths": [
+            "ui/board.html"
+          ]
+        },
+        {
+          "id": 3,
+          "title": "Check",
+          "icon": "check",
+          "sub": "Keyboard + empty states",
+          "detail": "Walk through the board with a keyboard and review the empty-state wording before sharing.",
+          "paths": [
+            "notes/tasks.md"
+          ]
+        },
+        {
+          "id": 4,
+          "title": "Preview",
+          "icon": "eye",
+          "sub": "Board \u2192 local preview",
+          "detail": "Inspect the local preview and decide which layout should ship next.",
+          "paths": [
+            "ui/preview.html"
+          ]
+        }
+      ],
+      "notes": [
+        [
+          "Sample only",
+          "Fictional project; local Git, Markdown tasks and CSV files."
+        ]
+      ]
+    },
+    {
+      "key": "copper-stream",
+      "name": "Copper Stream",
+      "color": "#A04D20",
+      "tag": "Turn fictional shop orders into a daily quality report.",
+      "sources": {
+        "local": [
+          {
+            "label": "Sample checkout",
+            "path": "sample/copper-stream",
+            "fetch": false,
+            "history": "head"
+          }
+        ],
+        "obsidian": [
+          {
+            "path": "sample/copper-stream/notes"
+          }
+        ]
+      },
+      "data": [
+        {
+          "label": "Order sample",
+          "path": "sample/copper-stream/data/orders.csv",
+          "kind": "csv",
+          "column": "created_at",
+          "max_age_days": 2
+        }
+      ],
+      "nodes": [
+        {
+          "id": 1,
+          "title": "Read",
+          "icon": "table",
+          "sub": "Local CSV \u2192 rows",
+          "detail": "Read fictional order rows from a local file. The sample is deliberately stale so freshness checks have something to flag.",
+          "paths": [
+            "data/orders.csv"
+          ]
+        },
+        {
+          "id": 2,
+          "title": "Validate",
+          "icon": "shield",
+          "sub": "Rows \u2192 checked records",
+          "detail": "Check required fields and identify duplicate order IDs before calculating totals.",
+          "paths": [
+            "pipeline/validate.md"
+          ]
+        },
+        {
+          "id": 3,
+          "title": "Summarize",
+          "icon": "chart",
+          "sub": "Checked records \u2192 daily totals",
+          "detail": "Group valid orders by day and compare the count with the previous report.",
+          "paths": [
+            "pipeline/summarize.md"
+          ]
+        },
+        {
+          "id": 4,
+          "title": "Review",
+          "icon": "hand",
+          "sub": "Totals \u2192 quality report",
+          "detail": "Review the freshness warning and approve the duplicate-order rule before refreshing the report.",
+          "paths": [
+            "notes/tasks.md"
+          ]
+        }
+      ],
+      "notes": [
+        [
+          "Sample only",
+          "Fictional project; local Git, Markdown tasks and CSV files."
+        ]
+      ]
+    },
+    {
+      "key": "paper-grove",
+      "name": "Paper Grove",
+      "color": "#34735A",
+      "tag": "Shape a collection of field notes into a short illustrated essay.",
+      "sources": {
+        "local": [
+          {
+            "label": "Sample checkout",
+            "path": "sample/paper-grove",
+            "fetch": false,
+            "history": "head"
+          }
+        ],
+        "obsidian": [
+          {
+            "path": "sample/paper-grove/notes"
+          }
+        ]
+      },
+      "data": [
+        {
+          "label": "Draft index",
+          "path": "sample/paper-grove/data/drafts.csv",
+          "kind": "csv",
+          "column": "created_at",
+          "max_age_days": 2
+        }
+      ],
+      "nodes": [
+        {
+          "id": 1,
+          "title": "Gather",
+          "icon": "book",
+          "sub": "Field notes \u2192 outline",
+          "detail": "Collect fictional observations and arrange them into a short outline with one idea per section.",
+          "paths": [
+            "writing/outline.md"
+          ]
+        },
+        {
+          "id": 2,
+          "title": "Draft",
+          "icon": "cards",
+          "sub": "Outline \u2192 essay",
+          "detail": "Turn the outline into a readable draft. Leave open questions as Markdown tasks for the next review.",
+          "paths": [
+            "writing/draft.md"
+          ]
+        },
+        {
+          "id": 3,
+          "title": "Polish",
+          "icon": "check",
+          "sub": "Essay \u2192 reading copy",
+          "detail": "Choose an opening, check the captions and trim the ending before preparing a reading copy.",
+          "paths": [
+            "notes/tasks.md"
+          ]
+        }
+      ],
+      "notes": [
+        [
+          "Sample only",
+          "Fictional project; local Git, Markdown tasks and CSV files."
+        ]
       ]
     }
   ]

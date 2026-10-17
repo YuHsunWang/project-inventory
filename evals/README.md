@@ -6,13 +6,21 @@ From the repository root, run with Claude credentials:
 claude plugin eval . --runs 3 --no-publish
 ```
 
-Five positive cases (English / Traditional Chinese) and three near misses exercise
-project-inventory routing. Each has a skill invocation check and an LLM behavior grader.
-Cases allow only Skill, Read, Glob and Grep, with four turns and a 90-second timeout;
-the prompt asks for a preview only, so setup and writes are outside the task.
-The default no-plugin baseline runs automatically. Positive invocation graders are
-with-only indicators, excluded from the comparative score; inspect those indicators
-for trigger failures. Negative invocation checks use min/max 0 and arm: both.
-Results stay in ignored evals/results/. --no-publish keeps the report local.
-Only CLI help and local case validation were run during authoring; credentials are
-required to measure trigger quality.
+Five positive cases (English / Traditional Chinese) and three near misses measure
+whether the project-inventory Skill fires for a bare user request. The core check
+is the `invocation` tool_used grader: positive cases require a matching Skill call;
+negative cases require no matching call. These cases do not grade dashboard quality
+or setup behavior, and have no LLM behavior graders.
+
+Cases allow only `[Skill, Read, Glob, Grep]`, with six turns and a 90-second timeout.
+That read-only tool allowlist prevents setup commands and file writes; the prompts
+contain only the user request, without instructions that suppress skill invocation.
+
+Read the **plugin-fired indicator rate** in the with-plugin results: it should be
+100% for should-trigger cases and 0% for should-not-trigger cases. Positive
+invocation graders use `arm: with-only` and are excluded from the comparative score;
+negative checks use `min: 0`, `max: 0`, and `arm: both`. The no-plugin baseline runs
+automatically, but the comparative/ablation score is not the trigger-quality score.
+Results stay in ignored `evals/results/`; `--no-publish` keeps the report local.
+Running the eval requires Claude credentials; offline validation only checks case
+configuration, not observed trigger rates.
