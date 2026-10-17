@@ -284,12 +284,16 @@ def main():
                 try:
                     portfile = Path(profile) / "DevToolsActivePort"
                     deadline = time.monotonic() + 60  # shared CI runners can take >15s to boot Chromium
-                    while not portfile.exists():
+                    # File creation can precede publication of the endpoint lines.
+                    while True:
+                        endpoint = portfile.read_text().splitlines()[:2] if portfile.exists() else []
+                        if len(endpoint) == 2 and all(endpoint):
+                            port, route = endpoint
+                            break
                         if browser.poll() is not None or time.monotonic() > deadline:
                             log.flush(); log.seek(0)
-                            raise RuntimeError("Chromium could not start: " + log.read()[-1500:])
+                            raise RuntimeError("Chromium could not start (DevToolsActivePort missing or incomplete): " + log.read()[-1500:])
                         time.sleep(.05)
-                    port, route = portfile.read_text().splitlines()[:2]
                     c = CDP(f"ws://127.0.0.1:{port}{route}")
                     for width in (390, 1280):
                         for theme in ("light", "dark"):
