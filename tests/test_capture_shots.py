@@ -7,7 +7,7 @@ import subprocess
 import sys
 import tempfile
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from test_support import case, summary
 
@@ -17,6 +17,7 @@ sys.path.insert(0, str(S))
 import build
 import collect
 import capture_shots
+import check_page
 import validation
 
 
@@ -117,6 +118,51 @@ def test_screenshot_waits_for_quiet_and_captures_on_timeout():
                 patch.object(capture_shots.subprocess, "Popen", side_effect=launch):
             assert capture_shots.screenshot("https://example.com/") == png
         assert len(captured) == 1 and expected <= captured[0] <= expected + .3, (mode, captured)
+
+
+@case
+def test_screenshot_waits_for_complete_devtools_endpoint():
+    """Chromium can create an empty port file before publishing both endpoint lines."""
+    contents = ["", "9222\n", "9222\n\n", "9222\n/devtools/browser/fixture"]
+    png = b"\x89PNG\r\n\x1a\nfixture"
+    clock = SimpleNamespace(now=0)
+    portfile = None
+    sleeps = []
+    browser = Mock()
+    browser.poll.return_value = None
+
+    def launch(args, **kwargs):
+        nonlocal portfile
+        profile = Path(next(arg.split("=", 1)[1] for arg in args if arg.startswith("--user-data-dir=")))
+        portfile = profile / "DevToolsActivePort"
+        portfile.write_text(contents[0])
+        return browser
+
+    def sleep(seconds):
+        sleeps.append(seconds)
+        clock.now += 1
+        assert clock.now <= len(contents), "startup wait did not accept the complete endpoint"
+        portfile.write_text(contents[min(len(sleeps), len(contents) - 1)])
+
+    clock.monotonic = lambda: clock.now
+    clock.sleep = sleep
+    with patch.object(capture_shots, "time", clock), patch.object(check_page, "time", clock), \
+            patch.object(capture_shots, "chromium", return_value="fake-browser"), \
+            patch.object(capture_shots.subprocess, "Popen", side_effect=launch), \
+            patch.object(capture_shots, "CDP") as connect, patch.object(capture_shots, "settle"):
+        c = connect.return_value
+        c.call.side_effect = lambda method, **params: {
+            "Target.createTarget": {"targetId": "target"},
+            "Target.attachToTarget": {"sessionId": "session"},
+            "Page.captureScreenshot": {"data": base64.b64encode(png).decode()},
+        }.get(method, {})
+        c.evaluate.return_value = 200
+        assert capture_shots.screenshot("https://example.com/") == png
+    assert len(sleeps) == len(contents) - 1, sleeps
+    connect.assert_called_once_with("ws://127.0.0.1:9222/devtools/browser/fixture")
+    c.sock.close.assert_called_once()
+    browser.terminate.assert_called_once()
+    browser.wait.assert_called_once_with(timeout=10)
 
 
 @case
