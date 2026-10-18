@@ -23,6 +23,7 @@
 - [安裝](#安裝)
 - [解除安裝](#解除安裝)
 - [使用方式](#使用方式)
+- [我的作業流程與搭配 skill](#我的作業流程與搭配-skill)
 - [不接服務也能在本機試跑](#不接服務也能在本機試跑)
 - [需求](#需求)
 - [發布與隱私](#發布與隱私)
@@ -189,6 +190,33 @@ rm -r ~/.hermes/skills/project-inventory
 | 本機 Git | 預設 fetch `origin`，更新遠端 refs 與 `.git/FETCH_HEAD`。在個別 `sources.local[]` 設定 `"fetch": false`，仍會讀 HEAD、分支、未提交檔案與歷史，但領先／落後及相對遠端的未推送數量顯示未知。歷史預設 `git log --all`；`"history": "head"` 只讀 HEAD 可到達的提交。進度頁逐一標示 checkout 的範圍。未連接或讀取失敗時，專案卡片與首頁會顯示改動紀錄沒讀到及來源錯誤。 |
 | GitHub Issues | 明確設定 `sources.github_issues: ["owner/repo"]`。讀取所有開啟與關閉的 issue，排除 PR，依建立／關閉日期重建趨勢。以不再規劃為由關閉的項目算取消，其餘關閉項目算完成。缺少 `gh` 權限或任一頁未讀取會顯示來源失敗。既有設定仍有效。 |
 | Obsidian | 設定時先問哪些資料夾有真正的任務。各來源遞迴掃描 vault `path` 下的 Markdown；選用的 `exclude` 資料夾相對於該路徑。略過 `.obsidian`、`.trash`、程式碼區塊與空白勾選列。同一來源內，完整文字經 `strip()` 後完全相同的任務只算一次，不做模糊比對。任一副本已勾選就算完成，否則算未完成。清單指向含未完成副本的最新檔案，沿用路徑字典序，不解析日期或使用修改時間。計數涵蓋全部去重後的任務，清單只列前 50 個未完成項目。不需新增設定。 |
+
+## 我的作業流程與搭配 skill
+
+1. 跟 agent 設定專案、來源與流程圖。
+2. 重新盤點專案資料。
+3. 由 agent 根據事實撰寫每週摘要與流程步驟文字。
+4. 選擇性地交給指定的寫作 skill 潤稿一次。
+5. 用完成的文字建置頁面。
+6. 檢查頁面。
+7. 發布到你選擇的位置。
+
+我推薦 [sepia](https://github.com/Nanako0129/sepia)，用來去除文章裡像 AI 寫的表達模式。在 Claude Code 安裝：
+
+```sh
+claude plugin marketplace add Nanako0129/sepia
+claude plugin install sepia@sepia --scope user
+```
+
+其他 agent：
+
+```sh
+npx skills add Nanako0129/sepia -g
+```
+
+啟用方式：回答設定時的選填問題，或在 `inventory.json` 加入：用 Claude Code plugin 安裝時填 `"writing_skill": "sepia:sepia"`（plugin 的 skill 名稱有命名空間），用 Skills CLI 安裝時填 `"writing_skill": "sepia"`。你已安裝的任何改寫或白話文 skill 都能用同樣方式搭配，只要提供安裝名稱。欄位只接受 ASCII 英文字母、數字、`-`、`_`、`:`。省略即不潤稿，也是預設值。agent 不會替你安裝 skill。
+
+> **注意：** 只有對話中的執行會使用寫作 skill。無人值守的排程更新（透過 `claude`／`codex` CLI 執行 `auto_refresh.py`／`step_refresh.py`）不使用。潤稿只改措辭；事實、數字、日期、名稱、連結與 JSON 結構都會核對，必須保持相同，任何一項改變就捨棄這次潤稿。若目前工作階段無法使用該 skill，agent 會在報告中說明一次，繼續完成盤點。
 
 ## 不接服務也能在本機試跑
 

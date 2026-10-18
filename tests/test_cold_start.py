@@ -156,7 +156,7 @@ def test_issue36_git_not_collected():
 @case
 def test_issue37_setup_explains_diagram_limits():
     text = (S.parent / 'SKILL.md').read_text()
-    setup = text.split('6. **Optional plain words.**', 1)[1].split('7. **Optional schedule', 1)[0]
+    setup = text.split('**Optional plain words.**', 1)[1].split('**Optional schedule', 1)[0]
     assert 'title' in setup and 'sub' in setup and 'zone' in setup
     assert 'never adds' in setup and all(word in setup for word in ('steps', 'paths', 'detail', 'media'))
     assert 'report.py' in setup and '"paths": ["report.py"]' in setup

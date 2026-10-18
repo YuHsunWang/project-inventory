@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Add optional `writing_skill` for wording-only summary and diagram polishing in conversation runs, with workflow and companion skill setup documentation.
+
 ## 0.1.0
 
 - Build a local dashboard with project diagrams, expandable steps, tickets, Git facts,
