@@ -77,6 +77,10 @@ The plugin namespace comes from `.claude-plugin/plugin.json`. See the [Claude Co
 
 ## Install
 
+Paste this sentence into your agent to install and self-check:
+
+> Install project-inventory: read https://raw.githubusercontent.com/YuHsunWang/project-inventory/main/INSTALL.md and follow it.
+
 ### Skills CLI — many agents
 
 User scope is the default in these instructions:

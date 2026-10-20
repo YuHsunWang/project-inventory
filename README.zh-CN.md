@@ -77,6 +77,10 @@
 
 ## 安装
 
+将这句话贴给你的 agent，即可安装并自动验收：
+
+> Install project-inventory: read https://raw.githubusercontent.com/YuHsunWang/project-inventory/main/INSTALL.md and follow it.
+
 ### Skills CLI：适用于多种智能体
 
 以下命令默认安装到用户范围：
