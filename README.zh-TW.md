@@ -77,6 +77,10 @@ plugin 命名空間來自 `.claude-plugin/plugin.json`。參考 [Claude Code plu
 
 ## 安裝
 
+將這句話貼給你的 agent，即可安裝並自動驗收：
+
+> Install project-inventory: read https://raw.githubusercontent.com/YuHsunWang/project-inventory/main/INSTALL.md and follow it.
+
 ### Skills CLI：多種 agent
 
 以下指令預設安裝在使用者範圍：

@@ -7,6 +7,9 @@ from urllib.parse import unquote, urlsplit
 
 ROOT = Path(__file__).resolve().parent.parent
 FILES = ("README.md", "README.zh-TW.md", "README.zh-CN.md")
+INSTALL_SENTENCE = ("Install project-inventory: read "
+                    "https://raw.githubusercontent.com/YuHsunWang/project-inventory/main/INSTALL.md "
+                    "and follow it.")
 
 
 def parse(text):
@@ -54,6 +57,13 @@ def main():
     errors, relative, anchors = [], 0, 0
     for name, (headings, blocks, prose) in parsed.items():
         text = (ROOT / name).read_text(encoding="utf-8")
+        # The paste instruction must be first in Install, before method subsections.
+        install_section = re.search(r"^## (?:Install|安裝|安装)\n(.*?)(?=^### |^## |\Z)",
+                                    text, re.M | re.S)
+        if not install_section or f"> {INSTALL_SENTENCE}" not in install_section[1]:
+            errors.append(f"{name}: missing agent install sentence at start of Install")
+        if not (ROOT / "INSTALL.md").is_file():
+            errors.append(f"{name}: missing INSTALL.md")
         if re.search(r"star\s+history|patreon", text, re.I):
             errors.append(f"{name}: forbidden text")
         for raw in re.findall(r"\]\(([^)\n]+)\)", prose):
