@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Explain installation self-check failures, propose method-specific updates for stale installs without overwriting them, and document network/home-write permissions (#61).
+
 - Add agent-facing INSTALL.md for one-sentence installation and an isolated demo self-check, linked from all three READMEs (#59).
 
 - Add optional `writing_skill` for wording-only summary and diagram polishing in conversation runs, with workflow and companion skill setup documentation.

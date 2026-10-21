@@ -11,6 +11,12 @@ INSTALL_SENTENCE = ("Install project-inventory: read "
                     "https://raw.githubusercontent.com/YuHsunWang/project-inventory/main/INSTALL.md "
                     "and follow it.")
 
+INSTALL_PERMISSIONS = {
+    "README.md": ("network access", "write access to your home directory", "permission problem"),
+    "README.zh-TW.md": ("網路存取", "家目錄寫入權限", "權限問題"),
+    "README.zh-CN.md": ("网络访问", "主目录写入权限", "权限问题"),
+}
+
 
 def parse(text):
     """Extract headings and fenced blocks without treating code as Markdown."""
@@ -62,6 +68,10 @@ def main():
                                     text, re.M | re.S)
         if not install_section or f"> {INSTALL_SENTENCE}" not in install_section[1]:
             errors.append(f"{name}: missing agent install sentence at start of Install")
+        # The raw URL may itself be blocked, so prerequisites must be beside it.
+        if not install_section or not all(term in install_section[1]
+                                          for term in INSTALL_PERMISSIONS[name]):
+            errors.append(f"{name}: missing network/home-write permissions or denial guidance")
         if not (ROOT / "INSTALL.md").is_file():
             errors.append(f"{name}: missing INSTALL.md")
         if re.search(r"star\s+history|patreon", text, re.I):
