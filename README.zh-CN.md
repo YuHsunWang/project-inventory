@@ -77,7 +77,7 @@
 
 ## 安装
 
-将这句话贴给你的 agent，即可安装并自动验收：
+将这句话贴给你的 agent，即可安装并自动验收。Agent 需要网络访问与主目录写入权限；若 Codex 沙箱阻止，应报告为权限问题：
 
 > Install project-inventory: read https://raw.githubusercontent.com/YuHsunWang/project-inventory/main/INSTALL.md and follow it.
 

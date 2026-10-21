@@ -77,7 +77,7 @@ plugin 命名空間來自 `.claude-plugin/plugin.json`。參考 [Claude Code plu
 
 ## 安裝
 
-將這句話貼給你的 agent，即可安裝並自動驗收：
+將這句話貼給你的 agent，即可安裝並自動驗收。Agent 需要網路存取與家目錄寫入權限；若 Codex 沙箱阻擋，應回報為權限問題：
 
 > Install project-inventory: read https://raw.githubusercontent.com/YuHsunWang/project-inventory/main/INSTALL.md and follow it.
 

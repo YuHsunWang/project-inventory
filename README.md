@@ -77,7 +77,7 @@ The plugin namespace comes from `.claude-plugin/plugin.json`. See the [Claude Co
 
 ## Install
 
-Paste this sentence into your agent to install and self-check:
+Paste this sentence into your agent to install and self-check. The agent needs network access and write access to your home directory; if a Codex sandbox blocks either, report it as a permission problem:
 
 > Install project-inventory: read https://raw.githubusercontent.com/YuHsunWang/project-inventory/main/INSTALL.md and follow it.
 
