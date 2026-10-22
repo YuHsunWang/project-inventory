@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Label weekly summaries as AI-written in English and Traditional Chinese; omit the label when no summary exists (#63).
+
 - Explain installation self-check failures, propose method-specific updates for stale installs without overwriting them, and document network/home-write permissions (#61).
 
 - Add agent-facing INSTALL.md for one-sentence installation and an isolated demo self-check, linked from all three READMEs (#59).
