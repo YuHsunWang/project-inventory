@@ -117,6 +117,8 @@ def validate_inventory(inv):
             ids.add(node_id)
             if "on" not in n:
                 spine.add(node_id)
+            if "draft" in n and not isinstance(n["draft"], bool):
+                fail(np + ".draft", "expected bool")
             if "auto_updated" in n:
                 value = n["auto_updated"]
                 parsed = parse_date(value, np + ".auto_updated")

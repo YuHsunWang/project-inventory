@@ -6,7 +6,8 @@ description: >
   note tasks, data freshness, recent activity and trends, plus a home list of what
   waits on the user. Use when the user says "inventory my projects", "project status",
   "盤點專案", "專案總覽", "/project-inventory", "/project-inventory:project-inventory", or asks which data is out of date
-  across projects. First run sets up inventory.json with the user; later runs just refresh.
+  across projects. First run uses Quick start; "full setup" / "完整設定" opens the full
+  eight-step setup. Later runs just refresh.
 ---
 
 # project-inventory
@@ -37,10 +38,67 @@ Talk to the user in their language and write page text (names, tags, diagram) in
 
 ## Which run is this?
 
-- `HOME/inventory.json` missing → **Setup** (below), then **Refresh**.
-- Present → **Refresh**. If the user adds a project or a data source, edit inventory.json first.
+- Present → **Refresh** immediately, unchanged. If the user adds a project or a data source,
+  edit inventory.json first. Do not rediscover projects or offer the Quick start menu.
+- `HOME/inventory.json` missing → **Quick start** by default, including “inventory my projects”
+  and “盤點專案”. Only an explicit “full setup” / “完整設定” chooses **Setup** (all eight steps).
 
-## Setup (first run) — confirm each step with the user, one question at a time
+## Quick start (default first run)
+
+Ask exactly one question before delivering the local page: which projects to include.
+Do not ask about sources, language, diagrams, writing skills, screenshots, models,
+schedules or publishing before the page. Use the conversation language for page text.
+
+1. **Discover and select (the only question).** Run
+   `python3 SCRIPTS/discover.py --inventory-home HOME`. Use its JSON, never model scanning,
+   to show a checkbox list with name, local paths, GitHub repo and last commit date.
+   Keep the script's `selected` defaults: commits within the last 90 days are checked;
+   older or unknown dates are unchecked. Ask which projects to include; allow selecting
+   older projects too. If the user replies “also look in <folder>” / “也看 <資料夾>”, rerun
+   the same script with that folder as a positional argument (defaults are still included),
+   then present the updated selection. Never include an unconfirmed project.
+   The script scans the current directory, `~`, and existing `~/projects`, `~/code`,
+   `~/src`, `~/dev`, `~/repos`, `~/workspace`, at most two directory levels below each
+   root. It skips `node_modules`, hidden directories, symlink directories and inventory
+   HOME itself. Authenticated `gh repo list` adds GitHub repos, merged with local remotes.
+   Report discovery warnings without adding another setup question. An empty selection
+   still builds a local page with no projects.
+2. **Configure without more questions.** For each selected project, read its README and
+   entry points and follow Setup step 5's diagram rules: real workflow, code/documented
+   facts only, code `paths`, supported icons. For GitHub-only projects read those files
+   through authenticated GitHub access; never execute project code. Do not invent steps
+   if files cannot be read: report the gap and leave `nodes` empty for that project.
+   Save `"draft": true` on every generated node. Do not show drafts for approval.
+   Set `sources.local` from all discovered `paths` (each entry has `label` and `path`).
+   When discovery's `github_available` is true and a project has `github`, add that repo
+   to `sources.github` for PRs; add `sources.github_issues` only when `has_issues` is true.
+   Selecting the project authorizes these Quick start defaults; full Setup step 2 still
+   confirms ticket sources individually. No Linear, Notion or Obsidian sources yet.
+   Use distinct readable colors, `data: []`, omit `writing_skill`, set
+   `auto_refresh: {"model": "none"}` with no schedule, and `publish: {"to": "local"}`.
+   No screenshots (`shot`/`capture`), model CLI, schedule installation or publication.
+3. **Save and deliver.** Write `HOME/inventory.json`, run
+   `python3 SCRIPTS/collect.py HOME --refresh`, then `python3 SCRIPTS/build.py HOME`.
+   Follow Refresh steps 3–5 for factual summaries, page checks, errors and the local path
+   `HOME/out/index.html`; this requires no further setup questions. On collection exit 2,
+   fix the reported input error and rerun before delivering. Exit 1 keeps failures visible.
+   Do not enter the full Refresh sequence or its Publish step during Quick start.
+4. **Add more? (once, after the page).** Offer one optional menu, with “skip all”:
+
+   | Choice | Run only this existing full-setup step |
+   |---|---|
+   | Connect Linear / Notion / Obsidian tasks | Setup step 2, limited to the chosen connector |
+   | Watch data | Setup step 3 |
+   | Add screenshots | Setup step 5, limited to screenshot selection and preview; step 6 only saves approved images/config |
+   | Scheduled updates | Setup step 8 |
+   | Publish | Publish options |
+
+   Run only the chosen step(s); never restart Setup or ask unrelated setup questions.
+   Save the chosen configuration and collect/build as needed. Do not repeat this menu
+   on Refresh. Draft labels remain until the user reviews the diagram in Setup step 5
+   or explicitly confirms it later; then remove `draft` only from the reviewed nodes.
+
+## Setup (full setup / 完整設定) — confirm each step with the user, one question at a time
 
 1. **Projects.** Ask which projects to include. Offer what you can see: Linear projects
    (`list_projects` if a Linear MCP is connected), Notion databases/pages the user names,
@@ -83,7 +141,8 @@ Talk to the user in their language and write page text (names, tags, diagram) in
 5. **Diagram.** Read each project's README and entry points, draft `nodes` (5–10 steps: the
    real order of work as the spine, inputs/alternatives on the left, checks/helpers on the
    right), with `paths` to the code for each step. Show the draft as a short list; fix what the
-   user corrects. Facts in `detail` must come from code or docs, not guesses.
+   user corrects. After the user approves, remove `draft` from the reviewed nodes.
+   Facts in `detail` must come from code or docs, not guesses.
    Apply the writing-skill rule in Refresh step 3 to these drafts too.
    Give every step an `icon` from this list: spider brain box gear shield clock truck globe eye flame check dice table hand cards play coin quiz scale pipe lake flask chart book plug.
    Then offer what a step can open to (`media`, see schema): a `mock` (a few lines showing what

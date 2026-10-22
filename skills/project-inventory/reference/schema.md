@@ -56,6 +56,11 @@
 - `nodes` without `on` form the spine, top to bottom, in list order. A node with `on: <spine id>`
   hangs off that spine step, `side` `l` or `r` (default `r`). `zone` on a spine node starts a new
   labelled section. `tickets` ties ticket ids to a step (shown on the step and in its panel).
+- `draft` (optional boolean on a node; absent/false = reviewed): Quick start sets `true`
+  on every generated diagram step. The page labels it “AI draft” / “AI 草稿” using
+  `.ai-updated`. Remove the field only after the user reviews that node in full Setup
+  step 5 or explicitly confirms it later. It is independent of `auto_updated`; existing
+  inventories need no migration.
 - `icon` (optional; missing or unknown values render a gear): spider, brain, box, gear, shield, clock, truck, globe, eye, flame, check, dice,
   table, hand, cards, play, coin, quiz, scale, pipe, lake, flask, chart, book, plug.
 - `media` (optional): what opens when a step is clicked, in order.
@@ -98,9 +103,10 @@
   a renamed or inaccessible legacy project reports a migration/permission error. IDs are unique
   across teams, so no team filter is needed once the UUID is confirmed.
 - `sources.github_issues`: optional list of `owner/repo` strings explicitly confirmed
-  during Setup as ticket repositories. Setup asks **Linear / Notion / GitHub Issues / none**
-  per project, saves the corresponding source configuration, and saves no ticket-source
-  keys for none. `sources.github` continues to mean PRs only; it never enables Issues.
+  during full Setup as ticket repositories, or enabled by Quick start project selection
+  only when authenticated discovery confirms Issues are enabled. Full Setup asks
+  **Linear / Notion / GitHub Issues / none** per project, saves the corresponding source configuration, and saves no ticket-source
+  keys for none. `sources.github` continues to mean PRs only; that key alone never enables Issues.
   Existing inventory files require no migration. The Issues connection excludes PRs.
   collect.py uses logged-in `gh api graphql`, follows every page of open and closed issues,
   and records each repo separately under `github_issues:owner/repo` in snapshot `sources`.
