@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Default first runs to one-question Quick start with deterministic project discovery, local output and reviewable AI draft labels; retain full eight-step setup and existing Refresh behavior (#65).
+
 - Label weekly summaries as AI-written in English and Traditional Chinese; omit the label when no summary exists (#63).
 
 - Explain installation self-check failures, propose method-specific updates for stale installs without overwriting them, and document network/home-write permissions (#61).

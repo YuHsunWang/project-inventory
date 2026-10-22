@@ -181,7 +181,7 @@ rm -r ~/.hermes/skills/project-inventory
 
 | Run | What happens |
 |---|---|
-| First run | The agent asks which projects to include and where each lives; asks for Linear / Notion / GitHub Issues / none per project and saves those sources. PR repos never silently enable Issues. It finds data files for you to choose, then drafts diagrams for confirmation. |
+| First run | Quick start asks one question: pick projects from deterministic local/GitHub discovery (commits within 90 days checked by default). It builds a local page with AI draft diagrams; authenticated GitHub PRs and enabled Issues use defaults. Then one optional menu offers task connectors, data checks, screenshots, scheduling or publishing. Say “full setup” / “完整設定” for the original eight-step setup. |
 | UI setup | It finds an existing URL or HTML output, proposes screenshots for relevant steps, captures and shows the images before saving. Supplied screenshots work too. Projects without a UI show no screenshot placeholder. It never starts project servers or runs project/build code. |
 | Later runs | It re-reads every source and rebuilds the page. It fills summaries for weeks that have none or have new work since the last summary, usually the current week. The first run covers all past weeks and takes longer. |
 

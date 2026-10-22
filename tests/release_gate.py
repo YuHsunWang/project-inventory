@@ -18,6 +18,7 @@ def main():
     passed = skipped = failed = 0
     with tempfile.TemporaryDirectory(prefix='release-') as td:
         commands = [
+            ('Quick start discovery and draft lifecycle', [sys.executable, str(ROOT / 'tests/test_quick_start.py')]),
             ('README links and translations', [sys.executable, str(ROOT / 'tests/check_readmes.py')]),
             ('cold-start 3 regressions', [sys.executable, str(ROOT / 'tests/test_coldstart3.py')]),
             ('cold-start 2 regressions', [sys.executable, str(ROOT / 'tests/test_coldstart2.py')]),
