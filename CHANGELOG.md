@@ -2,7 +2,7 @@
 
 ## 0.2.0
 
-- Say which open PRs can be merged right now: each PR read through `gh` gets a chip (ready to merge / merge #N first / checks failed / conflicts) and the home row counts the ready ones. Drafts, running checks and undecided mergeability get no chip; review comments are not considered.
+- Say which open PRs can be merged right now: each PR read through `gh` gets a chip (ready to merge / merge #N first / checks failed / conflicts) and the home row counts the ready ones. Drafts, running checks, PRs held back by a branch rule and undecided mergeability get no chip; review comments are not considered.
 
 - Add a two-sentence status line per project (what blocks it, what to do next), written like a week summary under the key `"now"` and requested again only when the blockers change.
 

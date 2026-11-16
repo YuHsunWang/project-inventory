@@ -203,15 +203,29 @@ assert ms(commits={"nodes": [{"commit": {"statusCheckRollup": {"state": "FAILURE
 for unsure in ({"isDraft": True}, {"mergeable": "UNKNOWN"}, {"commits": {"nodes": [{"commit": {"statusCheckRollup": {"state": "PENDING"}}}]}}):
     assert ms(**unsure) is None, unsure
 assert collect.merge_state({"number": 1}, None, {}) is None, "MCP-gathered PRs carry no merge fields: no chip"
+assert ms(mergeStateStatus="CLEAN") == "ok" and ms(mergeStateStatus="BEHIND") is None and ms(mergeStateStatus="BLOCKED") is None, "no conflicts is not yet mergeable under a branch rule"
+# a fork PR that reuses the parent's branch name must not become the PR to merge first
+page = {"data": {"repository": {"defaultBranchRef": {"name": "main"}, "pullRequests": {"pageInfo": {"hasNextPage": False}, "nodes": [
+    {"number": 1, "headRefName": "feature", "baseRefName": "main", "mergeable": "MERGEABLE"},
+    {"number": 2, "headRefName": "feature", "baseRefName": "main", "mergeable": "MERGEABLE", "isCrossRepository": True},
+    {"number": 3, "headRefName": "child", "baseRefName": "feature", "mergeable": "MERGEABLE"}]}}}}
+from unittest.mock import patch
+with patch.object(collect, "run", return_value=json.dumps(page)):
+    got = {p["number"]: p["merge"] for p in collect.gh_prs("o/r")}
+assert got == {1: "ok", 2: "ok", 3: "stacked:1"}, got
 
 # --- the status line is asked for when something waits on the user, and again only when that changes
-proj = {"key": "p", "facts": {"prs": [{"number": 3, "title": "t", "createdAt": "2026-10-01T00:00:00Z", "merge": "ok"}], "tickets": []}, "todo": []}
-st = build.status_request(proj)
+proj = {"key": "p", "facts": {"prs": [{"number": 3, "title": "t", "createdAt": "2026-10-01T00:00:00Z", "merge": "ok"}], "tickets": []}}
+st = build.status_request(proj["facts"])
 assert st["week"] == "now" and "PR #3 (can be merged now, opened 2026-10-01): t" in st["items"], st
-assert build.status_request(proj)["n"] == st["n"], "same blockers: not due again"
+assert build.status_request(proj["facts"])["n"] == st["n"], "same blockers: not due again"
+saved = {"now": {"n": st["n"], "text": "PR #3 waits. Merge it."}}
+assert build.status_text(proj["facts"], saved) == "PR #3 waits. Merge it."
 proj["facts"]["prs"][0]["merge"] = "ci_fail"
-assert build.status_request(proj)["n"] != st["n"], "the PR turned red: the line is due"
-assert build.status_request({"key": "q", "facts": {"prs": [], "tickets": []}}) is None, "no PRs or tickets: no request"
+assert build.status_request(proj["facts"])["n"] != st["n"], "the PR turned red: the line is due"
+assert build.status_text(proj["facts"], saved) is None, "an instruction written for other facts must not stay on the page"
+assert build.status_request({"prs": [], "tickets": []}) is None, "no PRs or tickets: no request"
+assert build.status_text({"prs": [], "tickets": []}, saved) is None, "the last PR was merged: 'Merge it' must go"
 assert build.todos({"key": "p"}, {**proj["facts"], "repos": [], "data": [], "errors": [], "prs": [{"merge": "ok"}, {"merge": None}]})[0]["ready"] == 1
 snap_f = next((home / "facts").glob("*.json")); keep = snap_f.read_text(); snap = json.loads(keep)
 snap["projects"]["p"]["prs"] = [{"number": 3, "title": "t", "url": "https://github.com/o/r/pull/3", "createdAt": "2026-10-01T00:00:00Z", "repo": "o/r", "merge": "ok"}]

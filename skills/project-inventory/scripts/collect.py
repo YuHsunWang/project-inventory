@@ -92,15 +92,16 @@ def weekly(dates, today):
 
 GH_PRS_Q = """query($owner:String!, $repo:String!, $after:String){
   repository(owner:$owner, name:$repo){ defaultBranchRef{ name } pullRequests(first:50, after:$after, states:OPEN){
-    nodes{ number title url createdAt updatedAt isDraft headRefName baseRefName mergeable
+    nodes{ number title url createdAt updatedAt isDraft headRefName baseRefName isCrossRepository mergeable mergeStateStatus
            commits(last:1){ nodes{ commit{ statusCheckRollup{ state } } } } }
     pageInfo{ hasNextPage endCursor } } } }"""
 
 
 def merge_state(pr, default, heads):
     """Can this PR be merged right now? "ok" | "conflict" | "ci_fail" | "stacked:<PR number or base branch>" | None.
-    None = draft, checks still running, or GitHub has not worked out mergeability: say nothing rather than guess.
-    `heads` = {head branch: PR number} of the repo's open PRs. Unanswered review comments are not looked at."""
+    None = draft, checks still running, held back by a branch rule (behind its base, a required review or
+    check missing), or GitHub has not worked out mergeability: say nothing rather than guess.
+    `heads` = {head branch: PR number} of the open PRs whose branch lives in this repo."""
     base = pr.get("baseRefName")
     if pr.get("isDraft") or not default or not base:
         return None
@@ -112,6 +113,8 @@ def merge_state(pr, default, heads):
     checks = ((last.get("commit") or {}).get("statusCheckRollup") or {}).get("state")  # None: the repo runs no checks
     if checks in ("FAILURE", "ERROR"):
         return "ci_fail"
+    if pr.get("mergeStateStatus") in ("BEHIND", "BLOCKED"):  # `mergeable` only means "no conflicts"
+        return None
     return "ok" if pr.get("mergeable") == "MERGEABLE" and checks in (None, "SUCCESS") else None
 
 
@@ -136,10 +139,11 @@ def gh_prs(repo, retry=True):
             if retry and any(p.get("mergeable") == "UNKNOWN" for p in prs):  # GitHub works it out after the first ask
                 time.sleep(5)
                 return gh_prs(repo, retry=False)
-            heads = {p.get("headRefName"): p.get("number") for p in prs}
+            # a fork's branch can carry the same name as the branch a stacked PR really sits on
+            heads = {p.get("headRefName"): p.get("number") for p in prs if not p.get("isCrossRepository")}
             for p in prs:
                 p["merge"] = merge_state(p, default, heads)
-                for raw in ("baseRefName", "mergeable", "commits"):
+                for raw in ("baseRefName", "isCrossRepository", "mergeable", "mergeStateStatus", "commits"):
                     p.pop(raw, None)
             return prs
         cursor = page["pageInfo"]["endCursor"]

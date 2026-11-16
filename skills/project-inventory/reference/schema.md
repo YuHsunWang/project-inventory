@@ -255,7 +255,8 @@ build.py lists a week in `out/summaries-needed.json` again when its count change
 The key `"now"` holds the project's status line (two sentences: what blocks it, what to do next),
 shown under the project name. It is requested like a week (`"week": "now"`, `items` = open PRs with
 their merge state, tickets waiting for review, open tickets); its `n` is a checksum of those items,
-so it is listed again exactly when they change. A project without open PRs or tickets gets no request.
+so it is listed again exactly when they change, and the page hides the saved line until it is rewritten.
+A project without open PRs or tickets gets no request and shows no line.
 
 ## facts/&lt;date&gt;.json (written by collect.py)
 
@@ -268,8 +269,8 @@ behind, dirty, last_commit, weekly commit counts for 12 weeks, recent commits fo
 `weekly` (the project's commits per week across all its checkouts, each commit counted once),
 `commits` (history in each checkout's selected scope, newest 3000 per checkout, deduped), `prs`
 (read through `gh`, each has `merge`: `"ok"` can be merged now, `"conflict"`, `"ci_fail"`,
-`"stacked:<PR number or base branch>"`, or `null` for drafts, running checks and anything GitHub
-has not decided; review comments are not considered; MCP-gathered PRs have no `merge`),
+`"stacked:<PR number or base branch>"`, or `null` for drafts, running checks, PRs held back by a
+branch rule (behind their base, a required review or check missing) and anything GitHub has not decided; review comments are not considered; MCP-gathered PRs have no `merge`),
 `obsidian` (open/done counts, `total` open tasks, `shown` items, first 50 open items with
 relative `file` and 1-based `line`; fenced code is skipped, nested lists are included), `data` (newest, age_days, stale, or error),
 `errors`.
