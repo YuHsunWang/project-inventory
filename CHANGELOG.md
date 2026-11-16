@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Halve what every run loads: `SKILL.md` keeps Quick start and Refresh; full setup, MCP gathering, publishing and scheduled-refresh rules move to `reference/` and are read only when needed. `build.py` asks for summaries of each project's newest 4 weeks only (`--all-weeks` for the whole history), so a first run on old repos no longer writes one per past week.
+
 - Default first runs to one-question Quick start with deterministic project discovery, local output and reviewable AI draft labels; retain full eight-step setup and existing Refresh behavior (#65).
 
 - Label weekly summaries as AI-written in English and Traditional Chinese; omit the label when no summary exists (#63).

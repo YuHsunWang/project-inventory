@@ -256,7 +256,10 @@ def embed_media(nodes, home, warn):
                          else f"step {n.get('id')}: screenshot rejected: {path}: {e}")
 
 
-def build_page(home, snapshot=None, run_id=None):
+RECENT_WEEKS = 4  # template.html shows this many weeks before "earlier weeks" is clicked
+
+
+def build_page(home, snapshot=None, run_id=None, all_weeks=False):
     manifest_f = home / "refresh.json"
     manifest = json.loads(manifest_f.read_text(encoding="utf-8")) if manifest_f.exists() else None
     last_page = home / "out" / "index.html"
@@ -311,9 +314,12 @@ def build_page(home, snapshot=None, run_id=None):
                          "todo": todos(p, f), "now": now(f, today), "history": history(f, sums.get(p["key"], {})),
                          "weekly": f.get("weekly") if f["repos"] else None,
                          "trend_tickets": ticket_series(f["tickets"], today, zone=zone) if availability["status"] in ("ready", "empty") else None})
+    left_out = 0  # a first run on a long-lived repo once asked for a summary of every week it ever had
     for p in projects:
+        ask = p["history"] if all_weeks else p["history"][:RECENT_WEEKS]
+        left_out += sum(not w["fresh"] for w in p["history"][len(ask):])
         weeks = [{"week": w["week"], "n": len(w["items"]), "old": w["summary"],
-                  "items": [f'{x["date"]} {x["kind"]}: {x["text"]}' for x in w["items"]]} for w in p["history"] if not w["fresh"]]
+                  "items": [f'{x["date"]} {x["kind"]}: {x["text"]}' for x in w["items"]]} for w in ask if not w["fresh"]]
         if weeks:
             need[p["key"]] = weeks
     page = {"title": inv.get("title", "Projects"), "lang": inv.get("lang", "en"),
@@ -347,7 +353,8 @@ def build_page(home, snapshot=None, run_id=None):
     need_f = out.parent / "summaries-needed.json"
     if need:
         need_f.write_text(json.dumps(need, ensure_ascii=False, indent=1), encoding="utf-8")
-        print(f"SUMMARIES {sum(map(len, need.values()))} weeks need a summary: {need_f}")
+        print(f"SUMMARIES {sum(map(len, need.values()))} weeks need a summary: {need_f}"
+              + (f" ({left_out} older weeks left out; --all-weeks lists them)" if left_out else ""))
     else:
         need_f.unlink(missing_ok=True)
     for w in warnings:
@@ -445,12 +452,13 @@ def main():
     parser.add_argument("home", nargs="?", default="~/.project-inventory")
     parser.add_argument("--snapshot", type=Path)
     parser.add_argument("--run-id")
+    parser.add_argument("--all-weeks", action="store_true", help="also list weeks older than the newest 4 in summaries-needed.json")
     args = parser.parse_args()
     home = Path(args.home).expanduser()
     from refresh_lock import refresh_lock, RefreshBusy
     try:
         with refresh_lock(home):
-            build_page(home, args.snapshot, args.run_id)
+            build_page(home, args.snapshot, args.run_id, args.all_weeks)
     except RefreshBusy as exc:
         print(f"BUSY: {exc}")
     except (OSError, ValueError, KeyError, TypeError, AttributeError) as e:
