@@ -1,6 +1,10 @@
 # Changelog
 
-## Unreleased
+## 0.2.0
+
+- Say which open PRs can be merged right now: each PR read through `gh` gets a chip (ready to merge / merge #N first / checks failed / conflicts) and the home row counts the ready ones. Drafts, running checks and undecided mergeability get no chip; review comments are not considered.
+
+- Add a two-sentence status line per project (what blocks it, what to do next), written like a week summary under the key `"now"` and requested again only when the blockers change.
 
 - Halve what every run loads: `SKILL.md` keeps Quick start and Refresh; full setup, MCP gathering, publishing and scheduled-refresh rules move to `reference/` and are read only when needed. `build.py` asks for summaries of each project's newest 4 weeks only (`--all-weeks` for the whole history), so a first run on old repos no longer writes one per past week.
 

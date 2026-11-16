@@ -22,7 +22,8 @@ def todos(p, f):
     """Items to inspect. kind: pr / review / notes / git / data / err. A checkout's git problems are one row."""
     k, out = p["key"], []
     if f["prs"]:
-        out.append({"kind": "pr", "n": len(f["prs"]), "t": "prs", "drafts": sum(pr.get("isDraft", False) for pr in f["prs"]), "go": f"#{k}/facts"})
+        out.append({"kind": "pr", "n": len(f["prs"]), "t": "prs", "drafts": sum(pr.get("isDraft", False) for pr in f["prs"]),
+                    "ready": sum(pr.get("merge") == "ok" for pr in f["prs"]), "go": f"#{k}/facts"})
     wait = [t for t in f["tickets"] if t.get("state") == "wait"]
     if wait:
         out.append({"kind": "review", "n": len(wait), "t": "review", "go": f"#{k}/tickets"})
@@ -46,6 +47,28 @@ def todos(p, f):
         out.append({"kind": "err", "n": len(f["errors"]), "t": "errors", "go": f"#{k}/facts"})
     priority = {"err": 0, "data": 1, "review": 2, "pr": 3, "notes": 4, "git": 5}
     return sorted(out, key=lambda t: priority[t["kind"]])
+
+
+NOW = "now"  # key of the status line in summaries.json, beside the Monday keys of the week summaries
+MERGE_WORDS = {"ok": "can be merged now", "conflict": "has conflicts", "ci_fail": "checks failed"}
+
+
+def status_request(p):
+    """Open PRs and unfinished tickets, as lines a writer turns into two sentences (what is stuck, what to do next).
+    Shaped like a week in summaries-needed.json so the same writers handle it; `n` is a checksum of the lines,
+    which makes the line due exactly when they change. None without PRs or tickets: git, data and source
+    problems already have their own rows on the page."""
+    f, lines = p["facts"], []
+    for pr in sorted(f["prs"], key=lambda x: x.get("createdAt") or ""):
+        m = pr.get("merge") or ""
+        word = "draft" if pr.get("isDraft") else f"merge {m[8:]} first" if m.startswith("stacked:") else MERGE_WORDS.get(m, "open")
+        lines.append(f'PR #{pr["number"]} ({word}, opened {(pr.get("createdAt") or "")[:10]}): {pr["title"]}')
+    wait = [t for t in f["tickets"] if t.get("state") == "wait"]
+    todo = [t for t in f["tickets"] if t.get("state") == "open"]
+    lines += [f'ticket done, waiting for review: {t.get("title")}' for t in wait[:10]]
+    if todo:
+        lines.append(f"{len(todo)} open tickets, e.g.: " + "; ".join(str(t.get("title")) for t in todo[:8]))
+    return {"week": NOW, "n": zlib.crc32("\n".join(lines).encode()), "items": lines} if lines else None
 
 
 def git_availability(p, f):
@@ -312,6 +335,7 @@ def build_page(home, snapshot=None, run_id=None, all_weeks=False):
         git_status = git_availability(p, f)
         projects.append({**p, "git_state": git_status, "facts": f, "ticket_state": availability, "counts": {s: sum(t.get("state") == s for t in f["tickets"]) for s in STATES},
                          "todo": todos(p, f), "now": now(f, today), "history": history(f, sums.get(p["key"], {})),
+                         "status": (sums.get(p["key"], {}).get(NOW) or {}).get("text"),
                          "weekly": f.get("weekly") if f["repos"] else None,
                          "trend_tickets": ticket_series(f["tickets"], today, zone=zone) if availability["status"] in ("ready", "empty") else None})
     left_out = 0  # a first run on a long-lived repo once asked for a summary of every week it ever had
@@ -320,6 +344,9 @@ def build_page(home, snapshot=None, run_id=None, all_weeks=False):
         left_out += sum(not w["fresh"] for w in p["history"][len(ask):])
         weeks = [{"week": w["week"], "n": len(w["items"]), "old": w["summary"],
                   "items": [f'{x["date"]} {x["kind"]}: {x["text"]}' for x in w["items"]]} for w in ask if not w["fresh"]]
+        status, written = status_request(p), sums.get(p["key"], {}).get(NOW) or {}
+        if status and written.get("n") != status["n"]:
+            weeks.append({**status, "old": written.get("text")})
         if weeks:
             need[p["key"]] = weeks
     page = {"title": inv.get("title", "Projects"), "lang": inv.get("lang", "en"),
@@ -327,7 +354,8 @@ def build_page(home, snapshot=None, run_id=None, all_weeks=False):
             "ticket_source_labels": {key: label for key, label in
                 (("linear", "Linear"), ("notion", "Notion"), ("github_issues", "GitHub Issues"))
                 if any(p.get("sources", {}).get(key) for p in inv["projects"])}}
-    banner = needs_claude(inv, snap, need)
+    # the banner counts week summaries; a due status line is written in the same pass and is not a week
+    banner = needs_claude(inv, snap, {k: [w for w in ws if w["week"] != NOW] for k, ws in need.items()})
     has_math = any("math" in m for p in projects for n in p.get("nodes", []) for m in n.get("media", []))
     html = (HERE / "template.html").read_text(encoding="utf-8")
     html = html.replace("__LANG__", htmllib.escape(page["lang"])).replace("__TITLE__", htmllib.escape(page["title"]))
@@ -353,7 +381,8 @@ def build_page(home, snapshot=None, run_id=None, all_weeks=False):
     need_f = out.parent / "summaries-needed.json"
     if need:
         need_f.write_text(json.dumps(need, ensure_ascii=False, indent=1), encoding="utf-8")
-        print(f"SUMMARIES {sum(map(len, need.values()))} weeks need a summary: {need_f}"
+        lines = sum(w["week"] == NOW for ws in need.values() for w in ws)
+        print(f"SUMMARIES {sum(map(len, need.values())) - lines} weeks{f' and {lines} status lines' if lines else ''} need a summary: {need_f}"
               + (f" ({left_out} older weeks left out; --all-weeks lists them)" if left_out else ""))
     else:
         need_f.unlink(missing_ok=True)

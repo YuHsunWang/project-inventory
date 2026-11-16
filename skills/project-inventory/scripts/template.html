@@ -317,7 +317,7 @@ footer p{margin:4px 0;max-width:80ch}
 const D = /*__DATA__*/null;
 const L = {
  "zh-TW": {ai_draft:"AI 草稿", ai_summary:"AI 摘要", ai_updated:"AI 自動更新（X）", all:"全部專案", projects:"個專案", todo_h:"要處理的事", nothing:"目前沒有要處理的事", projects_h:"專案", back:"‹ 全部專案",
-  prs:"個開啟中的 PR", review:"件待辦做好了、等你確認", dirty:"個檔案尚未提交", unpushed:"次提交尚未推送到遠端",
+  prs:"個開啟中的 PR", merge_ok:"可以合", merge_conflict:"有衝突", merge_ci_fail:"檢查沒過", merge_first:"先合", merge_base:"疊在分支", review:"件待辦做好了、等你確認", dirty:"個檔案尚未提交", unpushed:"次提交尚未推送到遠端",
   fetch_failed:"遠端更新失敗；遠端比較未知", last_fetch:"最後成功取得遠端資料：",
   no_upstream:"這條分支尚未設定追蹤分支", stale:"份資料沒更新到最新", errors:"項資料這次沒抓到", join:"、",
   k_pr:"開啟中的 PR", k_review:"等你確認", k_git:"本機未同步事項（依工作目錄彙總）", k_data:"資料沒更新", k_err:"這次沒抓到",
@@ -347,7 +347,7 @@ const L = {
   notes:"筆記待辦", notes_todo:"個筆記待辦還沒勾", k_notes:"筆記待辦", notes_truncated:"僅顯示前 A 個，共 B 個", notes_open:"個還沒勾", notes_done:"個已勾", pr_open:"開啟中的 PR", errs:"沒抓到的東西",
   foot_tickets:"待辦：X", foot:["開啟中的 PR：GitHub", "git 狀態、資料日期：這台電腦"]},
  "en": {ai_draft:"AI draft", ai_summary:"AI summary", ai_updated:"AI-updated (X)", all:"All projects", projects:"projects", todo_h:"Items to inspect", nothing:"No items to inspect", projects_h:"Projects", back:"‹ All projects",
-  prs:"open PRs", review:"tickets are done and wait for review", dirty:"files have uncommitted changes", unpushed:"commits are not pushed",
+  prs:"open PRs", merge_ok:"ready to merge", merge_conflict:"conflicts", merge_ci_fail:"checks failed", merge_first:"merge first:", merge_base:"based on", review:"tickets are done and wait for review", dirty:"files have uncommitted changes", unpushed:"commits are not pushed",
   fetch_failed:"Remote refresh failed; remote comparison unknown", last_fetch:"Last successful fetch: ",
   no_upstream:"branch has no upstream configured", stale:"datasets are stale", errors:"sources failed this run", join:", ",
   k_pr:"Open PRs", k_review:"To review", k_git:"Local unsynced items (by checkout)", k_data:"Stale data", k_err:"Failed",
@@ -712,7 +712,7 @@ function renderFacts(p){
     local.push([`<span${index === 0 ? ` id="d-${esc(p.key)}-notes"` : ""}>${T.notes}</span>`, `${o.open} ${T.notes_open} · ${o.done} ${T.notes_done} <div class="small"><code>${esc(o.path)}</code></div>${hint}${o.items.length ? `<details><summary>${shown} / ${total} ${T.notes_open}</summary>${o.items.map(i => `<div class="small">☐ ${esc(i.text)} · ${esc(i.file)}${i.line ? `:${esc(i.line)}` : ""}</div>`).join("")}</details>` : ""}`]);
   }
   for (const r of p.notes || []) local.push([esc(r[0]), esc(r[1])]);
-  if (f.prs.length) cloud.push([T.pr_open, f.prs.map(x => `<div>${ext(x.url, `#${esc(x.number)}`)} ${esc(x.title)}${x.isDraft ? ` <span class="st hist">Draft</span>` : ""} <span class="small">${esc(x.repo || "")} · ${mdOf(x.createdAt)}</span></div>`).join("")]);
+  if (f.prs.length) cloud.push([T.pr_open, f.prs.map(x => `<div>${ext(x.url, `#${esc(x.number)}`)} ${esc(x.title)}${x.isDraft ? ` <span class="st hist">Draft</span>` : ""}${mergeChip(x.merge)} <span class="small">${esc(x.repo || "")} · ${mdOf(x.createdAt)}</span></div>`).join("")]);
   if (src.linear) cloud.push([esc(D.ticket_source_labels?.linear), esc(src.linear.project)]);
   for (const repo of src.github_issues || []) cloud.push([esc(D.ticket_source_labels?.github_issues), ext(`https://github.com/${repo}/issues`, esc(repo))]);
   if (src.notion) cloud.push([esc(D.ticket_source_labels?.notion), ext(src.notion.url, esc(src.notion.url))]);
@@ -722,6 +722,12 @@ function renderFacts(p){
   const errs = f.errors.length ? [[T.errs, f.errors.map(e => `<div><span class="st bad" style="margin-left:0">!</span> ${esc(e)}</div>`).join("")]] : [];
   const sources = ticketSources(p);
   return `<p class="hint">${esc(X(T.facts_hint, sources.length ? T.join + sources.join(T.join) : ""))}</p>${tbl(T.f_local, local)}${tbl(T.f_cloud, cloud)}${tbl(T.errs, errs)}`;
+}
+function mergeChip(m){
+  if (!m) return "";
+  if (m.startsWith("stacked:")) { const b = m.slice(8); return ` <span class="st hist">${/^\d+$/.test(b) ? `${T.merge_first} #${b}` : `${T.merge_base} ${esc(b)}`}</span>`; }
+  const cls = {ok:"ok", conflict:"bad", ci_fail:"bad"}[m];
+  return cls ? ` <span class="st ${cls}">${T["merge_" + m]}</span>` : "";
 }
 function nowLine(p){
   const n = p.now, bits = [];
@@ -735,7 +741,7 @@ function nowLine(p){
 }
 function todoText(t){
   if (t.kind === "git") return `${esc(t.where)}：${t.parts.map(([n, k]) => (n != null ? `${n} ` : "") + T[k]).join(T.join)}`;
-  return T[t.t] + (t.kind === "pr" && t.drafts ? ` (Draft ${t.drafts})` : "");
+  return T[t.t] + (t.kind === "pr" && t.drafts ? ` (Draft ${t.drafts})` : "") + (t.kind === "pr" && t.ready ? ` (${t.ready} ${T.merge_ok})` : "");
 }
 function todoRows(list){
   return list.map(t => `<a class="todo pc" style="--pc0:${esc(t.color)}" href="${esc(String(t.go).startsWith("#") ? t.go : "#")}"><span class="tn">${t.n ?? ""}</span><span class="tt">${todoText(t)}</span><span class="tp">${esc(t.pname || "")}</span><span class="ta" aria-hidden="true">›</span></a>`).join("");
@@ -747,7 +753,7 @@ function renderProject(p){
   let h = `<section class="proj pc" id="${esc(p.key)}" style="--pc0:${esc(p.color)}" hidden>
     <a class="back" href="#">${T.back}</a>
     <header class="phead"><h2>${esc(p.name)}</h2>${p.tag ? `<p class="tag">${esc(p.tag)}</p>` : ""}
-      <p class="now">${nowLine(p)}</p>
+      <p class="now">${nowLine(p)}</p>${p.status ? `<p class="sumx">${esc(p.status)} <span class="ai-updated">${T.ai_summary}</span></p>` : ""}
       ${(p.links || []).length ? `<p class="links">${p.links.map(([t, u]) => ext(u, esc(t))).join("")}</p>` : ""}
     </header>
     ${p.todo.length ? `<div class="todos small">${todoRows(p.todo.map(t => ({...t, color:p.color})))}</div>` : ""}

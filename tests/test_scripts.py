@@ -169,10 +169,11 @@ assert not h[1]["fresh"]
 assert h[0]["items"][0]["text"] == "y", "newest first"
 # the whole history reaches the page, and the weeks to summarise are listed for Claude
 r = run("build.py", str(home))
-need = json.loads((home / "out/summaries-needed.json").read_text())["p"]
+listed = json.loads((home / "out/summaries-needed.json").read_text())["p"]
+need = [w for w in listed if w["week"] != "now"]
 assert "SUMMARIES" in r.stdout and sum(w["n"] for w in need) == 3, need
 wk = need[0]["week"]
-(home / "summaries.json").write_text(json.dumps({"p": {w["week"]: {"n": w["n"], "text": "ok"} for w in need}}))
+(home / "summaries.json").write_text(json.dumps({"p": {w["week"]: {"n": w["n"], "text": "ok"} for w in listed}}))
 r = run("build.py", str(home))
 assert "SUMMARIES" not in r.stdout and not (home / "out/summaries-needed.json").exists(), r.stdout
 # a first run must not ask for every week a long-lived repo ever had: only the weeks the page shows unclicked
@@ -182,7 +183,7 @@ long_facts = json.loads(old_facts)
 long_facts["projects"]["p"]["commits"] = [{"hash": f"w{i}", "date": (today - dt.timedelta(weeks=i)).isoformat(), "subject": f"week {i}"} for i in range(7)]
 facts_f.write_text(json.dumps(long_facts))
 r = run("build.py", str(home))
-need = json.loads((home / "out/summaries-needed.json").read_text())["p"]
+need = [w for w in json.loads((home / "out/summaries-needed.json").read_text())["p"] if w["week"] != "now"]
 assert len(need) == build.RECENT_WEEKS and need[0]["items"][0].endswith("week 0"), need
 assert "older weeks left out; --all-weeks" in r.stdout, r.stdout
 r = run("build.py", str(home), "--all-weeks")
@@ -190,6 +191,40 @@ assert len(json.loads((home / "out/summaries-needed.json").read_text())["p"]) > 
 facts_f.write_text(old_facts)
 (home / "summaries.json").write_text(json.dumps({"p": {w["week"]: {"n": w["n"], "text": "ok"} for w in json.loads((home / "out/summaries-needed.json").read_text())["p"]}}))
 run("build.py", str(home))
+
+# --- "ready to merge" tells the user to press the button without looking: never on a PR that cannot merge
+green = {"baseRefName": "main", "mergeable": "MERGEABLE", "headRefName": "x",
+         "commits": {"nodes": [{"commit": {"statusCheckRollup": {"state": "SUCCESS"}}}]}}
+ms = lambda **kw: collect.merge_state({**green, **kw}, "main", {"feat/a": 7})
+assert ms() == "ok" and ms(commits={"nodes": [{"commit": {"statusCheckRollup": None}}]}) == "ok", "a repo without checks can still merge"
+assert ms(baseRefName="feat/a") == "stacked:7" and ms(baseRefName="old") == "stacked:old"
+assert ms(mergeable="CONFLICTING") == "conflict"
+assert ms(commits={"nodes": [{"commit": {"statusCheckRollup": {"state": "FAILURE"}}}]}) == "ci_fail"
+for unsure in ({"isDraft": True}, {"mergeable": "UNKNOWN"}, {"commits": {"nodes": [{"commit": {"statusCheckRollup": {"state": "PENDING"}}}]}}):
+    assert ms(**unsure) is None, unsure
+assert collect.merge_state({"number": 1}, None, {}) is None, "MCP-gathered PRs carry no merge fields: no chip"
+
+# --- the status line is asked for when something waits on the user, and again only when that changes
+proj = {"key": "p", "facts": {"prs": [{"number": 3, "title": "t", "createdAt": "2026-10-01T00:00:00Z", "merge": "ok"}], "tickets": []}, "todo": []}
+st = build.status_request(proj)
+assert st["week"] == "now" and "PR #3 (can be merged now, opened 2026-10-01): t" in st["items"], st
+assert build.status_request(proj)["n"] == st["n"], "same blockers: not due again"
+proj["facts"]["prs"][0]["merge"] = "ci_fail"
+assert build.status_request(proj)["n"] != st["n"], "the PR turned red: the line is due"
+assert build.status_request({"key": "q", "facts": {"prs": [], "tickets": []}}) is None, "no PRs or tickets: no request"
+assert build.todos({"key": "p"}, {**proj["facts"], "repos": [], "data": [], "errors": [], "prs": [{"merge": "ok"}, {"merge": None}]})[0]["ready"] == 1
+snap_f = next((home / "facts").glob("*.json")); keep = snap_f.read_text(); snap = json.loads(keep)
+snap["projects"]["p"]["prs"] = [{"number": 3, "title": "t", "url": "https://github.com/o/r/pull/3", "createdAt": "2026-10-01T00:00:00Z", "repo": "o/r", "merge": "ok"}]
+snap_f.write_text(json.dumps(snap))
+r = run("build.py", str(home))
+due = [w for w in json.loads((home / "out/summaries-needed.json").read_text())["p"] if w["week"] == "now"]
+assert len(due) == 1 and "1 status lines" in r.stdout, r.stdout
+sums = json.loads((home / "summaries.json").read_text()); sums["p"]["now"] = {"n": due[0]["n"], "text": "PR #3 waits. Merge it."}
+(home / "summaries.json").write_text(json.dumps(sums))
+r = run("build.py", str(home))
+page = (home / "out/index.html").read_text()
+assert "status lines" not in r.stdout and "PR #3 waits. Merge it." in page and '"merge": "ok"' in page, r.stdout
+snap_f.write_text(keep); del sums["p"]["now"]; (home / "summaries.json").write_text(json.dumps(sums)); run("build.py", str(home))
 
 # --- a remote URL never shows a token
 assert collect.clean_url("https://me:ghp_secret@github.com/o/r.git") == "https://github.com/o/r"

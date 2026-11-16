@@ -13,7 +13,7 @@ Exit 1 when any source failed; the failure is also written into the snapshot, so
 Use --refresh to collect and build one run. Exit 2 means fatal input/write failure; refresh.json
 blocks stale rebuilds and the last page retains its data/time with a failure banner.
 """
-import argparse, csv, datetime as dt, json, os, re, shutil, sqlite3, subprocess, sys, uuid, urllib.error, urllib.request
+import argparse, csv, datetime as dt, json, os, re, shutil, sqlite3, subprocess, sys, time, uuid, urllib.error, urllib.request
 from pathlib import Path
 from validation import validate_inventory, validate_gathered, validate_snapshot, normalize_date, calendar_date, date_order, timezone
 
@@ -91,14 +91,33 @@ def weekly(dates, today):
 
 
 GH_PRS_Q = """query($owner:String!, $repo:String!, $after:String){
-  repository(owner:$owner, name:$repo){ pullRequests(first:50, after:$after, states:OPEN){
-    nodes{ number title url createdAt updatedAt isDraft headRefName }
+  repository(owner:$owner, name:$repo){ defaultBranchRef{ name } pullRequests(first:50, after:$after, states:OPEN){
+    nodes{ number title url createdAt updatedAt isDraft headRefName baseRefName mergeable
+           commits(last:1){ nodes{ commit{ statusCheckRollup{ state } } } } }
     pageInfo{ hasNextPage endCursor } } } }"""
 
 
-def gh_prs(repo):
+def merge_state(pr, default, heads):
+    """Can this PR be merged right now? "ok" | "conflict" | "ci_fail" | "stacked:<PR number or base branch>" | None.
+    None = draft, checks still running, or GitHub has not worked out mergeability: say nothing rather than guess.
+    `heads` = {head branch: PR number} of the repo's open PRs. Unanswered review comments are not looked at."""
+    base = pr.get("baseRefName")
+    if pr.get("isDraft") or not default or not base:
+        return None
+    if base != default:
+        return f"stacked:{heads.get(base, base)}"
+    if pr.get("mergeable") == "CONFLICTING":
+        return "conflict"
+    last = ((pr.get("commits") or {}).get("nodes") or [{}])[-1]
+    checks = ((last.get("commit") or {}).get("statusCheckRollup") or {}).get("state")  # None: the repo runs no checks
+    if checks in ("FAILURE", "ERROR"):
+        return "ci_fail"
+    return "ok" if pr.get("mergeable") == "MERGEABLE" and checks in (None, "SUCCESS") else None
+
+
+def gh_prs(repo, retry=True):
     owner, name = repo.split("/", 1)
-    prs, after = [], None
+    prs, after, default = [], None, None
     while True:
         cmd = ["gh", "api", "graphql", "-f", f"query={GH_PRS_Q}",
                "-f", f"owner={owner}", "-f", f"repo={name}"]
@@ -109,10 +128,19 @@ def gh_prs(repo):
             if res.get("errors"):
                 raise RuntimeError(res["errors"][0].get("message"))
             page = res["data"]["repository"]["pullRequests"]
+            default = (res["data"]["repository"].get("defaultBranchRef") or {}).get("name")
         except Exception as e:
             raise RuntimeError(f"PR page {len(prs) // 50 + 1}: {e}") from e
         prs += [{**p, "repo": repo} for p in page["nodes"]]
         if not page["pageInfo"]["hasNextPage"]:
+            if retry and any(p.get("mergeable") == "UNKNOWN" for p in prs):  # GitHub works it out after the first ask
+                time.sleep(5)
+                return gh_prs(repo, retry=False)
+            heads = {p.get("headRefName"): p.get("number") for p in prs}
+            for p in prs:
+                p["merge"] = merge_state(p, default, heads)
+                for raw in ("baseRefName", "mergeable", "commits"):
+                    p.pop(raw, None)
             return prs
         cursor = page["pageInfo"]["endCursor"]
         if not cursor or cursor == after:
