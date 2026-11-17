@@ -252,6 +252,12 @@ A real authorized workspace is still required to verify connector/API behavior.
 Keys are the Monday of each week. `n` is the number of items the summary was written for;
 build.py lists a week in `out/summaries-needed.json` again when its count changes.
 
+The key `"now"` holds the project's status line (two sentences: what blocks it, what to do next),
+shown under the project name. It is requested like a week (`"week": "now"`, `items` = open PRs with
+their merge state, tickets waiting for review, open tickets); its `n` is a checksum of those items,
+so it is listed again exactly when they change, and the page hides the saved line until it is rewritten.
+A project without open PRs or tickets gets no request and shows no line.
+
 ## facts/&lt;date&gt;.json (written by collect.py)
 
 Top level: `date`, `generated_at`, `run_id`, and `gathered_run_id` (the offered MCP run,
@@ -261,7 +267,10 @@ Per project: `sources` (source-level provenance/state), `tickets` (fresh rows on
 `stale_tickets` (previous or incomplete rows, excluded from current metrics), `repos` (head SHA, history scope, fetch_enabled, fetch_performed, branch, upstream, remote URL, ahead,
 behind, dirty, last_commit, weekly commit counts for 12 weeks, recent commits for 14 days),
 `weekly` (the project's commits per week across all its checkouts, each commit counted once),
-`commits` (history in each checkout's selected scope, newest 3000 per checkout, deduped), `prs`,
+`commits` (history in each checkout's selected scope, newest 3000 per checkout, deduped), `prs`
+(read through `gh`, each has `merge`: `"ok"` can be merged now, `"conflict"`, `"ci_fail"`,
+`"stacked:<PR number or base branch>"`, or `null` for drafts, running checks, PRs held back by a
+branch rule (behind their base, a required review or check missing) and anything GitHub has not decided; review comments are not considered; MCP-gathered PRs have no `merge`),
 `obsidian` (open/done counts, `total` open tasks, `shown` items, first 50 open items with
 relative `file` and 1-based `line`; fenced code is skipped, nested lists are included), `data` (newest, age_days, stale, or error),
 `errors`.

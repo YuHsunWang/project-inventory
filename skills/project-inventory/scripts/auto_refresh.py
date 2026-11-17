@@ -97,7 +97,7 @@ def fingerprints(home, inv):
                 return result
             probe(f"{key}:git:{path}", git_probe)
         for repo in src.get("github", []):
-            probe(f"{key}:github:{repo}", lambda repo=repo: sorted([[p["number"], p["updatedAt"]] for p in collect.gh_prs(repo)]))
+            probe(f"{key}:github:{repo}", lambda repo=repo: sorted([[p["number"], p["updatedAt"], p.get("merge")] for p in collect.gh_prs(repo)]))
         for repo in src.get("github_issues", []):
             probe(f"{key}:github_issues:{repo}", lambda repo=repo: digest(sorted(collect.gh_issues(repo), key=lambda ticket: ticket["source_id"])))
         if src.get("linear") and os.environ.get("LINEAR_API_KEY"):
