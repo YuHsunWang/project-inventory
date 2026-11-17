@@ -59,10 +59,16 @@ def status_request(f):
     which makes the line due exactly when they change. None without PRs or tickets: git, data and source
     problems already have their own rows on the page."""
     lines = []
+    # two repos can both have a #7: then the writer gets owner/repo#7, or "merge PR #7" names no PR
+    many = len({pr.get("repo") for pr in f["prs"]}) > 1
+    name = lambda pr, n: f'{pr.get("repo")}#{n}' if many else f"PR #{n}"
     for pr in sorted(f["prs"], key=lambda x: x.get("createdAt") or ""):
         m = pr.get("merge") or ""
-        word = "draft" if pr.get("isDraft") else f"merge {m[8:]} first" if m.startswith("stacked:") else MERGE_WORDS.get(m, "open")
-        lines.append(f'PR #{pr["number"]} ({word}, opened {(pr.get("createdAt") or "")[:10]}): {pr["title"]}')
+        parent = m[8:]
+        word = ("draft" if pr.get("isDraft") else
+                (f"merge {name(pr, parent)} first" if parent.isdigit() else f"based on branch {parent}") if m.startswith("stacked:")
+                else MERGE_WORDS.get(m, "open"))
+        lines.append(f'{name(pr, pr["number"])} ({word}, opened {(pr.get("createdAt") or "")[:10]}): {pr["title"]}')
     wait = [t for t in f["tickets"] if t.get("state") == "wait"]
     todo = [t for t in f["tickets"] if t.get("state") == "open"]
     lines += [f'ticket done, waiting for review: {t.get("title")}' for t in wait[:10]]
