@@ -67,7 +67,7 @@ def test_issue41_capture_timestamp_and_caption():
         media["caption"] = "Local build output: report"
         assert auto_refresh.inventory_fingerprint(inv) != before, "caption edits must invalidate the page"
 
-        skill = (S.parent / "SKILL.md").read_text()
+        skill = (S.parent / "reference/setup.md").read_text()
         assert "caption" in skill and "live site or a local build output" in skill
 
 
@@ -179,7 +179,7 @@ def test_issue45_obsidian_excludes_and_refresh_scope():
                 assert ".exclude" in str(exc), str(exc)
             else:
                 raise AssertionError("invalid exclude accepted: " + repr(value))
-        assert "which folders hold real tasks" in (S.parent / "SKILL.md").read_text()
+        assert "which folders hold real tasks" in (S.parent / "reference/setup.md").read_text()
 
 
 def issue(number, state="OPEN", reason=None):
@@ -239,7 +239,7 @@ def test_issue46_github_tickets_counts_trend_and_opt_in():
                 assert "github_issues" in str(exc)
             else:
                 raise AssertionError("invalid GitHub Issues repos accepted")
-        skill = (S.parent / "SKILL.md").read_text()
+        skill = (S.parent / "reference/setup.md").read_text()
         assert "Linear / Notion / GitHub Issues / none" in skill and "github_issues" in skill
 
 

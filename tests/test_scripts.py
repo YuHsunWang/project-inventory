@@ -175,6 +175,21 @@ wk = need[0]["week"]
 (home / "summaries.json").write_text(json.dumps({"p": {w["week"]: {"n": w["n"], "text": "ok"} for w in need}}))
 r = run("build.py", str(home))
 assert "SUMMARIES" not in r.stdout and not (home / "out/summaries-needed.json").exists(), r.stdout
+# a first run must not ask for every week a long-lived repo ever had: only the weeks the page shows unclicked
+(home / "summaries.json").write_text("{}")
+facts_f = next((home / "facts").glob("*.json")); old_facts = facts_f.read_text()
+long_facts = json.loads(old_facts)
+long_facts["projects"]["p"]["commits"] = [{"hash": f"w{i}", "date": (today - dt.timedelta(weeks=i)).isoformat(), "subject": f"week {i}"} for i in range(7)]
+facts_f.write_text(json.dumps(long_facts))
+r = run("build.py", str(home))
+need = json.loads((home / "out/summaries-needed.json").read_text())["p"]
+assert len(need) == build.RECENT_WEEKS and need[0]["items"][0].endswith("week 0"), need
+assert "older weeks left out; --all-weeks" in r.stdout, r.stdout
+r = run("build.py", str(home), "--all-weeks")
+assert len(json.loads((home / "out/summaries-needed.json").read_text())["p"]) > build.RECENT_WEEKS and "left out" not in r.stdout, r.stdout
+facts_f.write_text(old_facts)
+(home / "summaries.json").write_text(json.dumps({"p": {w["week"]: {"n": w["n"], "text": "ok"} for w in json.loads((home / "out/summaries-needed.json").read_text())["p"]}}))
+run("build.py", str(home))
 
 # --- a remote URL never shows a token
 assert collect.clean_url("https://me:ghp_secret@github.com/o/r.git") == "https://github.com/o/r"
