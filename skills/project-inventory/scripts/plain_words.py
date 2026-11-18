@@ -112,7 +112,7 @@ def send_batch(home, inv, project, provider, requests, targets, sums, notes):
               f"{' (' + project['tag'] + ')' if project.get('tag') else ''}, for a reader who does not code. "
               "For each week write 2-3 short sentences about what changed and why it matters. "
               'The entry whose week is "now" is not a week: write two short sentences, first what is blocking this '
-              "project, then the one next thing its owner should do (name PRs as PR #N). "
+              "project, then the one next thing its owner should do (name each PR exactly as the items do, e.g. PR #N or owner/repo#N). "
               "For each commit or open PR write one short sentence (at most about 40 characters in Chinese) on what it "
               "added or fixed for the user or the results. Do not copy code terms, flags, file names, ticket ids or "
               "step codes; say them in everyday words, or add a short explanation in brackets if one cannot be avoided. "

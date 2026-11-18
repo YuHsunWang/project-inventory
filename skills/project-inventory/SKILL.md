@@ -140,7 +140,7 @@ schedules or publishing before the page. Use the conversation language for page 
    language: what changed that week and why it matters, from the listed commits/tickets/PRs
    only — no guesses. An entry whose `week` is `"now"` is the project's status line, not a week:
    write two short sentences from its listed facts — first what is blocking the project, then
-   the one next thing the user should do (name PRs as PR #N) — and save it under the key `"now"`
+   the one next thing the user should do (name each PR exactly as the facts do, e.g. PR #N or owner/repo#N) — and save it under the key `"now"`
    the same way. It is listed again only when the blockers change. Before saving, if `writing_skill` is set, pass the drafts through
    that installed skill once as a wording-only edit. Apply this rule whenever you write or
    rewrite diagram step `title`/`sub`/`zone` in a conversation too; never pass `detail`, `paths`

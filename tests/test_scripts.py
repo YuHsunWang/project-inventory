@@ -225,6 +225,14 @@ proj["facts"]["prs"][0]["merge"] = "ci_fail"
 assert build.status_request(proj["facts"])["n"] != st["n"], "the PR turned red: the line is due"
 assert build.status_text(proj["facts"], saved) is None, "an instruction written for other facts must not stay on the page"
 assert build.status_request({"prs": [], "tickets": []}) is None, "no PRs or tickets: no request"
+two = {"prs": [{"number": 7, "repo": "org/frontend", "title": "x", "merge": "ok"},
+               {"number": 7, "repo": "org/backend", "title": "x", "merge": "conflict"},
+               {"number": 9, "repo": "org/backend", "title": "y", "merge": "stacked:7"}], "tickets": []}
+items = build.status_request(two)["items"]
+assert "org/frontend#7 (can be merged now, opened ): x" in items and "org/backend#7 (has conflicts, opened ): x" in items, items
+assert "org/backend#9 (merge org/backend#7 first, opened ): y" in items, "the parent is named in the child's repo"
+one = build.status_request({"prs": [{"number": 9, "repo": "o/r", "title": "y", "merge": "stacked:feature"}], "tickets": []})["items"]
+assert one == ["PR #9 (based on branch feature, opened ): y"], one
 assert build.status_text({"prs": [], "tickets": []}, saved) is None, "the last PR was merged: 'Merge it' must go"
 assert build.todos({"key": "p"}, {**proj["facts"], "repos": [], "data": [], "errors": [], "prs": [{"merge": "ok"}, {"merge": None}]})[0]["ready"] == 1
 snap_f = next((home / "facts").glob("*.json")); keep = snap_f.read_text(); snap = json.loads(keep)
